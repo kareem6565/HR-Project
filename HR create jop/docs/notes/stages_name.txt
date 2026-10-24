@@ -1,0 +1,43 @@
+🟦 Stage 1: Job Setup
+
+Create & Understand Job
+
+🟦 Stage 2: Candidate Intake
+
+Collect Applications
+
+🟦 Stage 3: AI Screening
+
+Parse & Evaluate CVs
+
+🟦 Stage 4: Candidate Ranking
+
+Match & Rank
+
+🟦 Stage 5: HR Review
+
+Explain & Recommend
+
+🟦 Stage 6: Screening
+
+Ask & Verify
+
+🟦 Stage 7: Interview
+
+Prepare & Schedule
+
+🟦 Stage 8: Interview Evaluation
+
+Scorecard & Feedback
+
+🟦 Stage 9: Hiring Decision
+
+Human Decision
+
+🟦 Stage 10: Offer
+
+Generate & Send
+
+🟦 Stage 11: Onboarding
+
+Convert Candidate → Employee

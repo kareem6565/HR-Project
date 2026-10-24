@@ -1,0 +1,501 @@
+1. Job Intelligence Agent
+
+وظيفته الوحيدة:
+
+يفهم الـJob Description.
+
+Input:
+
+Job Description
+
+Output:
+
+{
+  "title": "Backend Developer",
+  "must_have": [
+    "Java",
+    "Spring Boot",
+    "SQL"
+  ],
+  "nice_to_have": [
+    "Kafka",
+    "Docker"
+  ],
+  "experience_years": 2,
+  "responsibilities": []
+}
+
+والـHR يقدر يعدل النتيجة.
+
+مهم: الـAI لا يفرض الـcriteria.
+
+2. Resume Parser Agent
+
+يدخل له:
+
+PDF / DOCX
+
+ويخرج:
+
+Candidate Profile
+
+مثلاً:
+
+{
+  "name": "Ahmed",
+  "experience": 3,
+  "skills": [
+    "Java",
+    "Spring Boot",
+    "PostgreSQL"
+  ],
+  "education": "...",
+  "projects": [],
+  "certifications": []
+}
+
+هنا LangChain مفيد جدًا في التعامل مع document loaders / models / structured output.
+
+3. Candidate Matching Agent
+
+ده مش مجرد:
+
+skill exists = yes
+
+لكن:
+
+Job Requirements
+       +
+Candidate Profile
+       ↓
+Semantic Matching
+
+مثلاً:
+
+Spring Boot
+Candidate: 3 years
+Match: Strong
+
+Kafka
+Candidate: No evidence
+Match: Missing
+
+Microservices
+Candidate: Project experience
+Match: Moderate
+4. Evaluation Agent
+
+ده يعمل:
+
+Candidate Evaluation
+
+مثلاً:
+
+Overall Score: 86
+
+Technical:       91
+Experience:      85
+Responsibilities:88
+Education:       80
+
+لكن لازم نغير نقطة من الـworkflow القديم.
+
+أنت حاليًا عندك:
+
+Skills = 80%
+Experience = 20%
+
+أنا مش عايز الـAI يثبت النسب دي في الكود.
+
+الـJob نفسه يحدد:
+
+Technical Skills = 40%
+Experience = 25%
+Responsibilities = 20%
+Education = 5%
+Nice-to-have = 10%
+
+لأن:
+
+Backend Developer ≠ Graphic Designer ≠ Accountant.
+
+5. Explanation Agent
+
+وده مهم جدًا.
+
+بدل ما الـEvaluation Agent يقول:
+
+Score 86
+
+نعمل Agent متخصص في:
+
+Explainability
+
+ويطلع:
+
+Why 86?
+
+Strengths
+
+3 years relevant backend experience
+Strong Spring Boot experience
+REST API experience
+PostgreSQL
+
+Gaps
+
+No evidence of Kafka
+Limited Docker experience
+
+Risk
+
+Candidate has strong backend fundamentals but lacks evidence of one required technology.
+
+وده يخلي الـHR فاهم القرار بدل ما يشوف رقم سحري.
+
+6. Ranking Agent
+
+هنا عندنا كل الـCandidates:
+
+Ahmed     91
+Mohamed   88
+Omar      84
+Ali       81
+Sara      78
+...
+
+لكن:
+
+❌ ما نعملش Top 3 ونرمي الباقي.
+
+نعمل:
+
+Strong Match
+Potential Match
+Needs Review
+Low Match
+
+والـHR يقدر يعمل:
+
+Sort by Score
+Filter by Experience
+Filter by Skill
+Filter by Status
+
+وكل Candidate يفضل في الـsystem.
+
+7. HR Decision Node
+
+هنا بقى LangGraph هيبدأ يلمع.
+
+الـAI يقول:
+
+Recommendation:
+INTERVIEW
+
+لكن الـGraph يتوقف.
+
+ويقول:
+
+WAIT FOR HUMAN
+
+الـHR يفتح:
+
+AI Recommendation: Interview
+
+[ Advance ]
+[ Reject ]
+[ Hold ]
+
+بعد الضغط، الـGraph يكمل.
+
+وده من أقوى أسباب استخدام LangGraph بدل Chain عادي.
+
+8. HR Learning Agent
+
+دي فكرتك اللي أنا عايز نحافظ عليها.
+
+مثلاً:
+
+AI:
+
+Recommend Interview
+
+HR:
+
+Reject
+
+HR Reason:
+
+Candidate has strong technical skills but doesn't have the required industry experience.
+
+السيستم يخزن:
+
+AI Recommendation
+HR Decision
+HR Reason
+Candidate Attributes
+Job Attributes
+
+وبمرور الوقت يبني:
+
+HR Preference Profile
+
+مثلاً:
+
+HR Preferences
+
+Experience importance: HIGH
+Certifications: LOW
+Projects: HIGH
+Technical skills: HIGH
+Education: MEDIUM
+
+لكن:
+
+ما نخليش الـAI يعدل نفسه تلقائيًا.
+
+بعد عدد كافي من القرارات:
+
+"I noticed that you frequently reject candidates without industry experience. Would you like to increase the importance of industry experience?"
+
+HR:
+
+Accept / Ignore
+
+دي أكثر أمانًا وواقعية.
+
+9. Screening Agent
+
+بعد الـshortlist ممكن الـHR يقول:
+
+Send screening questions.
+
+الـAI يجهز:
+
+1. What is your notice period?
+2. What is your expected salary?
+3. Are you available full-time?
+4. How many years of Spring Boot experience?
+5. Are you comfortable working from Cairo?
+
+وبعدين Candidate يجاوب.
+
+والـAI يحلل الإجابات.
+
+10. Interview Agent
+
+بعد قبول الـcandidate للـInterview:
+
+الـInterview Agent يعمل:
+
+Interview Kit
+Technical Questions
+Behavioral Questions
+Problem Solving
+Experience Verification
+Role-specific Questions
+
+والأسئلة تكون مبنية على:
+
+Job
++
+CV
++
+Missing Skills
++
+Previous Screening
+
+مثلاً:
+
+الـCV يقول:
+
+Built microservices using Spring Boot.
+
+فالـAI يقول:
+
+Explain how you handled communication between your microservices.
+
+مش سؤال عشوائي من ChatGPT.
+
+11. أثناء الـInterview
+
+هنا عندي اقتراح مهم:
+
+ما نبدأش من أول نسخة بإن AI يسمع المكالمة ويقيم الشخص.
+
+دي feature كبيرة ومليانة مشاكل.
+
+في الـMVP:
+
+Interviewer
+      │
+      ▼
+Interview Dashboard
+      │
+      ├── Questions
+      ├── Candidate CV
+      ├── Notes
+      └── Scorecard
+
+والـAI يساعد الـInterviewer:
+
+Suggested follow-up question
+
+مثلاً:
+
+Candidate mentioned Kafka.
+
+AI:
+
+Ask about partitioning and consumer groups.
+
+12. Interview Scorecard Agent
+
+بعد المقابلة:
+
+Technical Skills       4/5
+Problem Solving        5/5
+Communication          3/5
+Experience             4/5
+Role Fit               4/5
+
+وبعدين الـAI يلخص:
+
+Strengths:
+Strong backend fundamentals.
+
+Concerns:
+Limited production Kafka experience.
+
+Recommendation:
+Proceed to final review.
+
+لكن القرار:
+
+HR.
+13. Scheduling Agent
+
+بعد:
+
+HR → Advance
+
+الـScheduling Agent يتعامل مع:
+
+Google Calendar
+
+ويشوف availability.
+
+ثم:
+
+Candidate
+     ↓
+Choose slot
+     ↓
+Calendar
+     ↓
+Create event
+     ↓
+Meeting link
+     ↓
+Email
+
+والـworkflow الحالي عندك أصلًا عامل جزء مهم من ده باستخدام Google Calendar وإنشاء Event وإضافة candidate كـattendee.
+
+14. Communication Agent
+
+بدل ما نعمل email templates في كل مكان، نعمل Agent واحد مسؤول عن:
+
+Application received
+Screening invitation
+Interview invitation
+Interview reminder
+Rejection
+Offer
+
+والـHR يقدر يراجع الرسالة قبل الإرسال في الحالات المهمة.
+
+15. Offer Agent
+
+لو:
+
+HR → Hire
+
+مش نرسل acceptance email مباشرة.
+
+نروح:
+
+Hire
+ ↓
+Offer Generation
+ ↓
+HR Review
+ ↓
+Candidate
+ ↓
+Accept / Reject
+16. Onboarding Agent
+
+لو candidate قبل:
+
+Candidate
+   ↓
+Employee
+   ↓
+Onboarding
+
+وممكن:
+
+Documents
+Account creation
+Equipment
+First day
+Team assignment
+
+لكن دي ممكن تكون Phase 3، مش MVP.
+
+🔥 دلوقتي: ليه LangGraph بالذات؟
+
+لأن مشروعك مش:
+
+A → B → C → D
+
+ده:
+
+A
+│
+▼
+B
+│
+▼
+C
+│
+├──────► HR Reject ───► Email ───► END
+│
+└──────► HR Advance
+             │
+             ▼
+          Screening
+             │
+             ▼
+          Interview
+             │
+        ┌────┴────┐
+        ▼         ▼
+      Reject     Hire
+                    │
+                    ▼
+                  Offer
+
+وفيه:
+
+conditional routing
+state
+human approval
+loops
+retries
+multiple agents
+persistence
+long-running workflow
+
+وده تحديدًا النوع اللي LangGraph مناسب له.

@@ -1,0 +1,76 @@
+Phase 1
+
+Foundation
+
+FastAPI
+PostgreSQL
+React
+Authentication
+File Upload
+Phase 2
+
+Job + CV Intelligence
+
+Job Agent
+Resume Parser
+Structured Data
+Matching
+Scoring
+Explanation
+Phase 3
+
+LangGraph
+
+State
+Nodes
+Edges
+Conditional Routing
+Human Approval
+Persistence
+Phase 4
+
+HR Dashboard
+
+Jobs
+Candidates
+Scores
+Filters
+Candidate Details
+AI Explanation
+HR Decision
+Phase 5
+
+Interview
+
+Interview Kit
+Questions
+Notes
+Scorecard
+Feedback
+Phase 6
+
+Automation
+
+Email
+Calendar
+Scheduling
+Reminders
+Phase 7
+
+Learning
+
+HR Decisions
+Feedback
+Preference Profile
+Recommendation Improvement
+Phase 8
+
+Advanced AI
+
+Multi-Agent Communication
+RAG
+Candidate Talent Pool
+Interview Assistant
+Analytics
+AI Evaluation
+Tracing

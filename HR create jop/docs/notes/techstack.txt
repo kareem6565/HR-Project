@@ -1,0 +1,86 @@
+الـTech Stack اللي أرشحه لك
+
+بما إنك هتبني من الصفر:
+
+Backend
+
+Python + FastAPI
+
+AI
+
+LangChain
+
+LangGraph
+
+LLM
+
+نعمل abstraction layer عشان تقدر تغير:
+
+Gemini
+OpenAI
+Claude
+Groq
+
+من غير ما تكسر المشروع.
+
+Database
+
+PostgreSQL
+
+Vector Search
+
+في البداية:
+
+pgvector
+
+بدل ما تدخل Vector DB منفصل من أول يوم.
+
+File Storage
+
+مثلاً:
+
+S3-compatible storage
+
+أو local أثناء الـdevelopment.
+
+Authentication
+
+JWT / OAuth2
+
+Frontend
+
+أنا أرشح:
+
+React + TypeScript + Vite
+
+Background Jobs
+
+مهم جدًا.
+
+لأن CV processing ممكن ياخد وقت.
+
+ممكن نستخدم:
+
+Celery + Redis
+
+أو في بداية المشروع:
+
+FastAPI Background Tasks
+
+ثم نطورها.
+
+Calendar
+
+Google Calendar API
+
+Email
+
+Gmail API / SMTP provider
+
+Observability
+
+ودي نقطة مهمة جدًا لمشروع AI:
+
+LangSmith
+
+لو متاح لك.

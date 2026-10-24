@@ -1,0 +1,90 @@
+🧩 طيب LangChain فين؟
+
+ما تخليش المشروع كله:
+
+LangChain Agent → LangChain Agent → LangChain Agent
+
+LangChain نستخدمه كـbuilding blocks.
+
+مثلاً:
+
+LangChain
+│
+├── LLM
+├── Prompt
+├── Structured Output
+├── Document Loaders
+├── Embeddings
+├── Vector Store
+├── Tools
+└── Retrieval
+
+و:
+
+LangGraph
+│
+├── Job Agent
+├── Resume Agent
+├── Matching Agent
+├── Evaluation Agent
+├── Interview Agent
+└── Communication Agent
+
+يعني:
+
+LangChain = أدوات
+
+LangGraph = orchestration
+
+Agents = workers
+
+FastAPI = application backend
+
+🧠 Multi-Agent Communication
+
+دي النقطة الثالثة اللي قالها لك الشخص.
+
+أنا مش عايز Agents تكلم بعض على شكل:
+
+"Hey bro, here's some text."
+
+😂
+
+نخلي عندنا Shared State.
+
+مثلاً:
+
+RecruitmentState
+
+يحتوي:
+
+job_profile
+candidate_profile
+matching_result
+evaluation
+ai_recommendation
+hr_decision
+screening_result
+interview_result
+final_decision
+
+مثلاً:
+
+Resume Agent
+      │
+      ▼
+candidate_profile
+      │
+      ▼
+Matching Agent
+      │
+      ▼
+matching_result
+      │
+      ▼
+Evaluation Agent
+      │
+      ▼
+evaluation
+
+كده التواصل منظم.

@@ -1,0 +1,47 @@
+                 AI RECRUITMENT COPILOT
+                          │
+          ┌───────────────┴────────────────┐
+          │                                │
+     JOB INTELLIGENCE              CANDIDATE INTELLIGENCE
+          │                                │
+          ▼                                ▼
+      Job Profile                     CV Parsing
+      Requirements                    Candidate Profile
+      Scorecard                       Matching
+          │                                │
+          └───────────────┬────────────────┘
+                          ▼
+                   AI EVALUATION
+                          │
+              ┌───────────┴───────────┐
+              │                       │
+           Score                 Explanation
+              │                       │
+              └───────────┬───────────┘
+                          ▼
+                   HR COPILOT
+                          │
+                Human Decision
+                          │
+             ┌────────────┴────────────┐
+             ▼                         ▼
+          Reject                    Advance
+             │                         │
+           Email                   Screening
+                                       │
+                                       ▼
+                                   Interview
+                                       │
+                                       ▼
+                              Interview Scorecard
+                                       │
+                                       ▼
+                                Final HR Decision
+                                  │          │
+                                Hire       Reject
+                                  │          │
+                                Offer      Email
+                                  │
+                              Acceptance
+                                  │
+                              Onboarding

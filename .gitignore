@@ -1,0 +1,47 @@
+# Secrets and machine-specific configuration
+.env
+.env.*
+!.env.example
+
+# Python environments, caches, and generated artifacts
+**/.venv/
+**/venv/
+**/__pycache__/
+**/*.py[cod]
+**/*.egg-info/
+**/.pytest_cache/
+**/.ruff_cache/
+**/.coverage
+**/htmlcov/
+
+# JavaScript dependencies and generated builds
+**/node_modules/
+**/dist/
+**/build/
+
+# Local data, private employee uploads, and logs
+**/uploads/
+**/storage/
+**/*.log
+**/*.db
+**/*.sqlite
+**/*.sqlite3
+**/*.db-journal
+**/*.db-shm
+**/*.db-wal
+
+# Local editor and operating-system files
+**/.idea/
+**/.vscode/
+**/*.swp
+**/*.swo
+**/.DS_Store
+**/Thumbs.db
+**/desktop.ini
+
+# Temporary document rendering files
+HR manager/.docx_render_temp/
+
+# Outdated duplicate copies; the root README defines the canonical two apps
+/Hr_Create_Jop/
+/Hr_Manager/

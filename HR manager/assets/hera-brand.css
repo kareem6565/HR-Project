@@ -1,0 +1,487 @@
+:root {
+  --hera-teal: #1B3A3A;
+  --hera-gold: #E9D98A;
+  --hera-sky: #6FA8B8;
+  --hera-ink: #292C2A;
+}
+
+body.hera-theme {
+  color: #F5F7F5 !important;
+  background: radial-gradient(ellipse at 50% 0%, #315759 0%, #1B3A3A 68%, #122B2B 100%) !important;
+}
+body.hera-theme *, body.hera-theme *::before, body.hera-theme *::after {
+  font-family: Inter, "Cairo", system-ui, sans-serif !important;
+}
+html[dir="rtl"] body.hera-theme *,
+html[dir="rtl"] body.hera-theme *::before,
+html[dir="rtl"] body.hera-theme *::after {
+  font-family: Cairo, Inter, system-ui, sans-serif !important;
+}
+body.hera-theme .sidebar {
+  background: linear-gradient(160deg, #1B3A3A, #122B2B) !important;
+}
+body.hera-theme header.sticky {
+  background-color: rgba(27, 58, 58, .96) !important;
+  border-color: rgba(233, 217, 138, .2) !important;
+}
+body.hera-theme .card-glass,
+body.hera-theme .panel {
+  border-color: rgba(111, 168, 184, .22) !important;
+}
+
+/* Shared brand accents for the legacy Tailwind-based HR manager screens. */
+.bg-indigo-600, .bg-blue-600, .bg-blue-700, .btn-primary {
+  background-color: var(--hera-teal) !important;
+}
+.hover\:bg-indigo-500:hover, .hover\:bg-blue-500:hover, .btn-primary:hover {
+  background-color: #315759 !important;
+}
+.text-indigo-300, .text-indigo-400, .text-blue-300, .text-blue-400 {
+  color: var(--hera-sky) !important;
+}
+.border-indigo-500, .border-blue-500 { border-color: var(--hera-sky) !important; }
+.ring-indigo-500, .ring-blue-500 { --tw-ring-color: var(--hera-sky) !important; }
+.focus\:border-indigo-500:focus, .focus\:border-blue-500:focus { border-color: var(--hera-sky) !important; }
+.focus\:ring-indigo-500:focus, .focus\:ring-blue-500:focus { --tw-ring-color: var(--hera-sky) !important; }
+.btn-primary { color: #fff !important; }
+
+/* Shared HERA application shell: match the recruitment app's light workspace. */
+body.hera-theme {
+  color: var(--hera-ink) !important;
+  background: #FAF7F2 !important;
+  font-family: Inter, "Cairo", system-ui, sans-serif;
+}
+body.hera-theme .sidebar {
+  color: #fff !important;
+  background: linear-gradient(180deg, #1B3A3A, #122B2B) !important;
+  border-color: rgba(255,255,255,.08) !important;
+}
+body.hera-theme header.sticky,
+body.hera-theme header:not(.dark-header) {
+  color: var(--hera-ink);
+  background: rgba(255,255,255,.94) !important;
+  border-color: var(--hera-border) !important;
+  box-shadow: 0 4px 20px rgba(27,58,58,.04);
+}
+body.hera-theme main { color: var(--hera-ink); }
+body.hera-theme .card,
+body.hera-theme .card-glass,
+body.hera-theme .panel,
+body.hera-theme .modal-box {
+  color: var(--hera-ink) !important;
+  background: #fff !important;
+  border: 1px solid var(--hera-border) !important;
+  box-shadow: 0 12px 32px rgba(27,58,58,.06) !important;
+  backdrop-filter: none;
+}
+body.hera-theme [class*="bg-slate-950"],
+body.hera-theme [class*="bg-slate-900"],
+body.hera-theme [class*="bg-slate-800"] {
+  background-color: #F8FAF9 !important;
+}
+body.hera-theme main [class*="text-white"]:not(button):not(.btn),
+body.hera-theme .card [class*="text-white"]:not(button):not(.btn),
+body.hera-theme .card-glass [class*="text-white"]:not(button):not(.btn),
+body.hera-theme .panel [class*="text-white"]:not(button):not(.btn) { color: var(--hera-ink) !important; }
+body.hera-theme [class*="text-slate-400"],
+body.hera-theme [class*="text-slate-300"] { color: #66736F !important; }
+body.hera-theme input:not([type="checkbox"]):not([type="radio"]),
+body.hera-theme select,
+body.hera-theme textarea,
+body.hera-theme .input,
+body.hera-theme .form-input {
+  color: var(--hera-ink) !important;
+  background: #fff !important;
+  border-color: var(--hera-border) !important;
+}
+body.hera-theme input::placeholder,
+body.hera-theme textarea::placeholder { color: #8A9692 !important; }
+body.hera-theme table th {
+  color: #53625E !important;
+  background: #F3F6F4 !important;
+}
+body.hera-theme table td { border-color: #E9EDEA !important; }
+body.hera-theme tbody tr:hover { background: #F6F9F7 !important; }
+
+/* Bring the employee work and profile screens into the same visual shell. */
+.hera-extra-sidebar {
+  position: fixed;
+  inset-block: 0;
+  inset-inline-start: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  width: 240px;
+  padding: 25px 15px;
+  color: #fff;
+  background: var(--hera-teal-deep, #082A24);
+}
+html[dir="rtl"] .hera-extra-sidebar { inset-inline-start: auto; inset-inline-end: 0; }
+html[dir="rtl"] .hera-extra-sidebar { inset: 0 0 0 auto; left: auto; right: 0; }
+html[dir="ltr"] .hera-extra-sidebar { inset: 0 auto 0 0; left: 0; right: auto; }
+.hera-extra-brand { display: flex; align-items: center; gap: 11px; padding: 5px 10px 35px; color: #fff; text-decoration: none; }
+.hera-extra-brand img { width: 38px; height: 38px; padding: 4px; border: 1px solid rgba(233,217,138,.25); border-radius: 11px; background: #fff; object-fit: contain; }
+.hera-extra-brand strong, .hera-extra-brand small { display: block; }
+.hera-extra-brand strong { font-size: 18px; line-height: 1.3; }
+.hera-extra-brand small { color: #A6B8B2; font-size: 11px; }
+.hera-extra-sidebar nav { display: flex; flex-direction: column; gap: 8px; }
+.hera-extra-sidebar nav a, .hera-extra-logout { display: flex; align-items: center; min-height: 46px; padding: 12px 13px; border-radius: 10px; color: #A6B8B2; font-size: 14px; text-decoration: none; }
+.hera-extra-sidebar nav a:hover, .hera-extra-sidebar nav a.active { color: #fff; background: rgba(255,255,255,.1); }
+.hera-extra-sidebar nav a.active { box-shadow: inset 3px 0 0 var(--hera-gold, #E9D98A); font-weight: 600; }
+html[dir="rtl"] .hera-extra-sidebar nav a.active { box-shadow: inset -3px 0 0 var(--hera-gold, #E9D98A); }
+.hera-extra-logout { margin-top: auto; color: #F1B8B4; }
+body.hera-has-extra-sidebar > header, body.hera-has-extra-sidebar > main {
+  width: calc(100% - 240px) !important;
+  max-width: none !important;
+  margin-inline-start: 240px !important;
+  margin-inline-end: 0 !important;
+}
+body.hera-has-extra-sidebar > header { min-height: 80px; }
+body.hera-has-extra-sidebar > header > div { max-width: none !important; padding-inline: 32px !important; }
+body.hera-has-extra-sidebar > main { padding: 30px 42px 50px !important; }
+body.hera-profile-layout > div:first-of-type { width: calc(100% - 240px) !important; max-width: none !important; margin-inline-start: 240px !important; margin-inline-end: 0 !important; padding: 30px 42px 50px !important; }
+html[dir="rtl"] body.hera-has-extra-sidebar > header,
+html[dir="rtl"] body.hera-has-extra-sidebar > main,
+html[dir="rtl"] body.hera-profile-layout > div:first-of-type { margin-inline-start: 0 !important; margin-inline-end: 240px !important; }
+@media (max-width: 950px) {
+  .hera-extra-sidebar { width: 76px; padding-inline: 10px; }
+  .hera-extra-brand { justify-content: center; padding-inline: 0; }
+  .hera-extra-brand span, .hera-extra-sidebar nav a, .hera-extra-logout { font-size: 0; overflow: hidden; justify-content: center; }
+  body.hera-has-extra-sidebar > header, body.hera-has-extra-sidebar > main,
+  body.hera-profile-layout > div:first-of-type { width: calc(100% - 76px) !important; margin-inline-start: 76px !important; padding-inline: 24px !important; }
+  html[dir="rtl"] body.hera-has-extra-sidebar > header,
+  html[dir="rtl"] body.hera-has-extra-sidebar > main,
+  html[dir="rtl"] body.hera-profile-layout > div:first-of-type { margin-inline-start: 0 !important; margin-inline-end: 76px !important; }
+}
+@media (max-width: 640px) {
+  .hera-extra-sidebar { display: none; }
+  body.hera-has-extra-sidebar > header, body.hera-has-extra-sidebar > main,
+  body.hera-profile-layout > div:first-of-type { width: 100% !important; margin: 0 !important; padding: 20px 16px 36px !important; }
+}
+body.hera-theme .nav-item.active,
+body.hera-theme .nav-item:hover:not(.active) {
+  color: #fff !important;
+  background: rgba(255,255,255,.1) !important;
+  border-color: var(--hera-gold) !important;
+}
+body.hera-theme .btn-primary,
+body.hera-theme .btn-success,
+body.hera-theme .btn-danger,
+body.hera-theme .btn-muted {
+  color: #fff !important;
+  border: 0;
+  border-radius: 10px;
+  transform: none;
+  box-shadow: 0 5px 14px rgba(27,58,58,.12);
+}
+body.hera-theme .btn-primary { background: var(--hera-teal) !important; }
+body.hera-theme .btn-primary:hover { background: #315759 !important; }
+body.hera-theme .btn-muted { background: #315759 !important; }
+body.hera-theme .btn-success { background: #23755E !important; }
+body.hera-theme .btn-danger { background: #B54743 !important; }
+body.hera-theme .modal-overlay { background: rgba(20,37,35,.55) !important; }
+body.hera-theme ::-webkit-scrollbar-track { background: #F3F6F4; }
+body.hera-theme ::-webkit-scrollbar-thumb { background: #B9C7C2; border-radius: 6px; }
+
+/* The language control is shared between the PHP app and the recruitment SPA. */
+.hera-language-toggle {
+  position: fixed;
+  z-index: 10000;
+  inset-block-start: 16px;
+  inset-inline-end: 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid rgba(27,58,58,.16);
+  border-radius: 12px;
+  color: #1B3A3A;
+  background: rgba(255,255,255,.96);
+  box-shadow: 0 5px 18px rgba(27,58,58,.12);
+  font: 700 13px/1 Inter, Cairo, sans-serif;
+  cursor: pointer;
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+.hera-language-toggle:hover { transform: translateY(-1px); box-shadow: 0 8px 22px rgba(27,58,58,.16); }
+.hera-language-toggle svg { width: 17px; height: 17px; }
+.hera-language-toggle.is-inline { position: relative; inset: auto; flex-shrink: 0; margin-inline-start: auto; }
+@media (max-width: 640px) { .hera-language-toggle { inset-block-start: 10px; inset-inline-end: 10px; min-height: 36px; padding-inline: 10px; } }
+
+html[dir="rtl"] body.hera-theme { font-family: Cairo, Inter, system-ui, sans-serif; }
+html[dir="rtl"] body.hera-theme .text-left { text-align: right !important; }
+html[dir="rtl"] body.hera-theme .text-right { text-align: right !important; }
+body.hera-auth-page { background: #FAF7F2 !important; }
+body.hera-auth-page, body.hera-auth-page * { font-family: Inter, Cairo, system-ui, sans-serif !important; }
+html[dir="rtl"] body.hera-auth-page, html[dir="rtl"] body.hera-auth-page * { font-family: Cairo, Inter, system-ui, sans-serif !important; }
+body.hera-auth-page .card-glass {
+  color: var(--hera-ink) !important;
+  background: #fff !important;
+  border: 1px solid var(--hera-border) !important;
+  box-shadow: 0 22px 55px rgba(27,58,58,.12) !important;
+}
+body.hera-auth-page .card-glass [class*="text-white"]:not(button),
+body.hera-auth-page .card-glass [class*="text-slate-"] { color: var(--hera-ink) !important; }
+body.hera-auth-page input { color: var(--hera-ink) !important; background: #F8FAF9 !important; border-color: var(--hera-border) !important; }
+body.hera-auth-page .btn-gradient { background: var(--hera-teal) !important; box-shadow: 0 6px 18px rgba(27,58,58,.2) !important; }
+
+/* HERA reference dashboard shell, shared by the HR management views. */
+:root {
+  --hera-teal-deep: #082A24;
+  --hera-border: #E2E5E3;
+  --hera-muted: #66736F;
+  --hera-cream-subtle: #FAF7F2;
+}
+body.hera-theme {
+  min-height: 100vh;
+  color: var(--hera-ink) !important;
+  background: var(--hera-cream-subtle) !important;
+  font-family: Inter, Cairo, system-ui, sans-serif !important;
+}
+body.hera-theme *, body.hera-theme *::before, body.hera-theme *::after {
+  font-family: Inter, Cairo, system-ui, sans-serif !important;
+}
+html[dir="rtl"] body.hera-theme,
+html[dir="rtl"] body.hera-theme *,
+html[dir="rtl"] body.hera-theme *::before,
+html[dir="rtl"] body.hera-theme *::after {
+  font-family: Cairo, Inter, system-ui, sans-serif !important;
+}
+
+/* The two existing dashboard pages already have a sidebar in their markup. */
+body.hera-theme > aside.sidebar {
+  position: fixed !important;
+  inset-block: 0 !important;
+  inset-inline-start: 0 !important;
+  inset-inline-end: auto !important;
+  z-index: 40;
+  width: 240px !important;
+  height: 100vh !important;
+  min-height: 100vh !important;
+  padding: 25px 15px !important;
+  overflow-y: auto;
+  color: #fff !important;
+  background: var(--hera-teal-deep) !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+html[dir="rtl"] body.hera-theme > aside.sidebar { inset-inline-start: auto !important; inset-inline-end: 0 !important; }
+html[dir="rtl"] body.hera-theme > aside.sidebar { inset: 0 0 0 auto !important; left: auto !important; right: 0 !important; }
+html[dir="ltr"] body.hera-theme > aside.sidebar { inset: 0 auto 0 0 !important; left: 0 !important; right: auto !important; }
+body.hera-theme > aside.sidebar > div:first-child {
+  padding: 5px 10px 35px !important;
+  border: 0 !important;
+}
+body.hera-theme > aside.sidebar > div:nth-child(2) {
+  margin: 0 0 18px !important;
+  padding: 12px 10px 18px !important;
+  border-bottom: 1px solid rgba(255,255,255,.08) !important;
+}
+body.hera-theme > aside.sidebar nav { padding: 0 !important; }
+body.hera-theme > aside.sidebar .nav-item {
+  min-height: 46px;
+  padding: 12px 13px !important;
+  color: #A6B8B2 !important;
+  border: 0 !important;
+  border-radius: 10px !important;
+  background: transparent !important;
+  text-decoration: none;
+  box-shadow: none;
+}
+body.hera-theme > aside.sidebar .nav-item:hover:not(.active) { color: #fff !important; background: rgba(255,255,255,.06) !important; }
+body.hera-theme > aside.sidebar .nav-item.active {
+  color: #fff !important;
+  background: rgba(255,255,255,.10) !important;
+  box-shadow: inset 3px 0 0 var(--hera-gold) !important;
+}
+html[dir="rtl"] body.hera-theme > aside.sidebar .nav-item.active { box-shadow: inset -3px 0 0 var(--hera-gold) !important; }
+body.hera-theme > aside.sidebar [class*="text-slate-400"],
+body.hera-theme > aside.sidebar [class*="text-blue-400"] { color: #A6B8B2 !important; }
+body.hera-theme > aside.sidebar [class*="text-white"] { color: #fff !important; }
+body.hera-theme > aside.sidebar [class*="border-white"] { border-color: rgba(255,255,255,.08) !important; }
+body.hera-theme > main.flex-1 { margin-inline-start: 240px; width: calc(100% - 240px); min-width: 0; }
+html[dir="rtl"] body.hera-theme > main.flex-1 { margin-inline-start: 0; margin-inline-end: 240px; }
+html[dir="rtl"] body.hera-theme > main.flex-1 { margin-left: 0 !important; margin-right: 240px !important; }
+body.hera-theme > main.flex-1 > header.sticky {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  min-height: 80px;
+  color: var(--hera-ink) !important;
+  background: rgba(255,255,255,.96) !important;
+  border-bottom: 1px solid var(--hera-border) !important;
+  box-shadow: 0 4px 20px rgba(27,58,58,.04);
+  backdrop-filter: blur(14px);
+}
+body.hera-theme > main.flex-1 > header.sticky > div:first-child { min-height: 80px; padding: 16px 32px !important; }
+body.hera-theme > main.flex-1 > header.sticky [class*="text-white"] { color: var(--hera-ink) !important; }
+body.hera-theme > main.flex-1 > header.sticky [class*="text-slate-400"],
+body.hera-theme > main.flex-1 > header.sticky [class*="text-slate-300"] { color: var(--hera-muted) !important; }
+
+/* HR suite: its existing header navigation becomes the same fixed side rail. */
+body.hera-theme:not(.flex) > header.sticky {
+  position: fixed !important;
+  inset-block: 0 !important;
+  inset-inline-start: 0 !important;
+  inset-inline-end: auto !important;
+  z-index: 40;
+  width: 240px;
+  height: 100vh;
+  overflow-y: auto;
+  color: #fff !important;
+  background: var(--hera-teal-deep) !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+html[dir="rtl"] body.hera-theme:not(.flex) > header.sticky { inset-inline-start: auto !important; inset-inline-end: 0 !important; }
+html[dir="rtl"] body.hera-theme:not(.flex) > header.sticky { inset: 0 0 0 auto !important; left: auto !important; right: 0 !important; }
+html[dir="ltr"] body.hera-theme:not(.flex) > header.sticky { inset: 0 auto 0 0 !important; left: 0 !important; right: auto !important; }
+body.hera-theme:not(.flex) > header.sticky > div {
+  width: 100% !important;
+  max-width: none !important;
+  min-height: 100vh;
+  margin: 0 !important;
+  padding: 25px 15px !important;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 24px;
+}
+body.hera-theme:not(.flex) > header.sticky > div > div:first-child {
+  padding: 5px 10px 24px;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+body.hera-theme:not(.flex) > header.sticky nav { flex-direction: column; align-items: stretch; gap: 8px; }
+body.hera-theme:not(.flex) > header.sticky nav .btn {
+  width: 100%;
+  min-height: 46px;
+  padding: 12px 13px;
+  text-align: start;
+  color: #A6B8B2 !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 10px;
+  box-shadow: none !important;
+}
+body.hera-theme:not(.flex) > header.sticky nav .btn:hover { color: #fff !important; background: rgba(255,255,255,.06) !important; }
+body.hera-theme:not(.flex) > header.sticky nav .btn-danger { margin-top: auto; color: #F1B8B4 !important; }
+body.hera-theme:not(.flex) > header.sticky [class*="text-white"] { color: #fff !important; }
+body.hera-theme:not(.flex) > header.sticky [class*="text-slate-400"],
+body.hera-theme:not(.flex) > header.sticky [class*="text-indigo-300"] { color: #A6B8B2 !important; }
+body.hera-theme:not(.flex) > main.max-w-7xl {
+  width: calc(100% - 240px);
+  max-width: none;
+  margin: 0 0 0 240px;
+  padding: 30px 42px 50px !important;
+}
+html[dir="rtl"] body.hera-theme:not(.flex) > main.max-w-7xl { margin: 0 240px 0 0; }
+html[dir="rtl"] body.hera-theme:not(.flex) > main.max-w-7xl { margin-left: 0 !important; margin-right: 240px !important; }
+
+body.hera-theme .card, body.hera-theme .card-glass, body.hera-theme .panel,
+body.hera-theme .modal-box {
+  color: var(--hera-ink) !important;
+  background: #fff !important;
+  border: 1px solid var(--hera-border) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 4px 14px rgba(27,58,58,.04) !important;
+  backdrop-filter: none !important;
+}
+body.hera-theme main [class*="text-white"]:not(button):not(.btn),
+body.hera-theme .card [class*="text-white"]:not(button):not(.btn),
+body.hera-theme .card-glass [class*="text-white"]:not(button):not(.btn),
+body.hera-theme .panel [class*="text-white"]:not(button):not(.btn) { color: var(--hera-ink) !important; }
+body.hera-theme [class*="text-slate-400"], body.hera-theme [class*="text-slate-300"] { color: var(--hera-muted) !important; }
+body.hera-theme [class*="bg-slate-950"], body.hera-theme [class*="bg-slate-900"],
+body.hera-theme [class*="bg-slate-800"] { background-color: #F8FAF9 !important; }
+body.hera-theme .btn-primary { color: #fff !important; background: var(--hera-teal) !important; border-radius: 10px; }
+body.hera-theme .btn-success { color: #fff !important; background: #23755E !important; }
+body.hera-theme .btn-danger { color: #fff !important; background: #B54743 !important; }
+body.hera-theme .btn-muted { color: var(--hera-teal) !important; background: #F0F4F2 !important; }
+body.hera-theme input:not([type="checkbox"]):not([type="radio"]),
+body.hera-theme select, body.hera-theme textarea {
+  color: var(--hera-ink) !important; background: #fff !important; border-color: var(--hera-border) !important;
+}
+body.hera-theme table th { color: #53625E !important; background: #F3F6F4 !important; }
+body.hera-theme table td { border-color: #E9EDEA !important; }
+body.hera-theme tbody tr:hover { background: #F6F9F7 !important; }
+
+/* Keep language selection in the header action row instead of covering it. */
+.hera-language-toggle { position: relative; inset: auto; flex-shrink: 0; margin-inline-start: 0; min-height: 40px; }
+.hera-language-toggle.is-inline { margin-inline-start: 0; }
+.hera-language-toggle.is-floating { position: fixed; inset-block-start: 16px; inset-inline-end: 18px; z-index: 10000; }
+@media (max-width: 950px) {
+  body.hera-theme > aside.sidebar { width: 76px !important; padding-inline: 10px !important; }
+  body.hera-theme > aside.sidebar > div:nth-child(2), body.hera-theme > aside.sidebar .nav-item { justify-content: center; }
+  body.hera-theme > aside.sidebar .nav-item { font-size: 0; gap: 0; }
+  body.hera-theme > aside.sidebar .nav-item svg { width: 21px; height: 21px; }
+  body.hera-theme > main.flex-1 { margin-inline-start: 76px; width: calc(100% - 76px); }
+  html[dir="rtl"] body.hera-theme > main.flex-1 { margin-inline-end: 76px; margin-inline-start: 0; }
+  body.hera-theme:not(.flex) > header.sticky { width: 76px; }
+  body.hera-theme:not(.flex) > header.sticky > div { padding: 18px 10px !important; }
+  body.hera-theme:not(.flex) > header.sticky > div > div:first-child > div > div { display: none; }
+  body.hera-theme:not(.flex) > header.sticky nav .btn { overflow: hidden; font-size: 0; padding-inline: 10px; }
+  body.hera-theme:not(.flex) > main.max-w-7xl { width: calc(100% - 76px); margin-inline-start: 76px; padding-inline: 24px !important; }
+  html[dir="rtl"] body.hera-theme:not(.flex) > main.max-w-7xl { margin-inline-end: 76px; margin-inline-start: 0; }
+}
+@media (max-width: 640px) {
+  body.hera-theme > aside.sidebar { display: none !important; }
+  body.hera-theme > main.flex-1 { margin: 0 !important; width: 100%; }
+  body.hera-theme:not(.flex) > header.sticky { position: sticky !important; inset: auto !important; width: 100%; height: auto; }
+  body.hera-theme:not(.flex) > header.sticky > div { min-height: auto; padding: 12px 16px !important; }
+  body.hera-theme:not(.flex) > header.sticky nav { flex-direction: row; overflow-x: auto; }
+  body.hera-theme:not(.flex) > header.sticky nav .btn { width: auto; white-space: nowrap; }
+  body.hera-theme:not(.flex) > main.max-w-7xl { width: 100%; margin: 0; padding: 20px 16px 36px !important; }
+}
+
+/* Keep metric typography neutral; use one restrained ink tone for all values. */
+body.hera-theme main .stat-card [class*="text-red-"],
+body.hera-theme main .stat-card [class*="text-rose-"],
+body.hera-theme main .stat-card [class*="text-amber-"],
+body.hera-theme main .stat-card [class*="text-yellow-"],
+body.hera-theme main .stat-card [class*="text-emerald-"],
+body.hera-theme main .stat-card [class*="text-green-"],
+body.hera-theme main .stat-card [class*="text-blue-"],
+body.hera-theme main .stat-card [class*="text-cyan-"],
+body.hera-theme main .stat-card [class*="text-indigo-"],
+body.hera-theme main .stat-card [class*="text-violet-"] { color: var(--hera-ink) !important; }
+body.hera-theme main .stat-card [class*="bg-red-"],
+body.hera-theme main .stat-card [class*="bg-rose-"],
+body.hera-theme main .stat-card [class*="bg-amber-"],
+body.hera-theme main .stat-card [class*="bg-yellow-"],
+body.hera-theme main .stat-card [class*="bg-emerald-"],
+body.hera-theme main .stat-card [class*="bg-green-"],
+body.hera-theme main .stat-card [class*="bg-blue-"],
+body.hera-theme main .stat-card [class*="bg-cyan-"],
+body.hera-theme main .stat-card [class*="bg-indigo-"] { background: #EBF2F1 !important; }
+body.hera-theme main .stat-card svg { color: var(--hera-teal) !important; }
+body.hera-theme main [class*="text-red-"],
+body.hera-theme main [class*="text-rose-"],
+body.hera-theme main [class*="text-amber-"],
+body.hera-theme main [class*="text-yellow-"],
+body.hera-theme main [class*="text-emerald-"],
+body.hera-theme main [class*="text-green-"],
+body.hera-theme main [class*="text-blue-"],
+body.hera-theme main [class*="text-cyan-"],
+body.hera-theme main [class*="text-indigo-"],
+body.hera-theme main [class*="text-violet-"] { color: var(--hera-ink) !important; }
+body.hera-theme main .badge,
+body.hera-theme main [class^="status-"],
+body.hera-theme main [class*=" status-"] {
+  color: var(--hera-teal) !important;
+  background: #EBF2F1 !important;
+  border-color: #D7E4E0 !important;
+}
+@media (min-width: 641px) and (max-width: 950px) {
+  html[dir="rtl"] body.hera-theme > main.flex-1 { margin-left: 0 !important; margin-right: 76px !important; }
+  html[dir="rtl"] body.hera-theme:not(.flex) > main.max-w-7xl { margin-left: 0 !important; margin-right: 76px !important; }
+}
+@media (max-width: 640px) {
+  html[dir="rtl"] body.hera-theme > main.flex-1,
+  html[dir="rtl"] body.hera-theme:not(.flex) > main.max-w-7xl { width: 100% !important; margin: 0 !important; }
+  html[dir="rtl"] body.hera-theme:not(.flex) > header.sticky { position: sticky !important; inset: auto !important; left: auto !important; right: auto !important; width: 100% !important; height: auto !important; }
+  html[dir="rtl"] body.hera-has-extra-sidebar > header,
+  html[dir="rtl"] body.hera-has-extra-sidebar > main,
+  html[dir="rtl"] body.hera-profile-layout > div:first-of-type { width: 100% !important; margin: 0 !important; }
+}

@@ -1,0 +1,19 @@
+# Frontend build/dependency artifacts (local only)
+node_modules/
+dist/
+
+# Local environment config (dev identity defaults live in .env)
+.env
+.env.*
+!.env.example
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini

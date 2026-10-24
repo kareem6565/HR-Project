@@ -1,0 +1,52 @@
+# Python virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+
+# Test and tooling caches
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage/
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs and runtime data
+*.log
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+backend/storage/
+storage/
+
+# Node / frontend build artifacts
+node_modules/
+dist/
+build/
+
+# Local archives and snapshots
+archive/
+checkpoint_snapshots/

@@ -1,0 +1,85 @@
+PLAN
+ ↓
+DESIGN
+ ↓
+PROMPT AI
+ ↓
+CODE
+ ↓
+TEST
+ ↓
+REVIEW
+ ↓
+COMMIT
+ ↓
+NEXT
+
+Rule 1
+
+AI لا يغير Architecture بدون موافقتك.
+
+Rule 2
+
+AI لا يضيف dependency إلا لما يشرح السبب.
+
+Rule 3
+
+AI لا يعدل ملفات غير مرتبطة بالـtask.
+
+Rule 4
+
+كل feature لها tests.
+
+Rule 5
+
+كل milestone له Git commit.
+
+Rule 6
+
+ممنوع giant prompts.
+
+Rule 7
+
+ممنوع أكثر من Agent جديد في task واحدة.
+
+Rule 8
+
+أي Error نفهم سببه قبل ما نطلب من AI "fix it".
+
+
+Project Rules
+
+1. Follow the existing architecture.
+2. Do not introduce new frameworks without approval.
+3. Prefer small changes.
+4. Do not modify unrelated files.
+5. Use typed interfaces.
+6. All LLM outputs must use structured schemas.
+7. Business-critical decisions must not depend solely on LLM output.
+8. Add tests for new behavior.
+9. Never remove tests to make them pass.
+10. Explain architectural changes before implementing them.
+
+كل Feature هتمر بنفس الدورة:
+
+1. PLAN
+   ↓
+2. ASK AI TO ANALYZE
+   ↓
+3. YOU REVIEW PLAN
+   ↓
+4. AI IMPLEMENTS
+   ↓
+5. AI WRITES TESTS
+   ↓
+6. YOU RUN TESTS
+   ↓
+7. YOU REVIEW CODE
+   ↓
+8. AI SELF-REVIEW
+   ↓
+9. GIT COMMIT
+   ↓
+10. NEXT FEATURE
+
+ممنوع AI يكتب الكود قبل ما توافق على الـplan.

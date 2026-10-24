@@ -1,0 +1,479 @@
+🏗️ Phase 0: إحنا الأول هنحدد الـArchitecture
+
+قبل ما نكتب أي AI Agent، نحدد:
+
+Frontend
+Backend
+Database
+AI Layer
+Workflow Engine
+External Services
+Observability
+
+أنا أقترح:
+
+                    React + TypeScript
+                           │
+                           ▼
+                     FastAPI Backend
+                           │
+             ┌─────────────┴─────────────┐
+             │                           │
+             ▼                           ▼
+        PostgreSQL                    File Storage
+             │
+             ▼
+        AI Application Layer
+             │
+             ▼
+          LangGraph
+             │
+      ┌──────┼──────┐
+      ▼      ▼      ▼
+    Agents  Tools  Human
+                    Approval
+             │
+             ▼
+       External Services
+       ├── Google Calendar
+       └── Email
+
+             │
+             ▼
+       Observability
+       ├── Tracing
+       ├── Logs
+       └── Errors
+
+دي مش Architecture نهائية لسه. دي نقطة البداية.
+
+Phase 1: Project Foundation
+
+أول حاجة نبني المشروع من غير AI.
+
+وده مهم جدًا.
+
+نعمل:
+
+hr-ai-assistant/
+│
+├── backend/
+│   ├── app/
+│   │   ├── api/
+│   │   ├── core/
+│   │   ├── models/
+│   │   ├── schemas/
+│   │   ├── services/
+│   │   ├── repositories/
+│   │   └── main.py
+│   │
+│   ├── tests/
+│   ├── pyproject.toml
+│   └── .env.example
+│
+├── frontend/
+│
+├── docs/
+│   ├── architecture.md
+│   ├── workflows.md
+│   └── decisions.md
+│
+├── docker-compose.yml
+└── README.md
+
+في المرحلة دي:
+
+❌ مفيش Agents
+❌ مفيش LangGraph
+❌ مفيش RAG
+❌ مفيش AI magic
+
+نعمل:
+
+FastAPI
+PostgreSQL
+SQLAlchemy
+Alembic
+Pydantic
+Authentication
+Docker
+React
+
+ونتأكد إن:
+
+Frontend → Backend → Database
+
+شغالين.
+
+🧪 إزاي تستخدم الـVibe Coding هنا؟
+
+مثلاً بدل ما تطلب منه المشروع كله:
+
+Prompt:
+
+We are building an HR Recruitment AI Assistant.
+
+Implement only the FastAPI project foundation.
+
+Requirements:
+
+Python
+FastAPI
+PostgreSQL
+SQLAlchemy
+Alembic
+Pydantic
+Clean separation between API, schemas, models, services and repositories.
+
+Do not implement AI, LangChain, LangGraph, authentication, or business logic yet.
+
+First inspect the existing project structure.
+Do not create unnecessary files.
+Explain the files you intend to create before modifying them.
+
+لاحظ آخر سطر.
+
+خليه يقولك هيعمل إيه قبل ما يعمله.
+
+🧠 دي قاعدة ذهبية
+
+خلي الـAI يعمل:
+
+Plan → Ask/Show → Implement
+
+مش:
+
+Implement → Implement → Implement → 💥
+Phase 2: Database Design
+
+قبل الـAgents، لازم نعرف بياناتنا.
+
+أنا متوقع Entities مثل:
+
+User
+Organization
+Job
+JobRequirement
+Candidate
+Resume
+CandidateEvaluation
+Screening
+Interview
+InterviewQuestion
+InterviewFeedback
+HiringDecision
+Email
+CalendarEvent
+HRPreference
+WorkflowRun
+
+لكن مش هنفترض إن كل دول لازم من البداية.
+
+هنعمل ERD.
+
+مثلاً:
+
+وبعدين نراجعها قبل ما الـAI يعمل migrations.
+
+Phase 3: Job Intelligence
+
+هنا أول AI حقيقي.
+
+نعمل:
+
+Job Description
+      ↓
+Job Parser
+      ↓
+Structured Job Profile
+
+لكن مهم جدًا:
+
+نعمل Schema ثابت
+
+مثلاً:
+
+JobProfile
+
+ويكون فيه:
+
+title
+summary
+must_have_skills
+nice_to_have_skills
+experience_requirements
+education_requirements
+responsibilities
+evaluation_criteria
+
+الـLLM لا يرجع نص حر.
+
+يرجع Structured Output.
+
+🧪 Test
+
+نعمل 10 Job Descriptions حقيقية أو sample.
+
+ونسأل:
+
+Input → JD
+Expected → Structured Job Profile
+
+ونراجع:
+
+هل بيستخرج Skills؟
+هل بيفرق Must-have عن Nice-to-have؟
+هل بيفهم الخبرة؟
+هل بيهبد Requirements مش موجودة؟
+
+لو مش ثابت، ممنوع نروح للمرحلة اللي بعدها.
+
+Phase 4: Resume Intelligence
+
+بعدها:
+
+PDF
+ ↓
+Text Extraction
+ ↓
+Resume Parser
+ ↓
+Candidate Profile
+
+ونعمل Dataset صغير:
+
+tests/
+   resumes/
+      resume_01.pdf
+      resume_02.pdf
+      resume_03.pdf
+
+وممكن يكون عندنا expected outputs.
+
+Phase 5: Matching Engine
+
+هنا لازم نفصل حاجة مهمة جدًا:
+
+AI Matching ≠ Score Calculation
+
+يعني:
+
+Matching
+
+يقول:
+
+Java → Strong Match
+Spring → Strong Match
+Kafka → Missing
+Docker → Partial
+Scoring Engine
+
+يحسب:
+
+Technical = 38/40
+Experience = 18/25
+...
+Total = 84
+
+أنا أفضل إن الحساب النهائي يكون deterministic code وليس LLM يقول:
+
+"أعتقد 84."
+
+الـAI يستخرج ويقيّم الأدلة، لكن القواعد الرياضية والـweights تكون تحت سيطرتنا.
+
+دي هتخلي النظام:
+
+predictable
+testable
+explainable
+Phase 6: LangGraph
+
+هنا فقط ندخل LangGraph.
+
+مش قبل ما نكون فاهمين الـindividual components.
+
+نعمل:
+
+START
+  ↓
+Parse Job
+  ↓
+Parse Resume
+  ↓
+Match Candidate
+  ↓
+Evaluate
+  ↓
+Explain
+  ↓
+HR Review
+
+وبعدين conditional routing:
+
+                    Evaluation
+                        │
+                ┌───────┴───────┐
+                ▼               ▼
+             Low Fit         Good Fit
+                │               │
+                ▼               ▼
+              Hold          HR Review
+                                │
+                         ┌──────┴──────┐
+                         ▼             ▼
+                      Reject        Advance
+🧑‍💼 أهم Node عندنا: Human Approval
+
+LangGraph هنا هيبقى مفيد جدًا.
+
+الـworkflow يوصل:
+
+AI Recommendation
+       ↓
+WAIT
+       ↓
+HR
+
+وبعد قرار الـHR:
+
+HR Decision
+       ↓
+Resume Graph
+
+يعني الـworkflow ممكن يستمر بعد ساعات أو يوم.
+
+وده واحد من الأسباب الأساسية اللي تخلينا نستخدم Graph بدل chain بسيط.
+
+🤖 Phase 7: Multi-Agent
+
+بعد ما الـworkflow الأساسي شغال، نبدأ نقسم الـAI.
+
+مش كل حاجة Agent.
+
+أنا أقترح مبدئيًا:
+
+Job Agent
+Resume Agent
+Matching Agent
+Interview Agent
+Communication Agent
+
+لكن مثلاً:
+
+Scoring Engine
+
+مش لازم Agent.
+
+Database
+
+مش Agent.
+
+Calendar API
+
+Tool.
+
+🔌 Agent vs Tool
+
+دي لازم تحفظها كويس:
+
+Agent
+
+عنده:
+
+reasoning + decision + tools
+
+Tool
+
+يعمل:
+
+specific deterministic action
+
+مثلاً:
+
+Calendar Agent
+      │
+      ├── get_available_slots()
+      ├── create_event()
+      └── cancel_event()
+
+الـCalendar نفسه Tool.
+
+🔍 Phase 8: AI Tracing
+
+من البداية، مش في الآخر.
+
+كل AI operation نسجلها.
+
+مثلاً:
+
+Workflow Run
+│
+├── Job Agent
+│   ├── Input
+│   ├── LLM call
+│   ├── Output
+│   └── Duration
+│
+├── Resume Agent
+│
+├── Matching Agent
+│
+└── Evaluation Agent ❌
+    └── Structured Output Error
+
+وعندنا:
+
+workflow_id
+agent
+node
+model
+latency
+input
+output
+error
+status
+
+وده هيخلينا نعرف لما الـAI يعمل حركة غريبة.
+
+🧪 Phase 9: Evaluation
+
+ودي من أهم الحاجات اللي الناس بتنسى تعملها.
+
+مش كل مرة تعدل Prompt وتقول:
+
+شكله اتحسن.
+
+نعمل Dataset:
+
+20 Jobs
+50 Resumes
+
+وندينا لكل حالة expected behavior.
+
+مثلاً:
+
+Candidate 01
+Expected:
+Strong Match
+
+Candidate 02
+Expected:
+Low Match
+
+كل مرة تغير:
+
+Prompt
+Model
+Agent logic
+Matching algorithm
+
+تشغل evaluation.
+
+ونقارن:
+
+Before: 82%
+After: 89%
+
+مش:
+
+"حاسس إنه بقى أحسن." 😂

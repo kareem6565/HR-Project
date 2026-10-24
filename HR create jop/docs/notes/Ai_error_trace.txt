@@ -1,0 +1,189 @@
+HR
+ ↓
+LangGraph
+ ↓
+Job Agent
+ ↓
+Resume Agent
+ ↓
+Matching Agent
+ ↓
+Evaluation Agent
+ ↓
+Interview Agent
+
+لو حصل Error في الآخر، مش عايزين نشوف:
+
+500 Internal Server Error
+
+وخلاص 😵‍💫
+
+عايزين نقدر نعرف:
+
+Workflow: Candidate Screening
+
+✓ Job Agent
+  1.2s
+
+✓ Resume Parser
+  3.8s
+
+✓ Matching Agent
+  2.1s
+
+✗ Evaluation Agent
+  4.7s
+
+Error:
+Invalid structured output
+
+Model:
+Gemini
+
+Input:
+Candidate ID: 123
+
+Expected:
+EvaluationSchema
+
+Received:
+Missing field "experience_score"
+
+وبالتالي نعرف فورًا إن المشكلة في Evaluation Agent، مش في الـResume Parser ولا الـMatching.
+
+وده يخلي عندنا 3 مستويات للـtracking
+1. Workflow Trace
+
+نعرف الـLangGraph مشي إزاي:
+
+Job Agent
+   ↓
+Resume Agent
+   ↓
+Matching Agent
+   ↓
+Evaluation Agent ❌
+2. Agent Trace
+
+نعرف كل Agent عمل إيه:
+
+Agent:
+Matching Agent
+
+Input:
+Job Profile
+Candidate Profile
+
+LLM Call:
+gemini...
+
+Output:
+MatchResult
+
+Duration:
+2.1s
+3. Error Trace
+
+لو حصلت مشكلة:
+
+Error
+ ↓
+Agent
+ ↓
+Node
+ ↓
+Tool
+ ↓
+LLM Request
+ ↓
+Response
+
+فنقدر نحدد الـroot cause.
+
+🧠 والأجمل إن LangGraph مناسب جدًا للموضوع ده
+
+لأن عندنا Nodes واضحة.
+
+مثلاً:
+
+فلو Evaluation Agent وقع، الـtrace يقدر يوضح:
+
+Graph Run
+ ├── Job Agent       ✓
+ ├── Resume Agent    ✓
+ ├── Matching Agent  ✓
+ └── Evaluation      ❌
+       ├── Prompt
+       ├── Model
+       ├── Input
+       ├── Output
+       ├── Error
+       └── Duration
+هل ده Agent لوحده؟
+
+لا.
+
+ودي نقطة مهمة من كلامنا السابق.
+
+ما نعملش:
+
+Error Tracking Agent 🤖
+
+😂
+
+الأفضل إن كل الـAgents والـLangGraph يكونوا observable.
+
+يعني نضيف طبقة:
+
+                 LangGraph
+                     │
+          ┌──────────┴──────────┐
+          │                     │
+       Agents                 Tools
+          │                     │
+          └──────────┬──────────┘
+                     │
+                     ▼
+             Observability
+                     │
+          ┌──────────┼──────────┐
+          ▼          ▼          ▼
+       Traces       Logs      Errors
+
+وممكن نستخدم أدوات متخصصة للـAI tracing مثل LangSmith مع LangChain/LangGraph، أو نبني جزء من الـlogging بأنفسنا.
+
+ودي هتكون مهمة جدًا في مشروعنا
+
+لأن عندنا حاجات كتير ممكن تقع:
+
+PDF parsing
+OCR
+LLM timeout
+Invalid JSON
+Structured output failure
+API rate limit
+Calendar API error
+Email API error
+Agent loop
+Wrong routing
+Database error
+Tool failure
+
+فبدل ما الـHR يشوف Error غامض، المطور يكون عنده Trace كامل يساعده يعرف المشكلة فين.
+
+وفي الـproduction ممكن حتى نعمل:
+
+Error detected
+      ↓
+Retry
+      ↓
+If still failing
+      ↓
+Save failed state
+      ↓
+Alert developer
+      ↓
+HR sees:
+"Candidate analysis temporarily unavailable"
+
+وده مهم جدًا لأن الـAI workflow بتاعنا مش لازم يقع كله بسبب Agent واحد فشل.

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 180" role="img" aria-labelledby="title">
+  <title id="title">HERA</title>
+  <g transform="translate(16 8)">
+    <path fill="#1B3A3A" d="M42 102V37c0-19 13-32 32-32h47c31 0 51 18 54 43-10-11-22-16-39-16H79v39c13 2 24 8 33 18l-20 20c-7-8-15-12-26-12-17 0-29 12-29 29v19H18v-16c0-13 8-24 24-27z"/>
+    <path fill="#1B3A3A" d="M32 79c-22 8-34 26-34 48 0 21 12 37 32 45l17-22c-9-4-14-12-14-23s5-19 15-23z"/>
+    <path fill="#E9D98A" d="M148 53c17 16 27 36 27 57 0 26-15 47-42 61l22 1-15-31c18-12 29-30 29-51 0-13-4-25-13-37z"/>
+    <path fill="#E9D98A" d="M124 83c-15 14-22 25-22 42 0 14 6 27 17 38l-4 11h46l-15-33c15-10 23-25 23-41 0-13-5-24-14-33z"/>
+    <circle cx="83" cy="46" r="7" fill="#1B3A3A"/><circle cx="119" cy="46" r="7" fill="#1B3A3A"/>
+    <path d="M87 63c9 8 20 8 29 0" fill="none" stroke="#1B3A3A" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="108" cy="112" r="16" fill="#6FA8B8" stroke="#fff" stroke-width="6"/>
+  </g>
+  <text x="218" y="119" fill="#1B3A3A" font-family="Arial,sans-serif" font-size="76" font-weight="800" letter-spacing="-3">HERA</text>
+</svg>

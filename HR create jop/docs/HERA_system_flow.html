@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HERA — System Flow / Technical Product Architecture</title>
+<style>
+  :root{
+    --forest:#183A32;
+    --butter:#E9D98A;
+    --blue:#6FA8B8;
+    --warmwhite:#FAF8F1;
+    --graphite:#292C2A;
+    --error:#B03A3A;
+    --muted:#CFC9B6;
+    --softgreen:#E3EFEA;
+    --softblue:#DFEDF1;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;background:var(--warmwhite);color:var(--graphite);
+    font-family:'Segoe UI', Arial, sans-serif;line-height:1.35;
+  }
+  .wrap{max-width:98vw;margin:0 auto;padding:16px 8px 40px;}
+  .sl h1{color:var(--forest);margin:0 0 2px;font-size:26px;letter-spacing:.3px;}
+  .sl p{margin:2px 0;color:var(--graphite);font-size:13px;opacity:.85;}
+  .note{background:var(--softgreen);border-left:4px solid var(--forest);padding:8px 12px;
+    font-size:12px;margin:10px 0 4px;border-radius:4px;}
+  svg{max-width:100%;height:auto;}
+  text{font-family:'Segoe UI',Arial,sans-serif;}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="sl">
+  <h1>HERA — Hiring Evaluation &amp; Recruitment Assistant</h1>
+  <p>Technical product workflow · system flow · user journey&nbsp;&nbsp;·&nbsp;&nbsp;read left → right</p>
+  <div class="note">This is a technical architecture, not marketing. Blue = AI / LLM, Green = deterministic logic,
+  Yellow = human / product, Red = error path. HERA is an <b>internal AI service</b>: it does not own auth,
+  storage, the HR UI, human review, interviews, scheduling, or communication.</div>
+</div>
+
+<svg viewBox="0 0 3020 2220" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="HERA system flow diagram">
+  <defs>
+    <marker id="arrB" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#183A32"/>
+    </marker>
+    <marker id="arrR" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#B03A3A"/>
+    </marker>
+    <marker id="arrG" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#6FA8B8"/>
+    </marker>
+  </defs>
+
+  <!-- ===================== HEADER ===================== -->
+  <rect x="20" y="20" width="2980" height="92" rx="10" fill="#183A32"/>
+  <g transform="translate(36,26) scale(0.62)" fill="#E9D98A">
+    <path d="M880 2705 c-58 -18 -113 -64 -148 -123 l-27 -47 -3 -316 -3 -317 -65 -32 c-273 -134 -327 -485 -109 -705 41 -42 78 -69 118 -85 l57 -24 0 -90 0 -91 164 0 163 0 7 72 c6 80 42 184 86 254 32 48 135 153 183 184 24 16 26 20 14 34 -61 70 -62 182 -1 251 11 14 6 24 -41 73 -69 72 -162 133 -237 155 l-58 17 0 268 0 267 353 0 c384 0 422 -4 520 -58 51 -27 167 -145 167 -168 0 -8 4 -14 8 -14 11 0 3 126 -10 170 -49 160 -194 289 -367 326 -94 20 -706 19 -771 -1z"/>
+  </g>
+  <text x="110" y="52" fill="#FAF8F1" font-size="28" font-weight="700">HERA — SYSTEM FLOW</text>
+  <text x="112" y="82" fill="#E9D98A" font-size="15">Hiring Evaluation &amp; Recruitment Assistant · Full Technical Product Architecture &amp; User Journey</text>
+
+  <!-- LEGEND -->
+  <text x="2150" y="42" fill="#FAF8F1" font-size="13" font-weight="600">LEGEND</text>
+  <rect x="2150" y="52" width="18" height="14" rx="3" fill="#6FA8B8"/>
+  <text x="2174" y="64" fill="#FAF8F1" font-size="12">AI / LLM</text>
+  <rect x="2260" y="52" width="18" height="14" rx="3" fill="#183A32"/>
+  <text x="2284" y="64" fill="#FAF8F1" font-size="12">Deterministic</text>
+  <rect x="2400" y="52" width="18" height="14" rx="3" fill="#E9D98A" stroke="#A08C3A"/>
+  <text x="2424" y="64" fill="#FAF8F1" font-size="12">Human / Product</text>
+  <rect x="2560" y="52" width="18" height="14" rx="3" fill="none" stroke="#B03A3A" stroke-width="2"/>
+  <text x="2584" y="64" fill="#FAF8F1" font-size="12">Error</text>
+
+  <!-- ============ ZONE A: HR USER + INPUTS (product layer, left) ============ -->
+  <g>
+    <rect x="30" y="150" width="360" height="118" rx="12" fill="#FAEECF" stroke="#183A32" stroke-width="2" stroke-dasharray="6 4"/>
+    <text x="50" y="180" fill="#183A32" font-size="18" font-weight="800">HR USER</text>
+    <text x="50" y="206" fill="#292C2A" font-size="12.5">Launches a job &amp; uploads a CV,</text>
+    <text x="50" y="224" fill="#292C2A" font-size="12.5">then reviews the AI analysis and</text>
+    <text x="50" y="242" fill="#292C2A" font-size="12.5">makes the FINAL hiring decision.</text>
+  </g>
+
+  <g>
+    <rect x="30" y="300" width="360" height="220" rx="10" fill="#FAF8F1" stroke="#6FA8B8" stroke-width="2"/>
+    <rect x="30" y="300" width="360" height="34" rx="10" fill="#6FA8B8"/>
+    <text x="44" y="321" fill="#fff" font-size="13" font-weight="700">INPUT 1 · JOB DESCRIPTION  (HR pastes)</text>
+    <text x="44" y="356" fill="#292C2A" font-size="12.5" font-weight="700">Job Title:</text>
+    <text x="44" y="374" fill="#292C2A" font-size="12.5">Backend Developer</text>
+    <text x="44" y="402" fill="#292C2A" font-size="12.5" font-weight="700">Requirements:</text>
+    <text x="44" y="420" fill="#292C2A" font-size="12.5">· Python · FastAPI · SQL</text>
+    <text x="44" y="438" fill="#292C2A" font-size="12.5">· 3+ years experience</text>
+    <text x="44" y="468" fill="#6FA8B8" font-size="11.5" font-style="italic">raw text → Job Intelligence</text>
+  </g>
+
+  <g>
+    <rect x="30" y="540" width="360" height="220" rx="10" fill="#FAF8F1" stroke="#6FA8B8" stroke-width="2"/>
+    <rect x="30" y="540" width="360" height="34" rx="10" fill="#6FA8B8"/>
+    <text x="44" y="561" fill="#fff" font-size="13" font-weight="700">INPUT 2 · CANDIDATE CV / RESUME</text>
+    <text x="44" y="596" fill="#292C2A" font-size="12.5" font-weight="700">Candidate CV</text>
+    <text x="44" y="614" fill="#292C2A" font-size="12.5">· Skills · Experience · Education · Projects</text>
+    <text x="44" y="646" fill="#6FA8B8" font-size="11.5" font-style="italic">PDF / DOCX → raw CV text</text>
+    <text x="44" y="664" fill="#6FA8B8" font-size="11.5" font-style="italic">→ Resume intelligence</text>
+  </g>
+
+  <!-- INPUT -> ASP.NET arrows -->
+  <line x1="390" y1="410" x2="432" y2="410" stroke="#183A32" stroke-width="2.5" marker-end="url(#arrB)"/>
+  <text x="394" y="400" fill="#183A32" font-size="10.5" font-weight="700">job text →</text>
+  <line x1="390" y1="650" x2="432" y2="580" stroke="#183A32" stroke-width="2.5" marker-end="url(#arrB)"/>
+  <text x="394" y="610" fill="#183A32" font-size="10.5" font-weight="700">CV →</text>
+
+  <!-- ============ ZONE B: ASP.NET / HR BACKEND ============ -->
+  <g>
+    <rect x="434" y="250" width="288" height="330" rx="12" fill="#F4EFDE" stroke="#A08C3A" stroke-width="2.5"/>
+    <rect x="434" y="250" width="288" height="42" rx="12" fill="#E9D98A"/>
+    <text x="448" y="277" fill="#183A32" font-size="14.5" font-weight="800">ASP.NET / HR BACKEND</text>
+    <text x="448" y="310" fill="#292C2A" font-size="11" font-weight="700">Owns (outside HERA):</text>
+    <text x="448" y="326" fill="#292C2A" font-size="11">· Authentication / sessions</text>
+    <text x="448" y="340" fill="#292C2A" font-size="11">· Database / SQL ownership</text>
+    <text x="448" y="354" fill="#292C2A" font-size="11">· Business / application logic</text>
+    <text x="448" y="368" fill="#292C2A" font-size="11">· HR dashboard &amp; UI</text>
+    <line x1="448" y1="384" x2="708" y2="384" stroke="#A08C3A" stroke-width="1" stroke-dasharray="4 3"/>
+    <text x="448" y="406" fill="#183A32" font-size="11.5" font-weight="700">Calls HERA over HTTP:</text>
+    <rect x="448" y="414" width="258" height="28" rx="6" fill="#FAF8F1" stroke="#6FA8B8"/>
+    <text x="458" y="433" fill="#292C2A" font-size="11.5" font-weight="700">HTTP Request  (JSON)</text>
+    <rect x="448" y="446" width="258" height="28" rx="6" fill="#FAF8F1" stroke="#6FA8B8"/>
+    <text x="458" y="465" fill="#292C2A" font-size="11">Header: X-Organization-Id</text>
+    <text x="448" y="510" fill="#A08C3A" font-size="10.5" font-style="italic">Forward identity; HERA stays internal.</text>
+  </g>
+
+  <!-- ASP.NET -> FastAPI arrow (HTTP call) -->
+  <line x1="722" y1="310" x2="822" y2="300" stroke="#183A32" stroke-width="2.5" marker-end="url(#arrB)"/>
+  <text x="726" y="298" fill="#183A32" font-size="10.5" font-weight="700">HTTP → (into HERA API)</text>
+
+  <!-- ============ ZONE C: HERA FASTAPI INTERNAL AI SERVICE ============ -->
+  <rect x="822" y="150" width="1220" height="1790" rx="14" fill="#FAF8F1" stroke="#183A32" stroke-width="3"/>
+  <rect x="822" y="150" width="1220" height="58" rx="14" fill="#183A32"/>
+  <text x="850" y="188" fill="#FAF8F1" font-size="21" font-weight="800">HERA · FastAPI INTERNAL AI SERVICE</text>
+  <text x="850" y="208" fill="#E9D98A" font-size="11.5">scope: Job Intelligence · Resume/Candidate Intelligence · Normalization · Evaluation · Explainable AI · LangGraph Orchestration · Versioning · Trace</text>
+
+  <!-- API LAYER -->
+  <text x="850" y="252" fill="#183A32" font-size="16" font-weight="800">HERA API LAYER  (internal /api endpoints)</text>
+  <g fill="#6FA8B8">
+    <rect x="850" y="262" width="224" height="30" rx="6"/>
+    <text x="862" y="282" fill="#fff" font-size="12" font-weight="600">POST /internal/ai/job-profile</text>
+    <rect x="1084" y="262" width="220" height="30" rx="6"/>
+    <text x="1096" y="282" fill="#fff" font-size="12" font-weight="600">POST /internal/ai/extract-cv</text>
+    <rect x="1314" y="262" width="252" height="30" rx="6"/>
+    <text x="1326" y="282" fill="#fff" font-size="12" font-weight="600">POST /internal/ai/candidate-profile</text>
+    <rect x="1576" y="262" width="212" height="30" rx="6"/>
+    <text x="1588" y="282" fill="#fff" font-size="12" font-weight="600">POST /internal/ai/evaluation</text>
+    <rect x="1798" y="262" width="226" height="30" rx="6"/>
+    <text x="1810" y="282" fill="#fff" font-size="12" font-weight="600">POST /internal/ai/explanation</text>
+  </g>
+  <!-- featured endpoint -->
+  <rect x="850" y="302" width="740" height="40" rx="8" fill="#E9D98A" stroke="#183A32" stroke-width="2"/>
+  <text x="870" y="327" fill="#183A32" font-size="15" font-weight="800">★ POST /internal/ai/evaluate-candidate</text>
+  <text x="1160" y="327" fill="#A08C3A" font-size="11.5" font-weight="600">— full workflow endpoint · orchestrates Steps 1–4 (LangGraph)</text>
+
+  <!-- FULL EVALUATION WORKFLOW PANEL -->
+  <rect x="850" y="360" width="1164" height="1080" rx="10" fill="#F1EFE4" stroke="#6FA8B8" stroke-width="2" stroke-dasharray="7 5"/>
+  <text x="874" y="388" fill="#183A32" font-size="16" font-weight="800">FULL EVALUATION WORKFLOW — LangGraph-orchestrated pipeline</text>
+  <text x="874" y="406" fill="#292C2A" font-size="11.5">Nodes reuse existing tested services; LangGraph provides state, conditional edges &amp; retries.</text>
+
+  <!-- JobProfile band (feeds Step 3) -->
+  <g>
+    <rect x="874" y="418" width="1116" height="52" rx="8" fill="#DFEDF1" stroke="#6FA8B8"/>
+    <text x="890" y="438" fill="#183A32" font-size="12.5" font-weight="700">Job Intelligence → JobProfile</text>
+    <text x="890" y="456" fill="#292C2A" font-size="10.5">"title":"Backend Developer"  ·  "requirements":["Python","FastAPI","SQL","3+ yrs"]</text>
+  </g>
+  <line x1="962" y1="302" x2="962" y2="330" stroke="#183A32" stroke-width="1.5"/>
+  <line x1="962" y1="330" x2="1450" y2="432" stroke="#183A32" stroke-width="1.5" marker-end="url(#arrB)"/>
+  <text x="1090" y="390" fill="#292C2A" font-size="11">job-profile →</text>
+  <line x1="1990" y1="444" x2="1990" y2="490" stroke="#183A32" stroke-width="2" marker-end="url(#arrB)"/>
+  <text x="1940" y="470" fill="#183A32" font-size="10.5" font-weight="700">JobProfile → Step 3</text>
+
+  <!-- ============ STEP 1 : EXTRACTION ============ -->
+  <g>
+    <rect x="874" y="490" width="266" height="820" rx="8" fill="#FFFFFF" stroke="#6FA8B8" stroke-width="2"/>
+    <rect x="874" y="490" width="266" height="34" rx="8" fill="#6FA8B8"/>
+    <text x="886" y="512" fill="#fff" font-size="13" font-weight="800">STEP 1 · EXTRACTION</text>
+    <rect x="886" y="532" width="242" height="32" rx="6" fill="#DFEDF1"/>
+    <text x="896" y="552" fill="#183A32" font-size="12" font-weight="700">Extraction Agent  (AI)</text>
+    <text x="896" y="586" fill="#292C2A" font-size="11" font-weight="700">Input:</text>
+    <text x="896" y="601" fill="#292C2A" font-size="11">Raw CV text</text>
+    <text x="896" y="626" fill="#292C2A" font-size="11" font-weight="700">Calls:</text>
+    <rect x="896" y="632" width="232" height="26" rx="5" fill="#EFEFE6" stroke="#A08C3A"/>
+    <text x="904" y="650" fill="#183A32" font-size="11" font-weight="600">CV Service</text>
+    <rect x="896" y="666" width="232" height="32" rx="6" fill="#6FA8B8"/>
+    <text x="906" y="680" fill="#fff" font-size="11" font-weight="700">LLM Provider</text>
+    <text x="906" y="694" fill="#fff" font-size="10">(Ollama / Gemini) structured gen</text>
+    <text x="890" y="742" fill="#292C2A" font-size="11" font-weight="700">Output: CandidateExtraction</text>
+    <rect x="886" y="748" width="242" height="150" rx="6" fill="#DFEDF1"/>
+    <text x="894" y="766" fill="#183A32" font-size="10.5">{</text>
+    <text x="902" y="782" fill="#183A32" font-size="10.5">"name": "...",</text>
+    <text x="902" y="796" fill="#183A32" font-size="10.5">"email": "...",</text>
+    <text x="902" y="810" fill="#183A32" font-size="10.5">"skills": [...],</text>
+    <text x="902" y="824" fill="#183A32" font-size="10.5">"experienceYears": 4,</text>
+    <text x="902" y="838" fill="#183A32" font-size="10.5">"education": [...],</text>
+    <text x="894" y="854" fill="#183A32" font-size="10.5">}</text>
+    <rect x="886" y="908" width="242" height="44" rx="6" fill="#EFEFE6"/>
+    <text x="896" y="926" fill="#183A32" font-size="10.5" font-weight="700">LLM extracts → Pydantic</text>
+    <text x="896" y="940" fill="#183A32" font-size="10.5" font-weight="700">validates structure</text>
+  </g>
+  <line x1="1140" y1="820" x2="1164" y2="820" stroke="#183A32" stroke-width="2.5" marker-end="url(#arrB)"/>
+  <text x="1142" y="808" fill="#183A32" font-size="10" font-weight="700">CandidateExtraction</text>
+
+  <!-- ============ STEP 2 : NORMALIZATION ============ -->
+  <g>
+    <rect x="1168" y="490" width="266" height="820" rx="8" fill="#FFFFFF" stroke="#183A32" stroke-width="2.5"/>
+    <rect x="1168" y="490" width="266" height="34" rx="8" fill="#183A32"/>
+    <text x="1180" y="512" fill="#FAF8F1" font-size="13" font-weight="800">STEP 2 · NORMALIZATION</text>
+    <rect x="1180" y="532" width="242" height="32" rx="6" fill="#E3EFEA"/>
+    <text x="1190" y="552" fill="#183A32" font-size="12" font-weight="700">Candidate Normalization</text>
+    <text x="1190" y="586" fill="#292C2A" font-size="11" font-weight="700">Deterministic Python logic</text>
+    <text x="1190" y="602" fill="#292C2A" font-size="11">· trim strings · lowercase email</text>
+    <text x="1190" y="618" fill="#292C2A" font-size="11">· remove empties · sort skills</text>
+    <text x="1190" y="634" fill="#292C2A" font-size="11">· dedupe · normalize experience</text>
+    <rect x="1180" y="648" width="242" height="36" rx="6" fill="#183A32"/>
+    <text x="1190" y="670" fill="#E9D98A" font-size="11" font-weight="800">Deterministic — NO LLM</text>
+    <text x="1186" y="742" fill="#292C2A" font-size="11" font-weight="700">Output: CandidateProfile</text>
+    <rect x="1180" y="748" width="242" height="150" rx="6" fill="#E3EFEA"/>
+    <text x="1188" y="766" fill="#183A32" font-size="10.5">{</text>
+    <text x="1196" y="782" fill="#183A32" font-size="10.5">"name":"...","email":"...",</text>
+    <text x="1196" y="796" fill="#183A32" font-size="10.5">"skills":[...],</text>
+    <text x="1196" y="810" fill="#183A32" font-size="10.5">"experienceYears":4,</text>
+    <text x="1196" y="824" fill="#183A32" font-size="10.5">"education":[...]</text>
+    <text x="1188" y="838" fill="#183A32" font-size="10.5">}</text>
+    <rect x="1180" y="908" width="242" height="44" rx="6" fill="#EFEFE6"/>
+    <text x="1190" y="926" fill="#183A32" font-size="10.5" font-weight="700">No AI, no score change →</text>
+    <text x="1190" y="940" fill="#183A32" font-size="10.5" font-weight="700">clean canonical record</text>
+  </g>
+  <line x1="1434" y1="820" x2="1458" y2="820" stroke="#183A32" stroke-width="2.5" marker-end="url(#arrB)"/>
+  <text x="1436" y="808" fill="#183A32" font-size="10" font-weight="700">CandidateProfile</text>
+
+  <!-- ============ STEP 3 : EVALUATION ============ -->
+  <g>
+    <rect x="1462" y="490" width="266" height="820" rx="8" fill="#FFFFFF" stroke="#183A32" stroke-width="2.5"/>
+    <rect x="1462" y="490" width="266" height="34" rx="8" fill="#183A32"/>
+    <text x="1474" y="512" fill="#E9D98A" font-size="13" font-weight="800">STEP 3 · EVALUATION</text>
+    <text x="1474" y="538" fill="#292C2A" font-size="11" font-weight="700">Inputs: JobProfile · CandProfile</text>
+    <rect x="1474" y="548" width="242" height="32" rx="6" fill="#DFEDF1"/>
+    <text x="1484" y="568" fill="#183A32" font-size="12" font-weight="700">Evaluation Agent  (AI)</text>
+    <text x="1474" y="600" fill="#292C2A" font-size="11" font-weight="700">Deterministic Scoring Engine</text>
+    <text x="1474" y="616" fill="#292C2A" font-size="11">based on: skill · experience ·</text>
+    <text x="1474" y="632" fill="#292C2A" font-size="11">education · responsibilities</text>
+    <rect x="1474" y="644" width="242" height="40" rx="6" fill="#E9D98A" stroke="#183A32"/>
+    <text x="1484" y="660" fill="#183A32" font-size="10.5" font-weight="800">The LLM does NOT decide the score.</text>
+    <text x="1484" y="675" fill="#183A32" font-size="10">Score is deterministic &amp; reproducible.</text>
+    <text x="1470" y="742" fill="#292C2A" font-size="11" font-weight="700">Output: Match Score + Evidence</text>
+    <rect x="1474" y="748" width="242" height="150" rx="6" fill="#DFEDF1"/>
+    <text x="1482" y="766" fill="#183A32" font-size="11" font-weight="800">Match Score</text>
+    <text x="1482" y="816" fill="#183A32" font-size="30" font-weight="900">87 / 100</text>
+    <text x="1482" y="838" fill="#183A32" font-size="9.5">weighted per requirement</text>
+    <text x="1482" y="852" fill="#183A32" font-size="9.5">(must/important/nice-to-have)</text>
+    <text x="1482" y="866" fill="#183A32" font-size="9.5">scoring_version:"1.0"</text>
+    <text x="1482" y="884" fill="#183A32" font-size="9.5">MatchEvidence: matched/missing</text>
+    <rect x="1474" y="908" width="242" height="44" rx="6" fill="#183A32"/>
+    <text x="1484" y="936" fill="#E9D98A" font-size="11" font-weight="800">Evaluation = deterministic ✓</text>
+  </g>
+  <line x1="1728" y1="820" x2="1752" y2="820" stroke="#183A32" stroke-width="2.5" marker-end="url(#arrB)"/>
+  <text x="1730" y="808" fill="#183A32" font-size="10" font-weight="700">MatchEvidence</text>
+
+  <!-- ============ STEP 4 : EXPLANATION ============ -->
+  <g>
+    <rect x="1756" y="490" width="244" height="820" rx="8" fill="#FFFFFF" stroke="#6FA8B8" stroke-width="2"/>
+    <rect x="1756" y="490" width="244" height="34" rx="8" fill="#6FA8B8"/>
+    <text x="1768" y="512" fill="#fff" font-size="13" font-weight="800">STEP 4 · EXPLANATION</text>
+    <text x="1768" y="538" fill="#292C2A" font-size="11" font-weight="700">Input: MatchEvidence</text>
+    <rect x="1768" y="548" width="220" height="32" rx="6" fill="#DFEDF1"/>
+    <text x="1778" y="568" fill="#183A32" font-size="12" font-weight="700">Explanation Agent  (AI)</text>
+    <rect x="1768" y="588" width="220" height="32" rx="6" fill="#6FA8B8"/>
+    <text x="1778" y="602" fill="#fff" font-size="11" font-weight="700">LLM Provider</text>
+    <text x="1778" y="616" fill="#fff" font-size="10">free-form text generation</text>
+    <text x="1766" y="668" fill="#292C2A" font-size="11" font-weight="700">Output: human-readable reason</text>
+    <rect x="1768" y="674" width="220" height="110" rx="6" fill="#DFEDF1"/>
+    <text x="1778" y="692" fill="#183A32" font-size="10" font-weight="700">Why this candidate scored 87/100</text>
+    <text x="1778" y="710" fill="#183A32" font-size="10">✓ Strong match on required skills</text>
+    <text x="1778" y="726" fill="#183A32" font-size="10">✓ Relevant experience · education</text>
+    <text x="1778" y="742" fill="#B03A3A" font-size="10">⚠ Missing some preferred</text>
+    <text x="1786" y="756" fill="#B03A3A" font-size="10">requirements</text>
+    <rect x="1768" y="852" width="220" height="52" rx="6" fill="#E3EFEA"/>
+    <text x="1778" y="872" fill="#183A32" font-size="10.5" font-weight="800">Explanation does NOT mutate</text>
+    <text x="1778" y="890" fill="#183A32" font-size="10.5" font-weight="800">the score → remains 87/100</text>
+  </g>
+
+  <!-- STEP 5 : TRACE band -->
+  <g>
+    <rect x="874" y="1330" width="1116" height="92" rx="8" fill="#F6F3E8" stroke="#183A32" stroke-width="1.5"/>
+    <rect x="874" y="1330" width="238" height="92" rx="8" fill="#183A32"/>
+    <text x="890" y="1356" fill="#E9D98A" font-size="14" font-weight="800">STEP 5 · TRACE</text>
+    <text x="890" y="1376" fill="#FAF8F1" font-size="10.5">WorkflowTrace</text>
+    <text x="890" y="1392" fill="#DFEDF1" font-size="9.5">observability · not on main path</text>
+    <text x="1132" y="1354" fill="#183A32" font-size="10.5" font-weight="800">Recorded per step:</text>
+    <text x="1132" y="1370" fill="#292C2A" font-size="10">· trace_id  · organization_id  · step name  · status</text>
+    <text x="1132" y="1386" fill="#292C2A" font-size="10">· duration / latency  · error info  · token usage</text>
+    <text x="1132" y="1402" fill="#A08C3A" font-size="9.5" font-style="italic">Linked to: Extraction · Evaluation · Explanation · final result</text>
+  </g>
+  <!-- connectors steps -> trace -->
+  <line x1="1007" y1="1310" x2="1007" y2="1330" stroke="#A08C3A" stroke-width="1.2" stroke-dasharray="4 4"/>
+  <line x1="1595" y1="1310" x2="1595" y2="1330" stroke="#A08C3A" stroke-width="1.2" stroke-dasharray="4 4"/>
+  <line x1="1878" y1="1310" x2="1878" y2="1330" stroke="#A08C3A" stroke-width="1.2" stroke-dasharray="4 4"/>
+
+  <!-- ============ ERROR BRANCHES ============ -->
+  <g>
+    <text x="916" y="1470" fill="#B03A3A" font-size="14" font-weight="800">ERROR PATHS — recorded in trace, failure response returned to the HR backend</text>
+    <line x1="1007" y1="1422" x2="1007" y2="1505" stroke="#B03A3A" stroke-width="1.8" marker-end="url(#arrR)"/>
+    <line x1="1595" y1="1422" x2="1420" y2="1505" stroke="#B03A3A" stroke-width="1.8" marker-end="url(#arrR)"/>
+    <line x1="1878" y1="1422" x2="1878" y2="1505" stroke="#B03A3A" stroke-width="1.8" marker-end="url(#arrR)"/>
+    <rect x="874" y="1512" width="250" height="66" rx="7" fill="#FBEDED" stroke="#B03A3A" stroke-width="1.5"/>
+    <text x="888" y="1534" fill="#B03A3A" font-size="11" font-weight="700">Extraction Failure</text>
+    <text x="888" y="1550" fill="#B03A3A" font-size="10">validation / provider error →</text>
+    <text x="888" y="1564" fill="#B03A3A" font-size="10">trace failure → workflow error</text>
+    <rect x="1142" y="1512" width="332" height="66" rx="7" fill="#FBEDED" stroke="#B03A3A" stroke-width="1.5"/>
+    <text x="1156" y="1534" fill="#B03A3A" font-size="11" font-weight="700">Evaluation Failure</text>
+    <text x="1156" y="1550" fill="#B03A3A" font-size="10">error → trace → workflow failure</text>
+    <text x="1156" y="1564" fill="#B03A3A" font-size="10">response (score/evidence missing)</text>
+    <rect x="1492" y="1512" width="332" height="66" rx="7" fill="#FBEDED" stroke="#B03A3A" stroke-width="1.5"/>
+    <text x="1506" y="1534" fill="#B03A3A" font-size="11" font-weight="700">Explanation Failure</text>
+    <text x="1506" y="1550" fill="#B03A3A" font-size="10">error → trace → workflow failure</text>
+    <text x="1506" y="1564" fill="#B03A3A" font-size="10">response (score/evidence preserved)</text>
+  </g>
+
+  <!-- ============ VERSION STORE ============ -->
+  <g>
+    <rect x="874" y="1600" width="640" height="140" rx="8" fill="#F6F3E8" stroke="#183A32" stroke-width="1.5"/>
+    <text x="890" y="1628" fill="#183A32" font-size="13" font-weight="800">Candidate Version Store  (profile versioning)</text>
+    <text x="890" y="1650" fill="#292C2A" font-size="11">Organization ID + Candidate Key</text>
+    <text x="890" y="1666" fill="#292C2A" font-size="11">→ Candidate Profile Version  "v1 → v2 → v3"</text>
+    <rect x="890" y="1676" width="300" height="34" rx="6" fill="#E9D98A"/>
+    <text x="900" y="1698" fill="#183A32" font-size="11" font-weight="700">Current: in-memory</text>
+    <rect x="1200" y="1676" width="300" height="34" rx="6" fill="#E3EFEA"/>
+    <text x="1210" y="1698" fill="#183A32" font-size="11" font-weight="700">Future: durable (outside AI svc)</text>
+  </g>
+
+  <!-- ============ ZONE D: FINAL OUTPUT (right) ============ -->
+  <g>
+    <rect x="2100" y="150" width="890" height="620" rx="12" fill="#FAF8F1" stroke="#E9D98A" stroke-width="3"/>
+    <rect x="2100" y="150" width="890" height="50" rx="12" fill="#E9D98A"/>
+    <text x="2120" y="182" fill="#183A32" font-size="17" font-weight="800">FINAL OUTPUT · CANDIDATE EVALUATION RESULT</text>
+    <text x="2120" y="230" fill="#183A32" font-size="12.5" font-weight="700">Candidate X · Backend Developer · org 09df6372-… · version v3</text>
+    <line x1="2120" y1="244" x2="2970" y2="244" stroke="#CFC9B6" stroke-width="1"/>
+    <rect x="2120" y="256" width="240" height="112" rx="8" fill="#183A32"/>
+    <text x="2152" y="292" fill="#E9D98A" font-size="13" font-weight="700">MATCH SCORE</text>
+    <text x="2146" y="344" fill="#FAF8F1" font-size="44" font-weight="900">87 / 100</text>
+    <text x="2380" y="222" fill="#183A32" font-size="12.5" font-weight="800">Result object contains:</text>
+    <text x="2380" y="246" fill="#183A32" font-size="11.5" font-weight="700">1. candidate_profile</text>
+    <text x="2398" y="262" fill="#292C2A" font-size="11">normalized name · email · skills</text>
+    <text x="2380" y="286" fill="#183A32" font-size="11.5" font-weight="700">2. match_score</text>
+    <text x="2398" y="302" fill="#292C2A" font-size="11">87 / 100 (deterministic)</text>
+    <text x="2380" y="326" fill="#183A32" font-size="11.5" font-weight="700">3. match_evidence</text>
+    <text x="2398" y="342" fill="#292C2A" font-size="11">matched · missing · breakdown</text>
+    <text x="2380" y="366" fill="#183A32" font-size="11.5" font-weight="700">4. explanation</text>
+    <text x="2398" y="382" fill="#292C2A" font-size="11">human-readable reasons</text>
+    <text x="2380" y="406" fill="#183A32" font-size="11.5" font-weight="700">5. workflow trace</text>
+    <text x="2398" y="422" fill="#292C2A" font-size="11">steps · latency · status</text>
+    <rect x="2120" y="432" width="850" height="56" rx="8" fill="#E3EFEA"/>
+    <text x="2138" y="456" fill="#183A32" font-size="12.5" font-weight="800">AI RECOMMENDATION (advisory only)</text>
+    <text x="2138" y="476" fill="#183A32" font-size="11.5">"Strong match — recommend: Advance" (never an automatic decision)</text>
+    <rect x="2120" y="498" width="850" height="56" rx="8" fill="#FBEDED" stroke="#B03A3A"/>
+    <text x="2138" y="522" fill="#B03A3A" font-size="12" font-weight="800">ERROR RESPONSE (on any step failure)</text>
+    <text x="2138" y="542" fill="#B03A3A" font-size="11">workflow_error + trace id returned to backend; partial results preserved</text>
+    <text x="2120" y="590" fill="#A08C3A" font-size="11" font-style="italic">Returned to ASP.NET / HR Backend as the API response → shown in HR dashboard</text>
+  </g>
+
+  <!-- workflow -> result arrow -->
+  <line x1="2000" y1="600" x2="2100" y2="600" stroke="#183A32" stroke-width="2.5" marker-end="url(#arrB)"/>
+  <text x="2010" y="590" fill="#183A32" font-size="11" font-weight="700">result →</text>
+
+  <!-- result return to backend (curved over top) -->
+  <path d="M 2100 196 C 1350 100, 900 100, 720 250" fill="none" stroke="#A08C3A" stroke-width="3" stroke-dasharray="8 5" marker-end="url(#arrB)"/>
+  <text x="1300" y="92" fill="#A08C3A" font-size="13" font-weight="800">RESULT RETURNED TO HR BACKEND  (Candidate Evaluation Result)</text>
+
+  <!-- ============ ZONE E: DASHBOARD + HUMAN DECISION (left product, below ASP.NET) ============ -->
+  <g>
+    <line x1="578" y1="580" x2="578" y2="650" stroke="#183A32" stroke-width="2.5" marker-end="url(#arrB)"/>
+    <rect x="200" y="880" width="620" height="104" rx="10" fill="#FAEECF" stroke="#183A32" stroke-width="2"/>
+    <rect x="200" y="880" width="620" height="38" rx="10" fill="#E9D98A"/>
+    <text x="216" y="905" fill="#183A32" font-size="15" font-weight="800">HR DASHBOARD  (in ASP.NET UI)</text>
+    <text x="216" y="938" fill="#292C2A" font-size="12">Shows Evaluation Result to HR: score · evidence · explanation · recommendation</text>
+    <text x="216" y="960" fill="#292C2A" font-size="12">HR can inspect, search, filter, rank &amp; group all candidates</text>
+    <line x1="510" y1="984" x2="510" y2="1020" stroke="#183A32" stroke-width="2.5" marker-end="url(#arrB)"/>
+    <rect x="200" y="1028" width="620" height="140" rx="10" fill="#FAEECF" stroke="#E9D98A" stroke-width="3"/>
+    <rect x="200" y="1028" width="620" height="38" rx="10" fill="#E9D98A"/>
+    <text x="216" y="1053" fill="#183A32" font-size="15" font-weight="800">HUMAN MAKES THE FINAL DECISION</text>
+    <text x="216" y="1084" fill="#183A32" font-size="13" font-weight="800">Advance  ·  Reject  ·  Hold</text>
+    <text x="216" y="1108" fill="#292C2A" font-size="12">The AI recommendation never automatically becomes the final decision.</text>
+    <text x="216" y="1126" fill="#292C2A" font-size="12">Decision + reason recorded (audit trail &amp; feedback).</text>
+    <text x="216" y="1152" fill="#6FA8B8" font-size="11" font-style="italic">← HERA stays a scoring/advisory layer; HR keeps control.</text>
+  </g>
+
+  <!-- result -> dashboard dashed link -->
+  <path d="M 2100 770 C 1500 900, 1100 900, 820 900" fill="none" stroke="#6FA8B8" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#arrG)"/>
+  <text x="1450" y="880" fill="#6FA8B8" font-size="11" font-style="italic">stored → shown in dashboard</text>
+
+  <!-- ============ ZONE F: BOTTOM CLEAN-ARCHITECTURE BAND ============ -->
+  <g>
+    <rect x="30" y="2010" width="2960" height="112" rx="12" fill="#183A32"/>
+    <text x="56" y="2036" fill="#E9D98A" font-size="15" font-weight="800">LAYERED CLEAN ARCHITECTURE (info flow, left → right)</text>
+
+    <rect x="56" y="2050" width="380" height="54" rx="8" fill="#E9D98A"/>
+    <text x="86" y="2074" fill="#183A32" font-size="13" font-weight="800">Dashboard  (Product UI)</text>
+    <text x="86" y="2092" fill="#183A32" font-size="11">HR sees scores, decides</text>
+    <line x1="436" y1="2077" x2="456" y2="2077" stroke="#FAF8F1" stroke-width="3" marker-end="url(#arrB)"/>
+
+    <rect x="460" y="2050" width="380" height="54" rx="8" fill="#F4EFDE" stroke="#E9D98A"/>
+    <text x="490" y="2074" fill="#183A32" font-size="13" font-weight="800">ASP.NET / HR Backend</text>
+    <text x="490" y="2092" fill="#292C2A" font-size="11">requests HERA over HTTP</text>
+    <line x1="840" y1="2077" x2="860" y2="2077" stroke="#FAF8F1" stroke-width="3" marker-end="url(#arrB)"/>
+
+    <rect x="864" y="2050" width="380" height="54" rx="8" fill="#DFEDF1" stroke="#6FA8B8"/>
+    <text x="894" y="2072" fill="#183A32" font-size="13" font-weight="800">FastAPI  (HERA service)</text>
+    <text x="894" y="2090" fill="#183A32" font-size="11">API layer + entry points</text>
+    <line x1="1244" y1="2077" x2="1264" y2="2077" stroke="#FAF8F1" stroke-width="3" marker-end="url(#arrB)"/>
+
+    <rect x="1268" y="2050" width="380" height="54" rx="8" fill="#DFEDF1" stroke="#6FA8B8"/>
+    <text x="1298" y="2072" fill="#183A32" font-size="13" font-weight="800">LangGraph</text>
+    <text x="1298" y="2090" fill="#183A32" font-size="11">orchestrates Steps 1–5</text>
+    <line x1="1648" y1="2077" x2="1668" y2="2077" stroke="#FAF8F1" stroke-width="3" marker-end="url(#arrB)"/>
+
+    <rect x="1672" y="2050" width="380" height="54" rx="8" fill="#DFEDF1" stroke="#6FA8B8"/>
+    <text x="1702" y="2072" fill="#183A32" font-size="13" font-weight="800">Agents</text>
+    <text x="1702" y="2090" fill="#183A32" font-size="11">Extraction · Evaluation · Expl.</text>
+    <line x1="2052" y1="2077" x2="2072" y2="2077" stroke="#FAF8F1" stroke-width="3" marker-end="url(#arrB)"/>
+
+    <rect x="2076" y="2050" width="380" height="54" rx="8" fill="#E3EFEA" stroke="#183A32"/>
+    <text x="2106" y="2072" fill="#183A32" font-size="13" font-weight="800">Services</text>
+    <text x="2106" y="2090" fill="#183A32" font-size="11">CV · normalization · scoring</text>
+    <line x1="2456" y1="2077" x2="2476" y2="2077" stroke="#FAF8F1" stroke-width="3" marker-end="url(#arrB)"/>
+
+    <rect x="2480" y="2050" width="430" height="54" rx="8" fill="#DFEDF1" stroke="#6FA8B8"/>
+    <text x="2510" y="2072" fill="#183A32" font-size="13" font-weight="800">Providers</text>
+    <text x="2510" y="2090" fill="#183A32" font-size="11">Ollama / Gemini (LLM abstraction)</text>
+  </g>
+
+  <!-- region labels -->
+  <text x="34" y="140" fill="#A08C3A" font-size="12" font-weight="700">PRODUCT LAYER</text>
+  <text x="848" y="140" fill="#183A32" font-size="12" font-weight="700">HERA INTERNAL AI SERVICE</text>
+  <text x="2130" y="140" fill="#A08C3A" font-size="12" font-weight="700">OUTPUT</text>
+
+</svg>
+
+</div>
+</body>
+</html>

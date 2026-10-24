@@ -1,0 +1,67 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: hr_ai_assistant_postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-hr_ai_assistant}
+      POSTGRES_USER: ${POSTGRES_USER:-hr_ai_assistant}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hr_ai_assistant}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hr_ai_assistant} -d ${POSTGRES_DB:-hr_ai_assistant}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hera
+
+  backend:
+    build:
+      context: ./backend
+    container_name: hr_ai_assistant_backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-hr_ai_assistant}:${POSTGRES_PASSWORD:-hr_ai_assistant}@postgres:5432/${POSTGRES_DB:-hr_ai_assistant}
+      AI_PROVIDER: ${AI_PROVIDER:-fake}
+      OLLAMA_API_KEY: ${OLLAMA_API_KEY:-}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-https://ollama.com/v1}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma4:31b}
+      SOAL_API_KEY: ${SOAL_API_KEY:-}
+      SOAL_BASE_URL: ${SOAL_BASE_URL:-https://soal.help/api/v1}
+      SOAL_MODEL: ${SOAL_MODEL:-gemini-3.5-flash}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-hera-dev-jwt-secret-key-explicitly-configured-32bytes}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 25s
+    networks:
+      - hera
+
+  frontend:
+    build:
+      context: ./frontend/frontend_last
+      args:
+        VITE_API_BASE_URL: /api/v1
+    container_name: hr_ai_assistant_frontend
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - hera
+
+networks:
+  hera:
+
+volumes:
+  postgres_data:

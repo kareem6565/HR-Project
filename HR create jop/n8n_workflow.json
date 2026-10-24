@@ -1,0 +1,2038 @@
+{
+  "name": "HR - Information Extractor (Aug 10 at 15:03:50)",
+  "nodes": [
+    {
+      "parameters": {
+        "multipleMethods": true,
+        "path": "cv-screening",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "48089a70-8ee6-4b85-bd95-2d845c70e0a9",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -5808,
+        -1440
+      ],
+      "webhookId": "6b5ed27c-82b2-40b5-abed-38a092990508"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first();\n\nconst binary = item.binary || {};\n\nreturn Object.entries(binary).map(([key, file]) => {\n  return {\n    json: {\n      file_name: file.fileName,\n      mime_type: file.mimeType,\n      binary_property: key\n    },\n    binary: {\n      data: file\n    }\n  };\n});"
+      },
+      "id": "7b11a905-0fb2-4d80-9eac-d3ac74c8d1d5",
+      "name": "Split CV Files",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -5584,
+        -1440
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "options": {
+          "keepSource": "binary"
+        }
+      },
+      "id": "f6dad290-3693-4fb5-98ce-02075bf1d1c9",
+      "name": "Extract from File",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        -5360,
+        -1440
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return {\n  json: {\n    cv_text: $json.text,\n    file_name: $binary?.data?.fileName || \"Unknown CV\"\n  },\n  binary: $binary\n};"
+      },
+      "id": "08f474ef-294a-4d8b-b4e8-d2493add8140",
+      "name": "Code in JavaScript6",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -5136,
+        -1440
+      ]
+    },
+    {
+      "parameters": {
+        "name": "={{ $json.file_name }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "1pvWE8Nbxe7OosdA66tslf3BKSffBsN_0",
+          "mode": "list",
+          "cachedResultName": "Original CVs",
+          "cachedResultUrl": "https://drive.google.com/drive/folders/1pvWE8Nbxe7OosdA66tslf3BKSffBsN_0"
+        },
+        "options": {}
+      },
+      "id": "44d16c54-b4ed-49bc-979a-b1fb75763596",
+      "name": "Upload file",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -4912,
+        -1440
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "iEHMHivmBJFxIdiw",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return {\n  json: {\n    file_id: $json.id,\n    file_name: $json.name || $json.originalFilename,\n    cv_link: `https://drive.google.com/file/d/${$json.id}/view`\n  },\n  binary: $binary\n};"
+      },
+      "id": "1e83beac-e024-4855-ab8e-b2a74d1f2d8f",
+      "name": "Code in JavaScript7",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -4688,
+        -1440
+      ]
+    },
+    {
+      "parameters": {
+        "text": "={{ $('Extract from File').item.json.text }}",
+        "attributes": {
+          "attributes": [
+            {
+              "name": "candidate_name",
+              "description": "full name",
+              "required": true
+            },
+            {
+              "name": "email",
+              "description": "email of candidate",
+              "required": true
+            },
+            {
+              "name": "phone",
+              "description": "phone number of candidate",
+              "required": true
+            },
+            {
+              "name": "skills",
+              "description": "skills of candidate",
+              "required": true
+            },
+            {
+              "name": "education",
+              "description": "education of candidate"
+            },
+            {
+              "name": "experience_years",
+              "type": "number",
+              "description": "number of exp years",
+              "required": true
+            },
+            {
+              "name": "github",
+              "description": "link of github "
+            },
+            {
+              "name": "linkedin",
+              "description": "linked in link"
+            },
+            {
+              "name": "cv_link",
+              "description": "link of cv"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c266e28d-af61-45a5-85f4-a6d4d625ffc5",
+      "name": "Information Extractor",
+      "type": "@n8n/n8n-nodes-langchain.informationExtractor",
+      "typeVersion": 1.2,
+      "position": [
+        -4464,
+        -1440
+      ]
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.1-flash-lite",
+        "options": {}
+      },
+      "id": "78d9fe98-4c2d-49b1-9d75-7460ae79cc08",
+      "name": "Google Gemini Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        -4400,
+        -1216
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "1r3d0m7eo5lEdbEt",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return {\n  json: {\n    ...$json,\n    cv_link: $('Code in JavaScript7').item.json.cv_link,\n    file_name: $('Code in JavaScript7').item.json.file_name\n  }\n};\n"
+      },
+      "id": "2c029759-b2f9-4893-8693-1dcb635fe65a",
+      "name": "cv_link",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -4112,
+        -1440
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const webhook = $('Webhook').first().json;\n\nreturn {\n  json: {\n    ...$json,\n\n    job_title: webhook.body?.job_title || \"\",\n    required_skills: webhook.body?.required_skills || \"\",\n    responsibilities: webhook.body?.responsibilities || \"\"\n  },\n\n  binary: $binary\n};"
+      },
+      "id": "e8faf595-6388-4b5f-a1cb-d635cf092906",
+      "name": "Code in JavaScript9",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3888,
+        -1440
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are an expert HR recruiter.\n\nCandidate Information:\n\nName: {{ $json.output.candidate_name }}\nEmail: {{ $json.output.email }}\nPhone: {{ $json.output.phone }}\nSkills: {{ $json.output.skills }}\nEducation: {{ $json.output.education }}\nExperience: {{ $json.output.experience_years }} years\n\nJob Information:\n\nJob Title: {{ $json.job_title }}\nRequired Skills: {{ $json.required_skills }}\nResponsibilities: {{ $json.responsibilities }}\n\nEvaluate this candidate ONLY against this specific job.\n\nConsider:\n1. Required skills match\n2. Relevant experience\n3. Technical relevance\n4. Responsibilities alignment\n\nDo not invent skills or experience that are not present in the candidate information.\n\nReturn ONLY valid JSON in this exact format:\n\n{\n  \"score\": 0,\n  \"status\": \"\",\n  \"matching_skills\": [],\n  \"missing_skills\": [],\n  \"reason\": \"\"\n}",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": []
+        },
+        "batching": {}
+      },
+      "id": "1694d518-a62d-437c-b6e5-44fa704baf11",
+      "name": "Basic LLM Chain",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        -3632,
+        -1440
+      ],
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.5-flash",
+        "options": {}
+      },
+      "id": "c3d6c4e1-c260-411f-8d86-0acd136a76cd",
+      "name": "Google Gemini Chat Model2",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        -3664,
+        -1216
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "1r3d0m7eo5lEdbEt",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\"type\":\"object\",\"properties\":{\"score\":{\"type\":\"number\"},\"status\":{\"type\":\"string\"},\"matching_skills\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"missing_skills\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"reason\":{\"type\":\"string\"}},\"required\":[\"score\",\"status\",\"matching_skills\",\"missing_skills\",\"reason\"]}",
+        "autoFix": true
+      },
+      "id": "c5438024-b67c-42df-a995-9860ac8e564c",
+      "name": "Structured Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        -3536,
+        -1216
+      ]
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.1-flash-lite",
+        "options": {}
+      },
+      "id": "720f9e98-7625-4a1c-b0fb-df0245d2bbd9",
+      "name": "Output Parser Fixer Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        -3424,
+        -1024
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "1r3d0m7eo5lEdbEt",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const candidateData = $('Code in JavaScript9').item.json;\n\nconst candidateSkills = String(\n  candidateData.output?.skills || \"\"\n);\n\nconst requiredSkills = String(\n  candidateData.required_skills || \"\"\n);\n\n// Convert skills to arrays\nconst candidate = candidateSkills\n  .split(\",\")\n  .map(skill => skill.trim().toLowerCase())\n  .filter(Boolean);\n\nconst required = requiredSkills\n  .split(\",\")\n  .map(skill => skill.trim().toLowerCase())\n  .filter(Boolean);\n\n// Normalize skill names\nfunction normalizeSkill(skill) {\n  let s = skill\n    .toLowerCase()\n    .trim()\n    .replace(/\\s+/g, \"\");\n\n  const aliases = {\n    \"html5\": \"html\",\n    \"css3\": \"css\",\n    \"reactjs\": \"react\",\n    \"react.js\": \"react\",\n    \"nodejs\": \"node\",\n    \"node.js\": \"node\",\n    \"expressjs\": \"express\",\n    \"express.js\": \"express\",\n    \"restapi\": \"restapis\",\n    \"restapi's\": \"restapis\"\n  };\n\n  return aliases[s] || s;\n}\n\n// Matching\nconst matchingSkills = required.filter(requiredSkill => {\n  const normalizedRequired = normalizeSkill(requiredSkill);\n\n  return candidate.some(candidateSkill =>\n    normalizeSkill(candidateSkill) === normalizedRequired\n  );\n});\n\n// Missing\nconst missingSkills = required.filter(requiredSkill => {\n  const normalizedRequired = normalizeSkill(requiredSkill);\n\n  return !candidate.some(candidateSkill =>\n    normalizeSkill(candidateSkill) === normalizedRequired\n  );\n});\n\nreturn {\n  json: {\n    ...$json,\n\n    matching_skills: matchingSkills,\n    missing_skills: missingSkills\n  }\n};"
+      },
+      "id": "0d73a873-cc6d-4d41-b845-81d4ddbeec4e",
+      "name": "Skill Matching Code",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3168,
+        -1440
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const candidateData = $('Code in JavaScript9').item.json;\nconst result = $('Basic LLM Chain').item.json.output || {};\n\nconst matchingSkills = $json.matching_skills || [];\nconst missingSkills = $json.missing_skills || [];\n\nconst experienceYears = Number(\n  candidateData.output?.experience_years || 0\n);\n\nconst totalSkills =\n  matchingSkills.length + missingSkills.length;\n\nconst skillScore =\n  totalSkills > 0\n    ? (matchingSkills.length / totalSkills) * 80\n    : 0;\n\nconst experienceScore =\n  Math.min(experienceYears / 3, 1) * 20;\n\nconst score = Math.round(\n  skillScore + experienceScore\n);\n\nlet status;\n\nif (score >= 80) {\n  status = \"Highly Qualified\";\n} else if (score >= 60) {\n  status = \"Potential Candidate\";\n} else {\n  status = \"Rejected\";\n}\n\nreturn {\n  json: {\n    \"Test Case\": \"CV Screening\",\n    \"job\": candidateData.job_title || \"\",\n    \"Candidate\": candidateData.output?.candidate_name || \"\",\n    \"Experience\": experienceYears,\n    \"Email\": candidateData.output?.email || \"\",\n    \"Email Status\": \"\",\n    \"Phone\": candidateData.output?.phone || \"\",\n    \"Education\": candidateData.output?.education || \"\",\n    \"Score\": score,\n    \"Matching Skills\": matchingSkills.join(\", \"),\n    \"Missing Skills\": missingSkills.join(\", \"),\n    \"AI Concerns\": result.reason || \"\",\n    \"AI Recommendation\": status,\n    \"HR Decision\": \"\",\n    \"Original CV\": candidateData.cv_link || \"\",\n    \"LinkedIn URL\": candidateData.output?.linkedin || \"\",\n    \"Github URL\": candidateData.output?.github || \"\",\n    \"Portfolio\": \"\",\n    \"Interview Questions\": \"\",\n    \"HR Notes\": \"\"\n  }\n};"
+      },
+      "id": "b99d19dd-23ee-45bc-a89a-64a72aaaf7da",
+      "name": "Prepare Google Sheet Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2944,
+        -1440
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nconst seen = new Set();\nconst uniqueItems = [];\n\nfor (const item of items) {\n  const candidate = item.json;\n\n  const key = [\n    candidate.Candidate,\n    candidate.Email,\n    candidate.job\n  ]\n    .map(value => String(value || \"\").trim().toLowerCase())\n    .join(\"|\");\n\n  if (seen.has(key)) {\n    continue;\n  }\n\n  seen.add(key);\n  uniqueItems.push(item);\n}\n\nreturn uniqueItems;"
+      },
+      "id": "16cd4a97-72b5-4b36-b355-d047aa644ea0",
+      "name": "Remove duplicate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2720,
+        -1440
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1q3BP2VYEsSI8ZutCQ72NjGncueRuFlZsr9-Yjbes87I",
+          "mode": "list",
+          "cachedResultName": "AI Recruitment Results",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1q3BP2VYEsSI8ZutCQ72NjGncueRuFlZsr9-Yjbes87I/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1L4JHryk40JJcSJ23MblINl7lBOkNFmPYqvuV1OKVOrI/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Candidate": "={{ $json.Candidate }}",
+            "Test Case": "={{ $json['Test Case'] }}",
+            "job": "={{ $json.job }}",
+            "Email": "={{ $json.Email }}",
+            "Score": "={{ $json.Score }}",
+            "Missing Skills": "={{ $json['Missing Skills'] }}",
+            "Matching Skills": "={{ $json['Matching Skills'] }}",
+            "Experience": "={{ $json.Experience }}",
+            "Email Status": "={{ $json['Email Status'] }}",
+            "Phone": "={{ $json.Phone }}",
+            "Education": "={{ $json.Education }}",
+            "AI Concerns": "={{ $json['AI Concerns'] }}",
+            "AI Recommendation": "={{ $json['AI Recommendation'] }}",
+            "HR Decision": "={{ $json['HR Decision'] }}",
+            "Original CV": "={{ $json['Original CV'] }}",
+            "LinkedIn URL": "={{ $json['LinkedIn URL'] }}",
+            "Github URL": "={{ $json['Github URL'] }}",
+            "Portfolio": "={{ $json.Portfolio }}",
+            "Interview Questions": "={{ $json['Interview Questions'] }}",
+            "HR Notes": "={{ $json['HR Notes'] }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Test Case",
+              "displayName": "Test Case",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "job",
+              "displayName": "job",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Candidate",
+              "displayName": "Candidate",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Experience",
+              "displayName": "Experience",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Email Status",
+              "displayName": "Email Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Phone",
+              "displayName": "Phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Education",
+              "displayName": "Education",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Score",
+              "displayName": "Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Matching Skills",
+              "displayName": "Matching Skills",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Missing Skills",
+              "displayName": "Missing Skills",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "AI Concerns",
+              "displayName": "AI Concerns",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "AI Recommendation",
+              "displayName": "AI Recommendation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "HR Decision",
+              "displayName": "HR Decision",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Original CV",
+              "displayName": "Original CV",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "LinkedIn URL",
+              "displayName": "LinkedIn URL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Github URL",
+              "displayName": "Github URL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Portfolio",
+              "displayName": "Portfolio",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Interview Questions",
+              "displayName": "Interview Questions",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "HR Notes",
+              "displayName": "HR Notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "69592354-d6a7-4bf3-b2d5-ea044c2b59e0",
+      "name": "Append row in sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -2496,
+        -1440
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "AWwwyc4KHc0fV5JJ",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1q3BP2VYEsSI8ZutCQ72NjGncueRuFlZsr9-Yjbes87I",
+          "mode": "list",
+          "cachedResultName": "AI Recruitment Results",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1q3BP2VYEsSI8ZutCQ72NjGncueRuFlZsr9-Yjbes87I/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1q3BP2VYEsSI8ZutCQ72NjGncueRuFlZsr9-Yjbes87I/edit#gid=0"
+        },
+        "options": {}
+      },
+      "id": "b1474b24-64d1-49b9-b12e-3db5ee6ec0c7",
+      "name": "Get row(s) in sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -2272,
+        -1440
+      ],
+      "executeOnce": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "AWwwyc4KHc0fV5JJ",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const candidates = $input.all().map(item => item.json);\n\nconst validCandidates = candidates\n  .map(candidate => ({\n    ...candidate,\n    Score: Number(\n      candidate.Score ??\n      candidate.score ??\n      0\n    )\n  }))\n  .filter(candidate =>\n    candidate.Candidate &&\n    candidate.Score >= 60\n  );\n\nvalidCandidates.sort((a, b) => b.Score - a.Score);\n\nconst top3 = validCandidates.slice(0, 3);\n\nreturn top3.map((candidate, index) => ({\n  json: {\n    ...candidate,\n    Rank: index + 1\n  }\n}));"
+      },
+      "id": "b3cca3db-a13c-4ab1-8c9d-2e1cfb9f3b76",
+      "name": "Select Top 3 Candidates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2048,
+        -1440
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const candidates = $input.all().map(item => item.json);\n\nlet message = `Top Candidates for Hiring\n\nJob: ${candidates[0]?.job || \"\"}\n\nWe reviewed the submitted CVs and selected the top qualified candidates:\n\n`;\n\ncandidates.forEach((candidate, index) => {\n  message += `\n--------------------\nRank ${candidate.Rank || index + 1}\n\nCandidate:\n${candidate.Candidate || \"\"}\n\nScore:\n${candidate.Score || 0}/100\n\nExperience:\n${candidate.Experience || 0} years\n\nEmail:\n${candidate.Email || \"\"}\n\nPhone:\n${candidate.Phone || \"\"}\n\nEducation:\n${candidate.Education || \"\"}\n\nMatching Skills:\n${candidate[\"Matching Skills\"] || \"None\"}\n\nMissing Skills:\n${candidate[\"Missing Skills\"] || \"None\"}\n\nAI Recommendation:\n${candidate[\"AI Recommendation\"] || \"\"}\n\nAI Assessment:\n${candidate[\"AI Concerns\"] || \"\"}\n\nLinkedIn:\n${candidate[\"LinkedIn URL\"] || \"Not provided\"}\n\nGitHub:\n${candidate[\"Github URL\"] || \"Not provided\"}\n\nCV:\n${candidate[\"Original CV\"] || \"Not provided\"}\n\n`;\n});\n\nmessage += `\n--------------------\n\nPlease review the candidates and make the final HR decision.\n\nThis shortlist was generated automatically by the CV Screening System.\n`;\n\nreturn [\n  {\n    json: {\n      message: message,\n      candidates_count: candidates.length,\n      top_candidate: candidates[0]?.Candidate || \"\"\n    }\n  }\n];"
+      },
+      "id": "39234dbd-f6ae-41a7-9493-eb08fba39d0d",
+      "name": "Prepare HR Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1824,
+        -1440
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "netcore01001@gmail.com",
+        "subject": "=CV Screening Results - {{ $json.top_candidate }} - Top 3 Candidates",
+        "message": "={{ $json.message }}",
+        "options": {}
+      },
+      "id": "8b3fe5cf-95ae-49d0-b238-0caad1cef594",
+      "name": "Send a message",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -1600,
+        -1440
+      ],
+      "webhookId": "8aa82559-239a-4fce-a13e-31d92cc79b9d",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "z5t0IRmjlpG9cuFI",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes"
+            }
+          ]
+        }
+      },
+      "id": "17537fc1-b981-4b70-a26a-1aa901ce2786",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -5776,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1q3BP2VYEsSI8ZutCQ72NjGncueRuFlZsr9-Yjbes87I",
+          "mode": "list",
+          "cachedResultName": "AI Recruitment Results",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1q3BP2VYEsSI8ZutCQ72NjGncueRuFlZsr9-Yjbes87I/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1q3BP2VYEsSI8ZutCQ72NjGncueRuFlZsr9-Yjbes87I/edit#gid=0"
+        },
+        "options": {}
+      },
+      "id": "ebf660f2-7069-4274-9de0-1461dff00051",
+      "name": "Get row(s) in sheet1",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -5552,
+        -80
+      ],
+      "executeOnce": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "AWwwyc4KHc0fV5JJ",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "327e3cf1-b09d-4f4e-a6f0-a96b77db73c3",
+              "leftValue": "={{ $json[\"HR Decision\"] }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e91498bb-18a4-4f93-afd5-edb3d0cffca3",
+      "name": "If1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -5328,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "1de29c7c-c7df-4d6b-8906-93c2c26100fe",
+              "leftValue": "={{ $json[\"HR Decision\"] }}",
+              "rightValue": "accepted",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "1094eac3-95f3-4d1f-834d-aff5e48ad300",
+      "name": "If",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -5104,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.Email }}",
+        "subject": "=Application Update –  {{ $json.job }}",
+        "message": "=Dear {{ $json.Candidate }},\n\nThank you for applying for the {{ $json.job }} position.\n\nWe are pleased to inform you that your application has been shortlisted for the next stage of the recruitment process.\n\nYour evaluation score: {{ $json.Score }}/100\n\nMatching Skills:\n{{ $json[\"Matching Skills\"] }}\n\nOur recruitment team will contact you with the next steps.\n\nBest regards,\nHR Team",
+        "options": {}
+      },
+      "id": "c06f9719-7062-46f5-8e1d-b536d039cb3e",
+      "name": "Send a message1",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -4736,
+        -80
+      ],
+      "webhookId": "0c1dade1-5024-40e6-9a4a-f3e927554b4a",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "z5t0IRmjlpG9cuFI",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are an expert technical interviewer.\n\nGenerate 8 interview questions for the following candidate.\n\nCandidate Name:\n{{ $json[\"Candidate\"] }}\n\nJob Title:\n{{ $json[\"job\"] }}\n\nExperience:\n{{ $json[\"Experience\"] }} years\n\nMatching Skills:\n{{ $json[\"Matching Skills\"] }}\n\nMissing Skills:\n{{ $json[\"Missing Skills\"] }}\n\nAI Assessment:\n{{ $json[\"AI Concerns\"] }}\n\nThe candidate has been accepted by HR.\n\nRequirements:\n\n1. Generate exactly 8 interview questions.\n2. Questions must be relevant to the job.\n3. Focus on the candidate's actual skills.\n4. Include technical questions.\n5. Include practical/problem-solving questions.\n6. Include at least one behavioral question.\n7. If the candidate is missing an important required skill, include a question that evaluates that skill.\n8. Do not invent experience or skills.\n9. Do not provide answers.\n10. Return only the interview questions.",
+        "hasOutputParser": true,
+        "batching": {}
+      },
+      "id": "0e917471-ddb4-43f6-a0bc-9a69416def62",
+      "name": "Basic LLM Chain1",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        -4848,
+        -688
+      ]
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-120b",
+        "options": {}
+      },
+      "id": "2c069093-d48f-41e9-9694-fab31946c1d9",
+      "name": "Groq Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        -4880,
+        -448
+      ],
+      "credentials": {
+        "groqApi": {
+          "id": "3nh9co8DAggKT68z",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"interview_questions\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      }\n    }\n  },\n  \"required\": [\n    \"interview_questions\"\n  ],\n  \"additionalProperties\": false\n}",
+        "autoFix": true
+      },
+      "id": "888dcd7c-f8df-4110-8971-378b5cc554aa",
+      "name": "Structured Output Parser1",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        -4752,
+        -448
+      ]
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-120b",
+        "options": {}
+      },
+      "id": "2d0ad42f-0739-4314-a5ed-13bc55db8814",
+      "name": "Groq Chat Model1",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        -4672,
+        -240
+      ],
+      "credentials": {
+        "groqApi": {
+          "id": "3nh9co8DAggKT68z",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const candidate = $('If').item.json;\n\nconst questions = $json.output?.interview_questions || [];\n\nreturn {\n  json: {\n    ...candidate,\n    \"Interview Questions\": questions\n      .map((q, index) => `${index + 1}. ${q}`)\n      .join(\"\\n\")\n  }\n};"
+      },
+      "id": "8b39b77a-4b30-4daf-bd5e-1c48a2462d82",
+      "name": "Prepare Interview Questions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -4384,
+        -480
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1q3BP2VYEsSI8ZutCQ72NjGncueRuFlZsr9-Yjbes87I",
+          "mode": "list",
+          "cachedResultName": "AI Recruitment Results",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1q3BP2VYEsSI8ZutCQ72NjGncueRuFlZsr9-Yjbes87I/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1q3BP2VYEsSI8ZutCQ72NjGncueRuFlZsr9-Yjbes87I/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Test Case": "={{ $json[\"Test Case\"] }}",
+            "job": "={{ $json.job }}",
+            "Candidate": "={{ $json.Candidate }}",
+            "Experience": "={{ $json.Experience }}",
+            "Email": "={{ $json.Email }}",
+            "Email Status": "={{ $json[\"Email Status\"] }}",
+            "Phone": "={{ $json.Phone }}",
+            "Education": "={{ $json.Education }}",
+            "Score": "={{ $json.Score }}",
+            "Matching Skills": "={{ $json[\"Matching Skills\"] }}",
+            "Missing Skills": "={{ $json[\"Missing Skills\"] }}",
+            "AI Concerns": "={{ $json[\"AI Concerns\"] }}",
+            "AI Recommendation": "={{ $json[\"AI Recommendation\"] }}",
+            "HR Decision": "={{ $json[\"HR Decision\"] }}",
+            "Original CV": "={{ $json[\"Original CV\"] }}",
+            "LinkedIn URL": "={{ $json[\"LinkedIn URL\"] }}",
+            "Github URL": "={{ $json[\"Github URL\"] }}",
+            "Portfolio": "={{ $json.Portfolio }}",
+            "Interview Questions": "={{ $json[\"Interview Questions\"] }}",
+            "HR Notes": "={{ $json[\"HR Notes\"] }}"
+          },
+          "matchingColumns": [
+            "Email"
+          ],
+          "schema": [
+            {
+              "id": "Test Case",
+              "displayName": "Test Case",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "job",
+              "displayName": "job",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Candidate",
+              "displayName": "Candidate",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Experience",
+              "displayName": "Experience",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Email Status",
+              "displayName": "Email Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Phone",
+              "displayName": "Phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Education",
+              "displayName": "Education",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Score",
+              "displayName": "Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Matching Skills",
+              "displayName": "Matching Skills",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Missing Skills",
+              "displayName": "Missing Skills",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "AI Concerns",
+              "displayName": "AI Concerns",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "AI Recommendation",
+              "displayName": "AI Recommendation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "HR Decision",
+              "displayName": "HR Decision",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Original CV",
+              "displayName": "Original CV",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "LinkedIn URL",
+              "displayName": "LinkedIn URL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Github URL",
+              "displayName": "Github URL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Portfolio",
+              "displayName": "Portfolio",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Interview Questions",
+              "displayName": "Interview Questions",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "HR Notes",
+              "displayName": "HR Notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "dfc5c75c-61ea-44b1-af76-15f7efdbdbbe",
+      "name": "Update row in sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -4160,
+        -480
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "AWwwyc4KHc0fV5JJ",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.Email }}",
+        "subject": "Application Update – Backend Developer",
+        "message": "=Dear {{ $json.Candidate }},\n\nThank you for your interest in the {{ $json.job }} position.\n\nAfter reviewing your application, we are sorry to inform you that your application was not selected to proceed to the next stage.\n\nReason:\n{{ $json[\"HR Notes\"] }}\n\nMissing Skills:\n{{ $json[\"Missing Skills\"] }}\n\nWe appreciate your time and interest in our company and wish you success in your future opportunities.\n\nBest regards,\nHR Team",
+        "options": {}
+      },
+      "id": "795a458d-50c0-4154-b32d-2b7207045033",
+      "name": "Send a message2",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -4736,
+        112
+      ],
+      "webhookId": "3a23c88e-fa8d-4388-8d1a-5d44b377dd08",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "z5t0IRmjlpG9cuFI",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "interview-schedule",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "https://interview-schedule-ui-pro.vercel.app"
+        }
+      },
+      "id": "73564120-55b5-4f6d-aea9-d70e6471040a",
+      "name": "Interview Scheduling Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -3632,
+        -272
+      ],
+      "webhookId": "ae8903f5-5ac5-491c-98b0-7c66672c26e2"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body;\n\nconst requiredFields = [\n  \"candidate\",\n  \"email\",\n  \"job\",\n  \"date\",\n  \"time\"\n];\n\nconst missingFields = requiredFields.filter(\n  field => !body?.[field] || String(body[field]).trim() === \"\"\n);\n\nif (missingFields.length > 0) {\n  return [\n    {\n      json: {\n        success: false,\n        error: \"Missing required fields\",\n        missingFields\n      }\n    }\n  ];\n}\n\nreturn [\n  {\n    json: {\n      success: true,\n      candidate: body.candidate.trim(),\n      email: body.email.trim(),\n      job: body.job.trim(),\n      date: body.date,\n      time: body.time\n    }\n  }\n];"
+      },
+      "id": "134928a9-cc1b-4b07-b928-3e91c31d06e7",
+      "name": "Validate Interview Booking",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3424,
+        -272
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "15fjjv-Q2tQyiTmVA5ndIc4Js0K3-JbI4h75HPffHqDY",
+          "mode": "list",
+          "cachedResultName": "Interview Schedule",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/15fjjv-Q2tQyiTmVA5ndIc4Js0K3-JbI4h75HPffHqDY/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/15fjjv-Q2tQyiTmVA5ndIc4Js0K3-JbI4h75HPffHqDY/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Interview Date",
+              "lookupValue": "={{ $('Validate Interview Booking').item.json.date }}"
+            },
+            {
+              "lookupColumn": "Interview Time",
+              "lookupValue": "={{ $('Validate Interview Booking').item.json.time }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "aa2c96ee-b9bf-4577-abd8-2d95692ac6c3",
+      "name": "Get row(s) in sheet2",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -3200,
+        -272
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "AWwwyc4KHc0fV5JJ",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "84f2c970-b865-4cd6-a491-e70c67ddb15a",
+              "leftValue": "={{ $json.Candidate }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "42c4c65b-0b48-4811-b1cd-68035aed2c7a",
+      "name": "If2",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -2976,
+        -272
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": false,\n  \"available\": false,\n  \"message\": \"This interview slot is already booked\",\n  \"candidate\": \"{{ $('Validate Interview Booking').item.json.candidate }}\",\n  \"date\": \"{{ $('Validate Interview Booking').item.json.date }}\",\n  \"time\": \"{{ $('Validate Interview Booking').item.json.time }}\"\n}",
+        "options": {
+          "responseCode": 409
+        }
+      },
+      "id": "57f7eb29-737a-45dc-ae0a-0e319d0c7da8",
+      "name": "Respond to Webhook1",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -2752,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "15fjjv-Q2tQyiTmVA5ndIc4Js0K3-JbI4h75HPffHqDY",
+          "mode": "list",
+          "cachedResultName": "Interview Schedule",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/15fjjv-Q2tQyiTmVA5ndIc4Js0K3-JbI4h75HPffHqDY/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/15fjjv-Q2tQyiTmVA5ndIc4Js0K3-JbI4h75HPffHqDY/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Candidate": "={{ $('Validate Interview Booking').item.json.candidate }}",
+            "Email": "={{ $('Validate Interview Booking').item.json.email }}",
+            "Job": "={{ $('Validate Interview Booking').item.json.job }}",
+            "Interview Date": "={{ $('Validate Interview Booking').item.json.date }}",
+            "Status": "=Scheduled",
+            "Interview Time": "={{ $('Validate Interview Booking').item.json.time }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Candidate",
+              "displayName": "Candidate",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Job",
+              "displayName": "Job",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Interview Date",
+              "displayName": "Interview Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Interview Time",
+              "displayName": "Interview Time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Calendar Event ID",
+              "displayName": "Calendar Event ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "12614847-da61-4aa3-8835-1718e7396a96",
+      "name": "Append row in sheet2",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -2752,
+        -176
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "AWwwyc4KHc0fV5JJ",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "gameheroxyz@gmail.com",
+          "mode": "list",
+          "cachedResultName": "gameheroxyz@gmail.com"
+        },
+        "start": "={{ DateTime.fromFormat(\n  $json['Interview Date'] + ' ' + $json['Interview Time'],\n  'yyyy-MM-dd hh:mm a'\n).toISO() }}",
+        "end": "={{ DateTime.fromFormat(\n  $json['Interview Date'] + ' ' + $json['Interview Time'],\n  'yyyy-MM-dd hh:mm a'\n).plus({ hours: 1 }).toISO() }}",
+        "additionalFields": {
+          "attendees": [
+            "={{ $('Validate Interview Booking').item.json.email }}"
+          ],
+          "description": "=Candidate: {{ $('Validate Interview Booking').item.json.candidate }} Email: {{ $('Validate Interview Booking').item.json.email }} Job: {{ $('Validate Interview Booking').item.json.job }}  Interview scheduled automatically by HR Recruitment Workflow.",
+          "summary": "=Interview - {{ $('Validate Interview Booking').item.json.candidate }} - {{ $('Validate Interview Booking').item.json.job }}"
+        }
+      },
+      "id": "fe9fc021-dd65-442a-8450-330b087660c8",
+      "name": "Create an event",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        -2528,
+        -176
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "Y5Z8pDTM1U0uypjc",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "15fjjv-Q2tQyiTmVA5ndIc4Js0K3-JbI4h75HPffHqDY",
+          "mode": "list",
+          "cachedResultName": "Interview Schedule",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/15fjjv-Q2tQyiTmVA5ndIc4Js0K3-JbI4h75HPffHqDY/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/15fjjv-Q2tQyiTmVA5ndIc4Js0K3-JbI4h75HPffHqDY/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Calendar Event ID": "={{ $json.id }}",
+            "Email": "={{ $('Validate Interview Booking').item.json.email }}"
+          },
+          "matchingColumns": [
+            "Email"
+          ],
+          "schema": [
+            {
+              "id": "Candidate",
+              "displayName": "Candidate",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Job",
+              "displayName": "Job",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Interview Date",
+              "displayName": "Interview Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Interview Time",
+              "displayName": "Interview Time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Calendar Event ID",
+              "displayName": "Calendar Event ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "fbfa3241-e8f0-4e89-9293-1b56456ecccd",
+      "name": "Append or update row in sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -2304,
+        -176
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "AWwwyc4KHc0fV5JJ",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"message\": \"Interview scheduled successfully\",\n  \"candidate\": \"{{ $('Validate Interview Booking').item.json.candidate }}\",\n  \"email\": \"{{ $('Validate Interview Booking').item.json.email }}\",\n  \"job\": \"{{ $('Validate Interview Booking').item.json.job }}\",\n  \"date\": \"{{ $('Validate Interview Booking').item.json.date }}\",\n  \"time\": \"{{ $('Validate Interview Booking').item.json.time }}\",\n  \"calendarEventId\": \"{{ $('Create an event').item.json.id }}\"\n}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "8de0bcf0-4f53-4069-ba4b-d1b8bf4c22cb",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -2080,
+        -176
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        []
+      ]
+    },
+    "Split CV Files": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript6": {
+      "main": [
+        [
+          {
+            "node": "Upload file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload file": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript7": {
+      "main": [
+        [
+          {
+            "node": "Information Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Information Extractor": {
+      "main": [
+        [
+          {
+            "node": "cv_link",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Information Extractor",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "cv_link": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript9",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript9": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Skill Matching Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Output Parser Fixer Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Structured Output Parser",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skill Matching Code": {
+      "main": [
+        [
+          {
+            "node": "Prepare Google Sheet Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Google Sheet Data": {
+      "main": [
+        [
+          {
+            "node": "Remove duplicate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove duplicate": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Select Top 3 Candidates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select Top 3 Candidates": {
+      "main": [
+        [
+          {
+            "node": "Prepare HR Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare HR Message": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet1": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Send a message1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Basic LLM Chain1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send a message2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain1": {
+      "main": [
+        [
+          {
+            "node": "Prepare Interview Questions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser1": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Basic LLM Chain1",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Structured Output Parser1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Interview Questions": {
+      "main": [
+        [
+          {
+            "node": "Update row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Interview Scheduling Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Interview Booking",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Interview Booking": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet2": {
+      "main": [
+        [
+          {
+            "node": "If2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If2": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Append row in sheet2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet2": {
+      "main": [
+        [
+          {
+            "node": "Create an event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create an event": {
+      "main": [
+        [
+          {
+            "node": "Append or update row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append or update row in sheet": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "8538b29e-0e9d-4847-9fbd-26efcecc5c42",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "a034e4d3a0db5371f773841887015eef78b8ad66c037181e5bea01c85f3040df"
+  },
+  "nodeGroups": [],
+  "id": "1H7rT0rqQZgoMndq",
+  "tags": []
+}
