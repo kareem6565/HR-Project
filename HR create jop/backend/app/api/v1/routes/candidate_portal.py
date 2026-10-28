@@ -1,22 +1,23 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.api.v1.deps import RequestContext, get_request_context
 from app.api.v1.schemas.candidate_portal import (
     AvailableSlotResponse,
+    CandidateBookingResponse,
     CandidateBookSlotRequest,
+    CandidatePortalMonthSlotsRequest,
+    CandidatePortalTokenRequest,
     CandidatePortalViewResponse,
     InvitationCreateRequest,
     InvitationResponse,
 )
-from app.api.v1.schemas.interviews import InterviewResponse
 from app.core.database import get_db
-from app.services.interview_service import InterviewService
+from app.models.interview_availability import InterviewAvailability
 from app.services.scheduling_workflow_service import SchedulingWorkflowService
 
 router = APIRouter()
@@ -37,7 +38,7 @@ def create_candidate_invitation(
 
     Enforces Stage G: Advance Gate — application must have an authoritative HR 'advance' decision.
     """
-    invitation = SchedulingWorkflowService().create_invitation(
+    issue = SchedulingWorkflowService().create_invitation(
         db,
         organization_id=ctx.organization_id,
         job_application_id=uuid.UUID(application_id),
@@ -46,51 +47,57 @@ def create_candidate_invitation(
         notes=body.notes,
     )
     db.commit()
-    return invitation
+    return {
+        "id": issue.invitation.id,
+        "organization_id": issue.invitation.organization_id,
+        "job_application_id": issue.invitation.job_application_id,
+        "token": issue.token,
+        "expires_at": issue.invitation.expires_at,
+        "status": issue.invitation.status,
+        "notes": issue.invitation.notes,
+        "created_at": issue.invitation.created_at,
+    }
 
 
-@router.get(
-    "/candidate-portal/invitations/{token}",
+@router.post(
+    "/candidate-portal/interview/preview",
     response_model=CandidatePortalViewResponse,
 )
 def get_candidate_invitation_details(
-    token: str,
+    body: CandidatePortalTokenRequest,
     db: Session = Depends(get_db),
 ):
     """Candidate-facing endpoint: resolve invitation token and display role info.
 
     Strictly redacts internal scoring, AI traces, and interviewer internal notes.
     """
-    view = SchedulingWorkflowService().get_candidate_view(db, token)
+    view = SchedulingWorkflowService().get_candidate_view(db, body.token)
     return CandidatePortalViewResponse(**view)
 
 
-@router.get(
-    "/candidate-portal/invitations/{token}/slots",
+@router.post(
+    "/candidate-portal/interview/slots",
     response_model=list[AvailableSlotResponse],
 )
 def list_slots_for_invitation(
-    token: str,
-    date_filter: str | None = Query(default=None, alias="date"),
+    body: CandidatePortalMonthSlotsRequest,
     db: Session = Depends(get_db),
 ):
-    """Candidate-facing endpoint: list genuinely open, non-conflicting interview slots."""
-    parsed_date = date.fromisoformat(date_filter) if date_filter else None
+    """List real open slots across the selected calendar month."""
     slots = SchedulingWorkflowService().list_available_slots_for_invitation(
         db,
-        token=token,
-        scheduled_date=parsed_date,
+        token=body.token,
+        month=body.month,
     )
     return [AvailableSlotResponse(**slot) for slot in slots]
 
 
 @router.post(
-    "/candidate-portal/invitations/{token}/book",
-    response_model=InterviewResponse,
+    "/candidate-portal/interview/book",
+    response_model=CandidateBookingResponse,
     status_code=201,
 )
 def candidate_book_interview(
-    token: str,
     body: CandidateBookSlotRequest,
     db: Session = Depends(get_db),
 ):
@@ -100,30 +107,16 @@ def candidate_book_interview(
     """
     interview = SchedulingWorkflowService().candidate_book_slot(
         db,
-        token=token,
-        scheduled_date=body.scheduled_date,
+        token=body.token,
+        availability_id=body.availability_id,
         scheduled_time=body.scheduled_time,
-        duration_minutes=body.duration_minutes,
-        interviewer_user_id=body.interviewer_user_id,
     )
     db.commit()
-    return InterviewResponse(**InterviewService.to_response(interview))
-
-
-@router.post(
-    "/candidate-portal/invitations/{token}/cancel",
-    response_model=InterviewResponse,
-)
-def candidate_cancel_interview(
-    token: str,
-    interview_id: str = Query(...),
-    db: Session = Depends(get_db),
-):
-    """Candidate-facing cancellation of an appointment."""
-    cancelled = SchedulingWorkflowService().candidate_cancel_booking(
-        db,
-        token=token,
-        interview_id=uuid.UUID(interview_id),
+    availability = db.get(InterviewAvailability, body.availability_id)
+    return CandidateBookingResponse(
+        status=interview.status,
+        scheduled_date=interview.scheduled_date.isoformat(),
+        scheduled_time=interview.scheduled_time,
+        scheduled_duration_minutes=interview.scheduled_duration_minutes,
+        timezone=availability.timezone if availability is not None else "UTC",
     )
-    db.commit()
-    return InterviewResponse(**InterviewService.to_response(cancelled))

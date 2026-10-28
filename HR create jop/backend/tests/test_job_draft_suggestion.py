@@ -354,3 +354,78 @@ class TestApproveJobProfileTransition:
 
         job_detail = client.get(f"/api/v1/jobs/{job['id']}", headers=headers)
         assert job_detail.json()["status"] == "draft"
+
+
+class TestJobSourceProvenance:
+    def test_source_review_is_saved_separately_and_actor_is_server_stamped(
+        self, client: httpx.Client, db_session: Session
+    ) -> None:
+        organization, user = seed_org_user(db_session)
+        headers = auth_headers(str(organization.id), str(user.id))
+        listing = "Synthetic Backend Engineer listing from HR."
+        job = create_job(client, headers, raw_description=listing)
+
+        response = client.post(
+            f"/api/v1/jobs/{job['id']}/profiles",
+            headers=headers,
+            json={
+                "status": "draft",
+                "source": "hr_edited",
+                "profile_data": {"title": "HR edited title", "requirements": []},
+                "source_original_listing_text": listing,
+                "source_metadata": {
+                    "source_name": "Synthetic careers page",
+                    "source_url": "https://example.test/jobs/backend",
+                    "published_at": "2026-10-20",
+                    "application_url": "https://example.test/apply/backend",
+                    "source_import_id": "synthetic-import-1",
+                    "review_confirmed": True,
+                },
+                "field_origins": {"title": "hr_edited_after_hera_suggestion"},
+            },
+        )
+        assert response.status_code == 201
+        provenance = response.json()["provenance"]
+        assert provenance["source"]["source_name"] == "Synthetic careers page"
+        assert provenance["source"]["reviewed_by_user_id"] == str(user.id)
+        assert provenance["source"]["reviewed_at"]
+        assert provenance["source"]["availability_checked_by_hera"] is False
+        assert provenance["field_origins"]["title"] == "hr_edited_after_hera_suggestion"
+        assert response.json()["profile_data"]["title"] == "HR edited title"
+        assert response.json()["raw_input_snapshot"]["original_listing_text"] == listing
+        assert client.get(f"/api/v1/jobs/{job['id']}", headers=headers).json()["raw_description"] == listing
+
+    def test_unreviewed_or_malformed_source_is_rejected(
+        self, client: httpx.Client, db_session: Session
+    ) -> None:
+        organization, user = seed_org_user(db_session)
+        headers = auth_headers(str(organization.id), str(user.id))
+        job = create_job(client, headers)
+        body = {
+            "status": "draft",
+            "source": "hr_edited",
+            "profile_data": {"title": "Backend Engineer", "requirements": []},
+            "source_metadata": {
+                "source_name": "Synthetic source",
+                "source_url": "javascript:alert(1)",
+                "source_import_id": "synthetic-import-2",
+                "review_confirmed": True,
+            },
+        }
+        response = client.post(f"/api/v1/jobs/{job['id']}/profiles", headers=headers, json=body)
+        assert response.status_code == 422
+
+        body["source_metadata"]["source_url"] = "https://example.test/job"
+        body["source_metadata"]["review_confirmed"] = False
+        response = client.post(f"/api/v1/jobs/{job['id']}/profiles", headers=headers, json=body)
+        assert response.status_code == 422
+        assert db_session.query(JobProfile).count() == 0
+
+        body["field_origins"] = {"untrusted_field": "hera_suggested"}
+        response = client.post(f"/api/v1/jobs/{job['id']}/profiles", headers=headers, json=body)
+        assert response.status_code == 422
+
+        body.pop("field_origins")
+        body["source_metadata"]["review_confirmed"] = True
+        response = client.post(f"/api/v1/jobs/{job['id']}/profiles", headers=headers, json=body)
+        assert response.status_code == 422

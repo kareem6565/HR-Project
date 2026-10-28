@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.api.v1.deps import RequestContext, get_request_context
+from app.api.v1.deps import RequestContext, require_roles
 from app.api.v1.schemas.ai_activity import (
     AIActivityRetryResponse,
     AIActivityRunResponse,
@@ -20,7 +20,7 @@ router = APIRouter()
     response_model=list[AIActivityRunResponse],
 )
 def list_ai_activity_runs(
-    ctx: RequestContext = Depends(get_request_context),
+    ctx: RequestContext = Depends(require_roles("admin")),
     db: Session = Depends(get_db),
     limit: int = Query(default=50, ge=1, le=200),
 ):
@@ -38,7 +38,7 @@ def list_ai_activity_runs(
     response_model=AIActivityStatsResponse,
 )
 def get_ai_activity_stats(
-    ctx: RequestContext = Depends(get_request_context),
+    ctx: RequestContext = Depends(require_roles("admin")),
     db: Session = Depends(get_db),
 ):
     """Return last-24h run counts and average AI latency, org-scoped."""
@@ -52,7 +52,7 @@ def get_ai_activity_stats(
 )
 def retry_ai_activity_run(
     run_id: str,
-    ctx: RequestContext = Depends(get_request_context),
+    ctx: RequestContext = Depends(require_roles("admin")),
     db: Session = Depends(get_db),
 ):
     """Re-run a failed workflow run against its related entity."""

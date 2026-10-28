@@ -11,12 +11,15 @@ import argparse
 from datetime import UTC, datetime, timedelta
 import logging
 from pathlib import Path
+import re
 import signal
 import sys
 import threading
 import time
+import traceback
 import uuid
 
+from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -43,6 +46,65 @@ from app.services.storage_service import LocalFileSystemStorage, StorageProvider
 from app.services.text_extraction_service import extract_text
 
 logger = logging.getLogger("app.worker")
+_SAFE_DIAGNOSTIC_FIELD = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
+
+
+def _safe_exception_diagnostics(error: Exception) -> dict[str, object]:
+    """Build diagnostics without serializing exception messages or payload values."""
+    validation_errors: list[dict[str, object]] = []
+    exception_frames: list[dict[str, object]] = []
+    pending: list[BaseException] = [error]
+    seen: set[int] = set()
+
+    while pending and len(seen) < 5:
+        current = pending.pop(0)
+        if id(current) in seen:
+            continue
+        seen.add(id(current))
+
+        if isinstance(current, PydanticValidationError):
+            for detail in current.errors(
+                include_input=False,
+                include_context=False,
+                include_url=False,
+            )[:20]:
+                location = []
+                for part in detail.get("loc", ())[:12]:
+                    if isinstance(part, int) and not isinstance(part, bool) and 0 <= part <= 10000:
+                        location.append(part)
+                    elif isinstance(part, str) and _SAFE_DIAGNOSTIC_FIELD.fullmatch(part):
+                        location.append(part)
+                    else:
+                        location.append("[REDACTED]")
+                error_type = detail.get("type")
+                validation_errors.append(
+                    {
+                        "location": location,
+                        "type": error_type
+                        if isinstance(error_type, str)
+                        and _SAFE_DIAGNOSTIC_FIELD.fullmatch(error_type)
+                        else "[REDACTED]",
+                    }
+                )
+
+        if current.__traceback__ is not None:
+            for frame in traceback.extract_tb(current.__traceback__)[-20:]:
+                exception_frames.append(
+                    {
+                        "file": Path(frame.filename).name,
+                        "function": frame.name,
+                        "line": frame.lineno,
+                    }
+                )
+
+        cause = current.__cause__ or current.__context__
+        if cause is not None:
+            pending.append(cause)
+
+    return {
+        "validation_errors": validation_errors[:20],
+        "exception_frames": exception_frames[-30:],
+    }
 
 
 class ScreeningWorker:
@@ -151,10 +213,15 @@ class ScreeningWorker:
             logger.warning("Claim lost or item reclaimed by another worker: %s", item_id)
             return False
 
-        batch = item.batch
-        org_id = batch.organization_id
-        job_id = batch.job_id
-        job = db.get(Job, job_id)
+        processing_stage = "load_job_context"
+        try:
+            batch = item.batch
+            org_id = batch.organization_id
+            job_id = batch.job_id
+            job = db.get(Job, job_id)
+        except Exception as exc:
+            self._log_item_failure(item, processing_stage, exc)
+            raise
         if job is None or job.organization_id != org_id:
             self._record_permanent_failure(
                 item_id, claim_token, "JOB_NOT_FOUND", "Associated job does not exist.", db=db
@@ -181,7 +248,7 @@ class ScreeningWorker:
         try:
             raw_bytes = self.storage.read(file_uri=item.storage_key)
         except Exception as exc:
-            logger.error("Failed to read stored batch file for item %s: %s", item_id, type(exc).__name__)
+            self._log_item_failure(item, "storage_read", exc)
             self._record_permanent_failure(
                 item_id, claim_token, "STORAGE_READ_FAILED", "Failed to read stored CV file.", db=db
             )
@@ -197,13 +264,13 @@ class ScreeningWorker:
                 max_docx_entries=settings.max_docx_entries,
             )
         except UploadValidationError as exc:
-            logger.warning("Validation failed for item %s: %s (%s)", item_id, exc.code, exc)
+            self._log_item_failure(item, "cv_text_extraction", exc, level=logging.WARNING)
             self._record_permanent_failure(
                 item_id, claim_token, exc.code, str(exc), db=db
             )
             return False
         except Exception as exc:
-            logger.warning("Unexpected extraction error for item %s: %s", item_id, type(exc).__name__)
+            self._log_item_failure(item, "cv_text_extraction", exc, level=logging.WARNING)
             self._record_permanent_failure(
                 item_id, claim_token, "CORRUPT", "Document extraction failed.", db=db
             )
@@ -211,6 +278,7 @@ class ScreeningWorker:
 
         # Execute candidate creation, profile extraction, and evaluation pipeline
         created_resume_uri = None
+        processing_stage = "candidate_creation"
         try:
             with db.begin_nested():
                 # Verify claim token still valid before writing records
@@ -226,6 +294,7 @@ class ScreeningWorker:
                 )
 
                 # 2. Permanent resume storage
+                processing_stage = "resume_storage"
                 resume_id = uuid.uuid4()
                 extension = Path(item.filename).suffix.lower().lstrip(".")
                 created_resume_uri = self.storage.save(
@@ -249,6 +318,7 @@ class ScreeningWorker:
                 db.flush()
 
                 # 3. Profile extraction
+                processing_stage = "candidate_profile_extraction"
                 profile_payload, evidence_payload, explanation_payload = derive_screening_payloads(
                     full_name=candidate.full_name,
                     job_title=job.title,
@@ -267,6 +337,7 @@ class ScreeningWorker:
                 )
 
                 # 4. Job application
+                processing_stage = "application_creation"
                 application = JobApplicationService().create(
                     db,
                     organization_id=org_id,
@@ -276,6 +347,7 @@ class ScreeningWorker:
                 )
 
                 # 5. Candidate evaluation
+                processing_stage = "candidate_evaluation"
                 eval_result = CandidateEvaluationWorkflow(
                     evidence_provider=get_provider(
                         settings,
@@ -296,6 +368,7 @@ class ScreeningWorker:
                     raise RuntimeError("Claim token preempted before commit.")
 
                 # 6. Mark item done
+                processing_stage = "batch_finalize"
                 item.candidate_id = candidate.id
                 item.resume_id = resume.id
                 item.application_id = application.id
@@ -314,6 +387,11 @@ class ScreeningWorker:
             return True
 
         except Exception as exc:
+            failure_context = {
+                "batch_id": str(item.batch_id),
+                "item_id": str(item.id),
+                "attempt_number": item.attempts,
+            }
             db.rollback()
             if created_resume_uri:
                 try:
@@ -321,9 +399,47 @@ class ScreeningWorker:
                 except Exception:
                     pass
 
-            logger.error("Transient error during item %s execution: %s", item_id, type(exc).__name__, exc_info=True)
-            self._handle_transient_failure(item_id, claim_token, str(type(exc).__name__), db=db)
+            self._log_item_failure(
+                item,
+                processing_stage,
+                exc,
+                context=failure_context,
+            )
+            self._handle_transient_failure(
+                item_id,
+                claim_token,
+                str(type(exc).__name__),
+                db=db,
+                processing_stage=processing_stage,
+            )
             return False
+
+    @staticmethod
+    def _log_item_failure(
+        item: ScreeningBatchItem,
+        processing_stage: str,
+        error: Exception,
+        *,
+        level: int = logging.ERROR,
+        context: dict[str, object] | None = None,
+    ) -> None:
+        """Log stage and safe diagnostic metadata while withholding exception messages."""
+        context = context or {
+            "batch_id": str(item.batch_id),
+            "item_id": str(item.id),
+            "attempt_number": item.attempts,
+        }
+        logger.log(
+            level,
+            "Screening batch item processing failed.",
+            extra={
+                **context,
+                "processing_stage": processing_stage,
+                "exception_class": type(error).__name__,
+                **_safe_exception_diagnostics(error),
+            },
+            exc_info=(type(error), error, error.__traceback__),
+        )
 
     def _record_permanent_failure(
         self,
@@ -358,6 +474,7 @@ class ScreeningWorker:
         claim_token: str,
         reason: str,
         db: Session | None = None,
+        processing_stage: str = "candidate_evaluation",
     ) -> None:
         """Requeue an item with exponential backoff or fail if attempts exhausted."""
         def _apply(session: Session) -> None:
@@ -370,7 +487,16 @@ class ScreeningWorker:
                     item.claim_token = None
                     item.lease_expires_at = None
                     item.next_attempt_at = datetime.now(UTC) + timedelta(seconds=delay)
-                    logger.info("Requeued item %s with %ds backoff delay (attempt %d/%d)", item_id, delay, item.attempts, item.max_attempts)
+                    logger.info(
+                        "Requeued screening batch item after transient failure.",
+                        extra={
+                            "batch_id": str(item.batch_id),
+                            "item_id": str(item.id),
+                            "attempt_number": item.attempts,
+                            "processing_stage": processing_stage,
+                            "error_code": "TRANSIENT_ERROR",
+                        },
+                    )
                 else:
                     item.status = "failed"
                     item.stage = "failed"
@@ -378,7 +504,16 @@ class ScreeningWorker:
                     item.error_message = f"Exceeded maximum attempts ({item.max_attempts}). Last error: {reason}"
                     item.claim_token = None
                     item.lease_expires_at = None
-                    logger.warning("Item %s exhausted max attempts and failed.", item_id)
+                    logger.warning(
+                        "Screening batch item exhausted maximum attempts.",
+                        extra={
+                            "batch_id": str(item.batch_id),
+                            "item_id": str(item.id),
+                            "attempt_number": item.attempts,
+                            "processing_stage": processing_stage,
+                            "error_code": "MAX_ATTEMPTS_EXCEEDED",
+                        },
+                    )
 
                 ScreeningBatchService._update_batch_state(item.batch)
                 session.commit()

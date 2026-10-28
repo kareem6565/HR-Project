@@ -26,12 +26,19 @@ class JobCandidateSummary(BaseModel):
     decision_created_at: datetime | None = None
 
 
+class TalentPoolEvidenceResponse(BaseModel):
+    evidence_type: str
+    requirement: str
+    quote: str | None = None
+    quote_verified: bool
+
+
 class TalentPoolRowResponse(BaseModel):
-    """One hold/advanced candidate in the organization-wide talent pool.
+    """One prior application in the organization-wide talent pool.
 
     Superset of ``JobCandidateSummary``: adds job context (``job_id``,
-    ``job_title``) so a consumer like the talent pool page can display which
-    job a hold/advanced candidate is linked to.
+    ``job_title``) so the page can display the role associated with the original
+    HR decision. Rejected applications are returned only on explicit request.
     """
 
     candidate_id: UUID
@@ -47,3 +54,5 @@ class TalentPoolRowResponse(BaseModel):
     skills: list[str] = Field(default_factory=list)
     decision: str | None = None
     decision_created_at: datetime | None = None
+    consent_expires_at: datetime | None = None
+    evidence: list[TalentPoolEvidenceResponse] = Field(default_factory=list)

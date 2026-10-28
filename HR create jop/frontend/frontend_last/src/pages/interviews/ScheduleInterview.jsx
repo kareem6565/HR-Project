@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { CalendarClock, Clock3, CheckCircle2, AlertCircle, ArrowLeft } from "lucide-react";
 import LoadingSpinner from "../../components/common/LoadingSpinner";
 import ErrorState from "../../components/common/ErrorState";
@@ -278,11 +278,14 @@ export default function ScheduleInterview() {
         <div>
           <p className="eyebrow">INTERVIEW SCHEDULING</p>
           <h2>Plan an interview</h2>
-          <p>Choose the people and a time. HERA will check the selected interviewer’s calendar for conflicts.</p>
+          <p>Choose the people and time. HERA checks interviews already recorded in this workspace.</p>
         </div>
-        <button className="btn btn-secondary schedule-back-button" type="button" onClick={() => navigate("/interviews")}>
-          <ArrowLeft size={16} /> Back to interviews
-        </button>
+        <div className="schedule-heading-actions">
+          <Link className="btn btn-secondary" to="/interviews/availability">Manage candidate availability</Link>
+          <button className="btn btn-secondary schedule-back-button" type="button" onClick={() => navigate("/interviews")}>
+            <ArrowLeft size={16} /> Back to interviews
+          </button>
+        </div>
       </header>
 
       <div className="schedule-layout">

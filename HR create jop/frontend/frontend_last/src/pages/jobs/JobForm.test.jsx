@@ -9,7 +9,7 @@ import {
   suggestJobDraft,
   updateJob,
 } from "../../services/jobService";
-import { extractJobProfile } from "../../services/jobProfileService";
+import { createJobProfile, extractJobProfile, listJobProfiles } from "../../services/jobProfileService";
 import JobForm from "./JobForm";
 
 vi.mock("../../services/jobService", () => ({
@@ -20,7 +20,9 @@ vi.mock("../../services/jobService", () => ({
 }));
 
 vi.mock("../../services/jobProfileService", () => ({
+  createJobProfile: vi.fn(),
   extractJobProfile: vi.fn(),
+  listJobProfiles: vi.fn(),
 }));
 
 const DEFAULT_SUGGESTION = {
@@ -59,6 +61,15 @@ describe("JobForm AI-assisted creation", () => {
     vi.clearAllMocks();
     getJobById.mockResolvedValue(null);
     suggestJobDraft.mockResolvedValue({ ...DEFAULT_SUGGESTION });
+    listJobProfiles.mockResolvedValue([]);
+    createJobProfile.mockResolvedValue({ id: "source-profile" });
+  });
+
+  test("uses a single-column form layout instead of an empty grid column", async () => {
+    const { container } = renderForm();
+
+    await screen.findByRole("heading", { name: "Create New Job" });
+    expect(container.querySelector("section.job-form-grid")).toBeInTheDocument();
   });
 
   test("sends only the raw description to the auto-fill endpoint", async () => {
@@ -282,6 +293,53 @@ describe("JobForm AI-assisted creation", () => {
     expect(payload).not.toHaveProperty("confidence");
     expect(payload).not.toHaveProperty("score");
     expect(payload).not.toHaveProperty("match_percent");
+  });
+
+  test("persists reviewed source metadata separately and keeps human edits after failed analysis", async () => {
+    createJob.mockResolvedValue({ id: "job-source" });
+    extractJobProfile.mockRejectedValue(new Error("Provider unavailable"));
+    renderForm();
+    const user = userEvent.setup();
+
+    await user.type(screen.getByLabelText(/Description/), "Synthetic role listing with Python experience.");
+    await user.type(screen.getByLabelText("Job Title"), "HR's backend title");
+    await user.type(screen.getByLabelText("Source name"), "Synthetic careers page");
+    await user.type(screen.getByLabelText("Source link"), "https://example.test/roles/backend");
+    await user.click(screen.getByLabelText(/I reviewed these source details/));
+    await user.click(screen.getByRole("button", { name: "Save Draft" }));
+
+    await waitFor(() => expect(createJobProfile).toHaveBeenCalledTimes(1));
+    expect(createJob.mock.calls[0][0].title).toBe("HR's backend title");
+    const profilePayload = createJobProfile.mock.calls[0][1];
+    expect(profilePayload.source_metadata.source_name).toBe("Synthetic careers page");
+    expect(profilePayload.source_metadata.review_confirmed).toBe(true);
+    expect(profilePayload.source_original_listing_text).toBe("Synthetic role listing with Python experience.");
+    expect(profilePayload.profile_data.title).toBe("HR's backend title");
+    expect(profilePayload.field_origins.title).toBe("hr_entered_or_edited");
+
+    await user.click(screen.getByRole("button", { name: "Analyze with HERA" }));
+    expect(await screen.findByText(/Provider unavailable/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Job Title")).toHaveValue("HR's backend title");
+    expect(createJobProfile).toHaveBeenCalledTimes(1);
+  });
+
+  test("records HR edits made over HERA suggestions without replacing them silently", async () => {
+    createJob.mockResolvedValue({ id: "job-origin" });
+    renderForm();
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText(/Description/), "Backend engineer, Python and FastAPI.");
+    await user.type(screen.getByLabelText("Source name"), "Synthetic source");
+    await user.click(screen.getByLabelText(/I reviewed these source details/));
+    await user.click(screen.getByRole("button", { name: /Suggest fields with HERA/ }));
+    await waitFor(() => expect(screen.getByLabelText(/Job Title/)).toHaveValue("Backend Engineer"));
+    await user.clear(screen.getByLabelText(/Job Title/));
+    await user.type(screen.getByLabelText(/Job Title/), "HR reviewed title");
+    await user.click(screen.getByRole("button", { name: "Save Draft" }));
+
+    await waitFor(() => expect(createJobProfile).toHaveBeenCalled());
+    const profilePayload = createJobProfile.mock.calls[0][1];
+    expect(profilePayload.profile_data.title).toBe("HR reviewed title");
+    expect(profilePayload.field_origins.title).toBe("hr_edited_after_hera_suggestion");
   });
 
   test("edit mode preloads the job and offers Analyze immediately", async () => {

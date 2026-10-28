@@ -125,7 +125,8 @@ describe("UI-07: Job Selection & Truthful Criteria Summary", () => {
     jobService.getJobs.mockResolvedValue(mockJobs);
   });
 
-  it("renders selected job details and displays truthful criteria without fabricating weights or approval states", async () => {
+  it("keeps screening focused while allowing HR to review the full job details and criteria", async () => {
+    const user = userEvent.setup();
     render(
       <MemoryRouter>
         <ScreenCandidates />
@@ -133,14 +134,22 @@ describe("UI-07: Job Selection & Truthful Criteria Summary", () => {
     );
 
     await screen.findByText("Senior Full Stack Engineer");
+    const detailsToggle = screen.getByText("Review job description & screening criteria");
+    expect(detailsToggle.closest("details")).not.toHaveAttribute("open");
+    expect(screen.getByText("Engineering · Riyadh, KSA · Full-time")).toBeInTheDocument();
+    expect(detailsToggle.closest("details").querySelector("li")).toHaveTextContent(
+      "5+ years React & Node.js"
+    );
+
+    await user.click(detailsToggle);
     expect(screen.getByText("5+ years React & Node.js")).toBeInTheDocument();
     expect(screen.getByText("Experience with PostgreSQL")).toBeInTheDocument();
     expect(screen.getByText("React")).toBeInTheDocument();
     expect(screen.getByText("TypeScript")).toBeInTheDocument();
 
-    // Truthful notice present
+    // Criteria are read from the job record without fabricating weights or approval states.
     expect(
-      screen.getByText(/Truthful criteria notice: Loaded directly from the job record/i)
+      screen.getByText(/Criteria are shown as saved on the job/i)
     ).toBeInTheDocument();
 
     // Verify NO fabricated weights or percentages exist in criteria
@@ -163,6 +172,7 @@ describe("UI-07: Job Selection & Truthful Criteria Summary", () => {
     // Switch to Product Designer which has empty requirements & skills
     await user.selectOptions(select, "job-2");
 
+    await user.click(screen.getByText("Review job description & screening criteria"));
     expect(await screen.findByText(/No explicit criteria or skills configured on this job/i)).toBeInTheDocument();
   });
 });
@@ -510,6 +520,25 @@ describe("Screening setup loading and empty states", () => {
 
     expect(await screen.findByText(/No screening batches for this job yet/i)).toBeInTheDocument();
     expect(screen.getByText(/After you submit CVs, their processing status will appear here/i)).toBeInTheDocument();
+  });
+
+  it("shows only the three most recent batches and requests only three from the API", async () => {
+    screeningBatchService.getJobBatches.mockResolvedValue([
+      { id: "batch-1", status: "completed", total_files: 1, counts: { completed: 1 } },
+      { id: "batch-2", status: "completed", total_files: 1, counts: { completed: 1 } },
+      { id: "batch-3", status: "completed", total_files: 1, counts: { completed: 1 } },
+      { id: "batch-4", status: "completed", total_files: 1, counts: { completed: 1 } },
+      { id: "batch-5", status: "completed", total_files: 1, counts: { completed: 1 } },
+    ]);
+    render(
+      <MemoryRouter>
+        <ScreenCandidates />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText("Recent screening batches")).toBeInTheDocument();
+    expect(await screen.findAllByRole("button", { name: "View" })).toHaveLength(3);
+    expect(screeningBatchService.getJobBatches).toHaveBeenCalledWith("job-1", 3);
   });
 
   it("distinguishes batch history request failure from an empty history and allows retry", async () => {

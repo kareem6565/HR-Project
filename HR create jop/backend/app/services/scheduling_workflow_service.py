@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import hashlib
 import secrets
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from calendar import monthrange
+from dataclasses import dataclass
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -27,6 +31,12 @@ from app.services.interview_service import (
 )
 
 
+@dataclass(frozen=True)
+class CandidateInvitationIssue:
+    invitation: CandidateInvitation
+    token: str
+
+
 class SchedulingWorkflowService:
     """Manages interviewer availability, candidate invitations, and candidate self-scheduling."""
 
@@ -46,6 +56,14 @@ class SchedulingWorkflowService:
         organization = db.get(Organization, organization_id)
         if organization is None:
             raise NotFoundError("Organization was not found.")
+
+        try:
+            timezone_info = ZoneInfo(timezone_name)
+        except ZoneInfoNotFoundError:
+            raise ValidationError("timezone must be a valid IANA time zone.") from None
+
+        if scheduled_date < datetime.now(timezone_info).date():
+            raise ValidationError("Availability cannot be published for a past date.")
 
         interviewer = db.get(User, interviewer_user_id)
         if interviewer is None or interviewer.organization_id != organization_id:
@@ -74,12 +92,37 @@ class SchedulingWorkflowService:
         db.flush()
         return availability
 
+    def cancel_availability(
+        self,
+        db: Session,
+        *,
+        organization_id: uuid.UUID,
+        availability_id: uuid.UUID,
+    ) -> InterviewAvailability:
+        availability = db.scalar(
+            select(InterviewAvailability)
+            .where(
+                InterviewAvailability.id == availability_id,
+                InterviewAvailability.organization_id == organization_id,
+            )
+            .with_for_update()
+        )
+        if availability is None:
+            raise NotFoundError("Availability was not found.")
+        if availability.status != "available":
+            raise ValidationError("Only published availability can be withdrawn.")
+        availability.status = "cancelled"
+        db.flush()
+        return availability
+
     def list_availability(
         self,
         db: Session,
         *,
         organization_id: uuid.UUID,
         scheduled_date: date | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
         interviewer_user_id: uuid.UUID | None = None,
     ) -> list[InterviewAvailability]:
         """List published availabilities matching filters."""
@@ -96,6 +139,10 @@ class SchedulingWorkflowService:
         )
         if scheduled_date is not None:
             stmt = stmt.where(InterviewAvailability.scheduled_date == scheduled_date)
+        if start_date is not None:
+            stmt = stmt.where(InterviewAvailability.scheduled_date >= start_date)
+        if end_date is not None:
+            stmt = stmt.where(InterviewAvailability.scheduled_date <= end_date)
         if interviewer_user_id is not None:
             stmt = stmt.where(InterviewAvailability.interviewer_user_id == interviewer_user_id)
         return list(db.scalars(stmt))
@@ -109,26 +156,69 @@ class SchedulingWorkflowService:
         actor_user_id: uuid.UUID,
         expires_in_days: int = 7,
         notes: str | None = None,
-    ) -> CandidateInvitation:
+    ) -> CandidateInvitationIssue:
         """Issue a secure, candidate-facing interview invitation token.
 
         Enforces Stage G: Advance Gate — candidates cannot be invited for interviews
         unless HR has made an authoritative 'advance' decision.
         """
-        application = db.get(JobApplication, job_application_id)
-        if application is None or application.organization_id != organization_id:
+        application = db.scalar(
+            select(JobApplication)
+            .where(
+                JobApplication.id == job_application_id,
+                JobApplication.organization_id == organization_id,
+            )
+            .with_for_update()
+        )
+        if application is None:
             raise NotFoundError("JobApplication was not found.")
+        if expires_in_days != 7:
+            raise ValidationError("Interview invitation links expire after exactly 7 days.")
 
         # Stage G Advance Gate
         InterviewService._check_advance_gate(db, application)
 
+        already_scheduled = db.scalar(
+            select(Interview.id)
+            .join(
+                CandidateInvitation,
+                CandidateInvitation.booked_interview_id == Interview.id,
+            )
+            .where(
+                CandidateInvitation.organization_id == organization_id,
+                CandidateInvitation.job_application_id == job_application_id,
+                CandidateInvitation.status == "booked",
+                Interview.status == "scheduled",
+            )
+        )
+        if already_scheduled is not None:
+            raise ConflictError(
+                "An interview is already scheduled for this application. "
+                "Cancel it before issuing a replacement link."
+            )
+
         token = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
         expires_at = datetime.now(timezone.utc) + timedelta(days=expires_in_days)
+
+        # Keep only one live invitation per application. Reissuing invalidates
+        # older unused links, while booked interviews remain untouched.
+        pending = db.scalars(
+            select(CandidateInvitation)
+            .where(
+                CandidateInvitation.organization_id == organization_id,
+                CandidateInvitation.job_application_id == job_application_id,
+                CandidateInvitation.status == "pending",
+            )
+            .with_for_update()
+        )
+        for prior in pending:
+            prior.status = "cancelled"
 
         invitation = CandidateInvitation(
             organization_id=organization_id,
             job_application_id=job_application_id,
-            token=token,
+            token_hash=token_hash,
             expires_at=expires_at,
             status="pending",
             notes=notes,
@@ -149,7 +239,7 @@ class SchedulingWorkflowService:
             },
             flush=False,
         )
-        return invitation
+        return CandidateInvitationIssue(invitation=invitation, token=token)
 
     def get_invitation_by_token(
         self,
@@ -158,13 +248,18 @@ class SchedulingWorkflowService:
     ) -> CandidateInvitation:
         """Resolve and validate an invitation token from the candidate perspective."""
         invitation = db.scalar(
-            select(CandidateInvitation).where(CandidateInvitation.token == token)
+            select(CandidateInvitation)
+            .where(
+                CandidateInvitation.token_hash
+                == hashlib.sha256(token.encode("utf-8")).hexdigest()
+            )
+            .with_for_update()
         )
         if invitation is None:
             raise NotFoundError("Invitation token is invalid or does not exist.")
 
         if invitation.status == "cancelled":
-            raise ValidationError("This interview invitation has been cancelled.")
+            raise ValidationError("This interview invitation is no longer active.")
 
         # Ensure timezone-aware comparison
         now = datetime.now(timezone.utc)
@@ -196,33 +291,59 @@ class SchedulingWorkflowService:
         job = application.job
 
         return {
-            "invitation_id": invitation.id,
             "status": invitation.status,
             "expires_at": invitation.expires_at,
-            "notes": invitation.notes,
             "candidate_name": candidate.full_name,
             "job_title": job.title,
             "department": job.department,
             "location": job.location,
             "employment_type": job.job_type,
+            "scheduled_date": (
+                invitation.booked_interview.scheduled_date.isoformat()
+                if invitation.booked_interview is not None
+                else None
+            ),
+            "scheduled_time": (
+                invitation.booked_interview.scheduled_time
+                if invitation.booked_interview is not None
+                else None
+            ),
+            "scheduled_duration_minutes": (
+                invitation.booked_interview.scheduled_duration_minutes
+                if invitation.booked_interview is not None
+                else None
+            ),
+            "timezone": (
+                invitation.booked_availability.timezone
+                if invitation.booked_availability is not None
+                else None
+            ),
         }
 
     def list_available_slots_for_invitation(
         self,
         db: Session,
         token: str,
-        scheduled_date: date | None = None,
+        month: date,
     ) -> list[dict[str, Any]]:
         """Return genuinely open slots for this invitation without conflicts."""
         invitation = self.get_invitation_by_token(db, token)
+        if invitation.status != "pending":
+            return []
         application = invitation.job_application
 
         # Find published availabilities in the org
         availabilities = self.list_availability(
             db,
             organization_id=invitation.organization_id,
-            scheduled_date=scheduled_date,
         )
+
+        month_end = month.replace(day=monthrange(month.year, month.month)[1])
+        availabilities = [
+            availability
+            for availability in availabilities
+            if month <= availability.scheduled_date <= month_end
+        ]
 
         open_slots: list[dict[str, Any]] = []
         for avail in availabilities:
@@ -230,10 +351,20 @@ class SchedulingWorkflowService:
             start_min = _to_minutes(avail.start_time)
             end_min = _to_minutes(avail.end_time)
             slot_duration = avail.duration_minutes
+            timezone_info = ZoneInfo(avail.timezone)
+            local_now = datetime.now(timezone_info)
 
             # Slide by slot duration through the available block
             current = start_min
             while current + slot_duration <= end_min:
+                slot_datetime = datetime.combine(
+                    avail.scheduled_date,
+                    time(hour=current // 60, minute=current % 60),
+                    tzinfo=timezone_info,
+                )
+                if slot_datetime <= local_now:
+                    current += slot_duration
+                    continue
                 conflicts = InterviewService().find_conflicts(
                     db,
                     organization_id=invitation.organization_id,
@@ -248,7 +379,6 @@ class SchedulingWorkflowService:
                     open_slots.append(
                         {
                             "availability_id": avail.id,
-                            "interviewer_id": interviewer.id,
                             "interviewer_name": interviewer.full_name,
                             "date": avail.scheduled_date.isoformat(),
                             "start_time": _to_hhmm(current),
@@ -266,10 +396,8 @@ class SchedulingWorkflowService:
         db: Session,
         *,
         token: str,
-        scheduled_date: date,
+        availability_id: uuid.UUID,
         scheduled_time: str,
-        duration_minutes: int = DEFAULT_DURATION_MINUTES,
-        interviewer_user_id: uuid.UUID | None = None,
     ) -> Interview:
         """Candidate selects an open slot.
 
@@ -281,9 +409,39 @@ class SchedulingWorkflowService:
 
         application = invitation.job_application
 
-        # Prevent past-date bookings
-        if scheduled_date < date.today():
+        availability = db.scalar(
+            select(InterviewAvailability)
+            .where(
+                InterviewAvailability.id == availability_id,
+                InterviewAvailability.organization_id == invitation.organization_id,
+                InterviewAvailability.status == "available",
+            )
+            .with_for_update()
+        )
+        if availability is None:
+            raise ValidationError("This availability is no longer open.")
+
+        start = _to_minutes(availability.start_time)
+        end = _to_minutes(availability.end_time)
+        requested = _to_minutes(scheduled_time)
+        duration_minutes = availability.duration_minutes
+        if (
+            requested < start
+            or requested + duration_minutes > end
+            or (requested - start) % duration_minutes != 0
+        ):
+            raise ValidationError("Choose an interview time shown as available.")
+
+        timezone_info = ZoneInfo(availability.timezone)
+        requested_local = datetime.combine(
+            availability.scheduled_date,
+            time(hour=requested // 60, minute=requested % 60),
+            tzinfo=timezone_info,
+        )
+        if requested_local <= datetime.now(timezone_info):
             raise ValidationError("Cannot book an interview slot in the past.")
+        if invitation.job_application_id != application.id:
+            raise ValidationError("This invitation is not valid for this application.")
 
         interview = InterviewService().schedule(
             db,
@@ -291,14 +449,16 @@ class SchedulingWorkflowService:
             candidate_id=application.candidate_id,
             job_id=application.job_id,
             interview_type="technical",
-            scheduled_date=scheduled_date,
+            scheduled_date=availability.scheduled_date,
             scheduled_time=scheduled_time,
-            interviewer_user_id=interviewer_user_id,
+            interviewer_user_id=availability.interviewer_user_id,
             scheduled_duration_minutes=duration_minutes,
             meeting_link="https://meet.hera-recruitment.internal/" + secrets.token_hex(6),
         )
 
         invitation.status = "booked"
+        invitation.booked_interview_id = interview.id
+        invitation.booked_availability_id = availability.id
         db.flush()
 
         AuditService().log_event(
@@ -310,48 +470,9 @@ class SchedulingWorkflowService:
             entity_id=invitation.id,
             metadata={
                 "interview_id": str(interview.id),
-                "scheduled_date": scheduled_date.isoformat(),
+                "scheduled_date": availability.scheduled_date.isoformat(),
                 "scheduled_time": scheduled_time,
             },
             flush=False,
         )
         return interview
-
-    def candidate_cancel_booking(
-        self,
-        db: Session,
-        *,
-        token: str,
-        interview_id: uuid.UUID,
-    ) -> Interview:
-        """Safely allow candidate to cancel an appointment."""
-        invitation = self.get_invitation_by_token(db, token)
-        application = invitation.job_application
-
-        interview = db.get(Interview, interview_id)
-        if (
-            interview is None
-            or interview.job_application_id != application.id
-            or interview.organization_id != invitation.organization_id
-        ):
-            raise NotFoundError("Interview was not found for this invitation.")
-
-        cancelled = InterviewService().cancel(
-            db,
-            interview_id=interview_id,
-            organization_id=invitation.organization_id,
-        )
-        invitation.status = "pending"  # Re-enable invitation for re-booking
-        db.flush()
-
-        AuditService().log_event(
-            db,
-            action="candidate_invitation.booking_cancelled",
-            entity_type="candidate_invitation",
-            organization_id=invitation.organization_id,
-            actor_user_id=None,
-            entity_id=invitation.id,
-            metadata={"interview_id": str(interview.id)},
-            flush=False,
-        )
-        return cancelled

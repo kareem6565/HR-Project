@@ -20,6 +20,7 @@ from app.models.organization import Organization
 from app.models.resume import Resume
 from app.models.screening_batch import ScreeningBatch
 from app.models.screening_batch_item import ScreeningBatchItem
+from app.models.talent_pool_consent import TalentPoolConsent
 from app.models.user import User
 from app.models.workflow_run import WorkflowRun
 from app.models.workflow_step_trace import WorkflowStepTrace
@@ -47,6 +48,7 @@ __all__ = [
     "Resume",
     "ScreeningBatch",
     "ScreeningBatchItem",
+    "TalentPoolConsent",
     "User",
     "WorkflowRun",
     "WorkflowStepTrace",

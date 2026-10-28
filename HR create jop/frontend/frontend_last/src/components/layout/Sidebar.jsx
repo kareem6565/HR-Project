@@ -11,8 +11,6 @@ import {
   Star,
   BarChart3,
   Settings,
-  Activity,
-  Building2,
 } from "lucide-react";
 import BrandIcon from "../common/BrandIcon";
 import { BRAND } from "../../config/brand";
@@ -38,11 +36,10 @@ const SECONDARY_NAV_ITEMS = [
 // Administrator-only configuration and observability
 const ADMIN_NAV_ITEMS = [
   { to: "/settings", label: "Settings", icon: Settings },
-  { to: "/ai-activity", label: "AI Activity", icon: Activity },
 ];
 
 export default function Sidebar() {
-  const { isAdmin, isRecruiter } = useAuth();
+  const { isAdmin } = useAuth();
 
   return (
     <aside className="sidebar" aria-label="Sidebar navigation">
@@ -93,19 +90,6 @@ export default function Sidebar() {
             </NavLink>
           ))}
         </div>
-        {isRecruiter && import.meta.env.VITE_HR_MANAGER_URL && (
-          <div className="nav-section" role="group" aria-label="HR workspace">
-            <a
-              className="nav-link"
-              href={import.meta.env.VITE_HR_MANAGER_URL}
-              title="HR Manager"
-              aria-label="Open HR Manager"
-            >
-              <Building2 size={19} aria-hidden="true" />
-              <span>HR Manager</span>
-            </a>
-          </div>
-        )}
       </nav>
 
       <div className="sidebar-bottom">

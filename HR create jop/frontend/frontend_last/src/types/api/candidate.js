@@ -122,6 +122,7 @@ export const CandidatePoolGroup = Object.freeze({
  * @property {CandidatePoolGroupValue} group
  * @property {import("./decision.js").HRDecisionValue} [decision]
  * @property {import("./common.js").ISO8601DateTime} [decision_created_at]
+ * @property {Array<{evidence_type: string, requirement: string, quote?: string, quote_verified: boolean}>} evidence
  */
 
 /**

@@ -168,6 +168,18 @@ def test_api_invitation_creation_and_candidate_portal_booking(client: httpx.Clie
         },
     )
     assert avail_resp.status_code == 201
+    next_day_avail = client.post(
+        "/api/v1/availability",
+        headers=headers,
+        json={
+            "interviewer_user_id": str(interviewer.id),
+            "scheduled_date": "2026-11-27",
+            "start_time": "13:00",
+            "end_time": "14:00",
+            "duration_minutes": 60,
+        },
+    )
+    assert next_day_avail.status_code == 201
 
     # 3. Create candidate invitation via API
     inv_resp = client.post(
@@ -179,7 +191,9 @@ def test_api_invitation_creation_and_candidate_portal_booking(client: httpx.Clie
     token = inv_resp.json()["token"]
 
     # 4. Candidate accesses public portal view (NO auth headers required!)
-    portal_resp = client.get(f"/api/v1/candidate-portal/invitations/{token}")
+    portal_resp = client.post(
+        "/api/v1/candidate-portal/interview/preview", json={"token": token}
+    )
     assert portal_resp.status_code == 200
     portal_data = portal_resp.json()
     assert portal_data["candidate_name"] == "Salma Test"
@@ -187,30 +201,38 @@ def test_api_invitation_creation_and_candidate_portal_booking(client: httpx.Clie
     assert "score" not in portal_data
 
     # 5. Candidate queries open slots
-    slots_resp = client.get(f"/api/v1/candidate-portal/invitations/{token}/slots?date=2026-11-25")
+    slots_resp = client.post(
+        "/api/v1/candidate-portal/interview/slots",
+        json={"token": token, "month": "2026-11-01"},
+    )
     assert slots_resp.status_code == 200
     slots = slots_resp.json()
-    assert len(slots) == 2
+    assert len(slots) == 3
     assert slots[0]["start_time"] == "10:00"
+    assert any(slot["date"] == "2026-11-27" for slot in slots)
 
     # 6. Candidate books 10:00 slot
     book_resp = client.post(
-        f"/api/v1/candidate-portal/invitations/{token}/book",
+        "/api/v1/candidate-portal/interview/book",
         json={
-            "scheduled_date": "2026-11-25",
+            "token": token,
+            "availability_id": slots[0]["availability_id"],
             "scheduled_time": "10:00",
-            "duration_minutes": 60,
-            "interviewer_user_id": str(interviewer.id),
         },
     )
     assert book_resp.status_code == 201
     assert book_resp.json()["status"] == "scheduled"
     assert book_resp.json()["scheduled_time"] == "10:00"
+    assert book_resp.json()["timezone"] == "UTC"
 
-    # 7. Remaining slots now shows only 11:00
-    remaining_resp = client.get(f"/api/v1/candidate-portal/invitations/{token}/slots?date=2026-11-25")
-    assert len(remaining_resp.json()) == 1
-    assert remaining_resp.json()[0]["start_time"] == "11:00"
+    # 7. A used invitation no longer exposes slots or permits rescheduling.
+    remaining_resp = client.post(
+        "/api/v1/candidate-portal/interview/slots",
+        json={"token": token, "month": "2026-11-01"},
+    )
+    assert remaining_resp.json() == []
+    assert "candidate_id" not in book_resp.json()
+    assert "organization_id" not in book_resp.json()
 
 
 def test_api_feedback_learning_loop(client: httpx.Client, db_session: Session) -> None:

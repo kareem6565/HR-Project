@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import exists, select
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -17,6 +18,7 @@ from app.models import (
     JobApplication,
     MatchEvidence,
     Resume,
+    TalentPoolConsent,
 )
 from app.services.candidate_pool_service import (
     VALID_APPLICATION_STATUSES,
@@ -27,6 +29,7 @@ from app.services.evaluation_service import EvaluationService
 from app.services.job_application_service import JobApplicationService
 
 TALENT_POOL_STATUSES = frozenset({"hold", "advanced"})
+TALENT_POOL_STATUSES_WITH_REJECTED = TALENT_POOL_STATUSES | {"rejected"}
 
 
 @dataclass(frozen=True)
@@ -59,7 +62,7 @@ class ApplicationSummaryRow:
 
 @dataclass(frozen=True)
 class TalentPoolRow:
-    """One hold/advanced candidate with application context."""
+    """One prior application with its original decision context."""
 
     application: JobApplication
     candidate: Candidate
@@ -68,6 +71,18 @@ class TalentPoolRow:
     latest_decision: HRDecision | None
     group: str
     skills: list[str]
+    evidence: list[TalentPoolEvidenceItem]
+    consent_expires_at: datetime
+
+
+@dataclass(frozen=True)
+class TalentPoolEvidenceItem:
+    """Verified, persisted evidence associated with the prior HR decision."""
+
+    evidence_type: str
+    requirement: str
+    quote: str | None
+    quote_verified: bool
 
 
 def _requirement_topic(requirement_ref: dict[str, Any] | None) -> str:
@@ -254,17 +269,43 @@ class ReviewService:
         db: Session,
         *,
         organization_id: uuid.UUID,
+        include_rejected: bool = False,
     ) -> list[TalentPoolRow]:
-        """Return org-wide hold/advanced candidates ranked by current score.
+        """Return prior applications, optionally including rejected decisions.
 
         Rows carry application context, the persisted current evaluation score,
         the deterministic grouping band, and the latest HR decision. Decisions
         are left-joined so candidates without a decision are never hidden.
         """
         latest_decision_id = self._latest_decision_id_subquery()
+        now = datetime.now(UTC)
+        active_consent = exists(
+            select(TalentPoolConsent.id).where(
+                TalentPoolConsent.candidate_id == JobApplication.candidate_id,
+                TalentPoolConsent.organization_id == organization_id,
+                TalentPoolConsent.response == "accepted",
+                TalentPoolConsent.granted_at.is_not(None),
+                TalentPoolConsent.consent_expires_at > now,
+                TalentPoolConsent.revoked_at.is_(None),
+            )
+        )
+        consent_expiry = (
+            select(TalentPoolConsent.consent_expires_at)
+            .where(
+                TalentPoolConsent.candidate_id == JobApplication.candidate_id,
+                TalentPoolConsent.organization_id == organization_id,
+                TalentPoolConsent.response == "accepted",
+                TalentPoolConsent.granted_at.is_not(None),
+                TalentPoolConsent.consent_expires_at > now,
+                TalentPoolConsent.revoked_at.is_(None),
+            )
+            .order_by(TalentPoolConsent.consent_expires_at.desc())
+            .limit(1)
+            .scalar_subquery()
+        )
 
         query = (
-            select(JobApplication, Candidate, Job, CandidateEvaluation, HRDecision)
+            select(JobApplication, Candidate, Job, CandidateEvaluation, HRDecision, consent_expiry)
             .join(Candidate, Candidate.id == JobApplication.candidate_id)
             .join(Job, Job.id == JobApplication.job_id)
             .outerjoin(
@@ -274,7 +315,12 @@ class ReviewService:
             )
             .outerjoin(HRDecision, HRDecision.id == latest_decision_id)
             .where(JobApplication.organization_id == organization_id)
-            .where(JobApplication.status.in_(TALENT_POOL_STATUSES))
+            .where(active_consent)
+            .where(
+                JobApplication.status.in_(
+                    TALENT_POOL_STATUSES_WITH_REJECTED if include_rejected else TALENT_POOL_STATUSES
+                )
+            )
         )
 
         rows = db.execute(query).all()
@@ -300,6 +346,42 @@ class ReviewService:
                         if isinstance(skill, str) and skill.strip()
                     ][:12]
 
+        evaluation_ids: set[uuid.UUID] = set()
+        evidence_evaluation_by_application: dict[uuid.UUID, uuid.UUID] = {}
+        for application, _candidate, _job, evaluation, decision, _consent_expiry in rows:
+            evaluation_id = (
+                decision.candidate_evaluation_id
+                if decision is not None
+                else evaluation.id if evaluation is not None else None
+            )
+            if evaluation_id is not None:
+                evaluation_ids.add(evaluation_id)
+                evidence_evaluation_by_application[application.id] = evaluation_id
+        evidence_by_evaluation: dict[uuid.UUID, list[TalentPoolEvidenceItem]] = {}
+        if evaluation_ids:
+            evidence_rows = db.execute(
+                select(
+                    MatchEvidence.candidate_evaluation_id,
+                    MatchEvidence.evidence_type,
+                    MatchEvidence.requirement_ref,
+                    MatchEvidence.candidate_evidence,
+                )
+                .where(MatchEvidence.candidate_evaluation_id.in_(evaluation_ids))
+                .order_by(MatchEvidence.created_at)
+            ).all()
+            for evaluation_id, evidence_type, requirement_ref, candidate_evidence in evidence_rows:
+                requirement = _requirement_topic(requirement_ref)
+                candidate_data = candidate_evidence if isinstance(candidate_evidence, dict) else {}
+                quote = candidate_data.get("quote") or candidate_data.get("evidence_text")
+                evidence_by_evaluation.setdefault(evaluation_id, []).append(
+                    TalentPoolEvidenceItem(
+                        evidence_type=evidence_type,
+                        requirement=requirement,
+                        quote=quote if isinstance(quote, str) and quote else None,
+                        quote_verified=candidate_data.get("quote_verified") is True,
+                    )
+                )
+
         entries = [
             TalentPoolRow(
                 application=application,
@@ -309,8 +391,13 @@ class ReviewService:
                 latest_decision=decision,
                 group=assign_group(self._as_decimal(evaluation.score if evaluation else None)),
                 skills=skills_by_application.get(application.id, []),
+                evidence=evidence_by_evaluation.get(
+                    evidence_evaluation_by_application.get(application.id),
+                    [],
+                ),
+                consent_expires_at=consent_expiry,
             )
-            for application, candidate, job, evaluation, decision in rows
+            for application, candidate, job, evaluation, decision, consent_expiry in rows
         ]
 
         entries.sort(

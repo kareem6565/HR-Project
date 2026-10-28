@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
@@ -94,6 +95,21 @@ class CandidateService:
         if phone is not None:
             candidate.phone = phone
         db.flush()
+        return candidate
+
+    def archive(
+        self,
+        db: Session,
+        *,
+        candidate_id: uuid.UUID,
+        organization_id: uuid.UUID,
+    ) -> Candidate:
+        """Archive a candidate without deleting their hiring history."""
+        candidate = self.get(db, candidate_id=candidate_id, organization_id=organization_id)
+        if candidate.status != "archived":
+            candidate.status = "archived"
+            candidate.archived_at = datetime.now(UTC)
+            db.flush()
         return candidate
 
     @staticmethod

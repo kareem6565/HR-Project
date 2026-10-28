@@ -7,6 +7,7 @@ from app.api.v1.routes.auth import router as auth_router
 from app.api.v1.routes.availability import router as availability_router
 from app.api.v1.routes.candidate_pool import router as candidate_pool_router
 from app.api.v1.routes.candidate_portal import router as candidate_portal_router
+from app.api.v1.routes.talent_pool_consent import router as talent_pool_consent_router
 from app.api.v1.routes.candidate_profiles import router as candidate_profiles_router
 from app.api.v1.routes.candidates import router as candidates_router
 from app.api.v1.routes.chat import router as chat_router
@@ -51,6 +52,7 @@ api_router.include_router(ai_settings_router, tags=["ai-settings"])
 api_router.include_router(interviews_router, tags=["interviews"])
 api_router.include_router(availability_router, tags=["availability"])
 api_router.include_router(candidate_portal_router, tags=["candidate-portal"])
+api_router.include_router(talent_pool_consent_router, tags=["talent-pool-consent"])
 api_router.include_router(feedback_learning_router, tags=["feedback-learning"])
 api_router.include_router(interview_questions_router, tags=["interview-questions"])
 api_router.include_router(interview_question_sets_router, tags=["interview-questions"])

@@ -102,6 +102,38 @@ export async function getInterviewers() {
   }));
 }
 
+export async function getPublishedAvailability({ startDate, endDate }) {
+  const { data } = await apiClient.get("/availability", {
+    params: { start_date: startDate, end_date: endDate },
+  });
+  return Array.isArray(data) ? data : [];
+}
+
+export async function publishInterviewAvailability(payload) {
+  const { data } = await apiClient.post("/availability", {
+    interviewer_user_id: payload.interviewerUserId,
+    scheduled_date: payload.date,
+    start_time: payload.startTime,
+    end_time: payload.endTime,
+    duration_minutes: payload.durationMinutes,
+    timezone: payload.timezone,
+  });
+  return data;
+}
+
+export async function withdrawInterviewAvailability(availabilityId) {
+  const { data } = await apiClient.delete(`/availability/${availabilityId}`);
+  return data;
+}
+
+export async function createCandidateInterviewInvitation(applicationId) {
+  const { data } = await apiClient.post(
+    `/job-applications/${applicationId}/invitations`,
+    { expires_in_days: 7 },
+  );
+  return data;
+}
+
 // Books an interview slot for a screened candidate + job. The backend
 // resolves (and validates) the JobApplication from candidate_id + job_id and
 // hard-blocks overlapping slots for the same interviewer or candidate (409).

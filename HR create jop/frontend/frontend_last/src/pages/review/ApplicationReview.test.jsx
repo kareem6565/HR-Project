@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import ApplicationReview, { filterCertificationHeadings } from "./ApplicationReview";
 import { getReviewWorkspace, recordDecision } from "../../services/reviewService";
+import { createCandidateInterviewInvitation } from "../../services/interviewService";
 
 // Verify the review screen keeps submitting the exact same payload through
 // the shared PipelineActions component it previously sent with inline buttons:
@@ -15,6 +16,9 @@ vi.mock("../../services/reviewService", () => ({
 }));
 vi.mock("../../services/resumeService", () => ({
   downloadResume: vi.fn(),
+}));
+vi.mock("../../services/interviewService", () => ({
+  createCandidateInterviewInvitation: vi.fn(),
 }));
 
 const workspace = {
@@ -62,6 +66,7 @@ describe("ApplicationReview pipeline decision", () => {
     vi.clearAllMocks();
     getReviewWorkspace.mockResolvedValue(workspace);
     recordDecision.mockResolvedValue({});
+    createCandidateInterviewInvitation.mockResolvedValue({ token: "opaque-test-token" });
   });
 
   it("submits { decision: 'hold', reason } via the shared component and confirmation modal", async () => {
@@ -103,6 +108,21 @@ describe("ApplicationReview pipeline decision", () => {
     await user.click(screen.getByRole("button", { name: /Cancel/i }));
 
     expect(recordDecision).not.toHaveBeenCalled();
+  });
+
+  it("offers a one-use candidate scheduling link only after an Advance decision", async () => {
+    const user = userEvent.setup();
+    getReviewWorkspace.mockResolvedValueOnce({ ...workspace, poolRow: { group: "A", decision: "advance" } });
+    renderPage();
+
+    await screen.findByRole("heading", { name: "Ada Lovelace" });
+    await user.click(screen.getByRole("button", { name: "Create scheduling link" }));
+
+    expect(await screen.findByLabelText("Share this link with the candidate")).toHaveValue(
+      `${window.location.origin}/interview/schedule#opaque-test-token`
+    );
+    expect(createCandidateInterviewInvitation).toHaveBeenCalledWith("app-1");
+    expect(screen.getByText(/invalidates the previous unused link/i)).toBeInTheDocument();
   });
 
   it("displays current recorded decision badge and timestamp when decision is present in poolRow", async () => {

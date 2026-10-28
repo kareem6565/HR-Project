@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from "react";
-import { RefreshCw, KeyRound, CheckCircle2, XCircle } from "lucide-react";
+import { RefreshCw, KeyRound, CheckCircle2, XCircle, Sun, Moon, Activity } from "lucide-react";
+import { Link } from "react-router-dom";
 import LoadingSpinner from "../../components/common/LoadingSpinner";
 import ErrorState from "../../components/common/ErrorState";
 import {
   getAISettings,
   verifyApiKey,
 } from "../../services/aiSettingsService";
-import AIActivityList from "../ai-activity/AIActivityList";
+import { useTheme } from "../../context/ThemeContext";
 
 const SOURCE_LABELS = {
   environment: "Server env (.env)",
@@ -15,6 +16,7 @@ const SOURCE_LABELS = {
 };
 
 export default function AISettings() {
+  const { theme, setTheme } = useTheme();
   const [settings, setSettings] = useState(null);
   const [apiKey, setApiKeyField] = useState("");
   const [loading, setLoading] = useState(true);
@@ -64,7 +66,7 @@ export default function AISettings() {
 
   return (
     <section>
-      <div className="content-grid">
+      <div className="content-grid settings-grid">
         <div className="panel">
           <div className="panel-title">
           <div>
@@ -156,10 +158,43 @@ export default function AISettings() {
           </div>
         )}
         </div>
-      </div>
 
-      <div style={{ marginTop: 28 }}>
-        <AIActivityList />
+        <div className="panel appearance-panel">
+          <div className="panel-title">
+            <div>
+              <p className="eyebrow">APPEARANCE</p>
+              <h3>Theme</h3>
+            </div>
+          </div>
+          <p className="muted-note">Choose the appearance for HERA on this device.</p>
+          <div className="theme-options" role="group" aria-label="Appearance theme">
+            <button
+              type="button"
+              className={`theme-option${theme === "light" ? " is-selected" : ""}`}
+              aria-pressed={theme === "light"}
+              onClick={() => setTheme("light")}
+            >
+              <Sun size={18} aria-hidden="true" />
+              <span>Light</span>
+            </button>
+            <button
+              type="button"
+              className={`theme-option${theme === "dark" ? " is-selected" : ""}`}
+              aria-pressed={theme === "dark"}
+              onClick={() => setTheme("dark")}
+            >
+              <Moon size={18} aria-hidden="true" />
+              <span>Dark</span>
+            </button>
+          </div>
+          <div className="settings-diagnostics">
+            <p className="eyebrow">SYSTEM OPERATORS</p>
+            <p>Technical workflow traces and AI execution diagnostics.</p>
+            <Link className="btn btn-secondary" to="/ai-activity">
+              <Activity size={16} aria-hidden="true" /> Open AI Activity
+            </Link>
+          </div>
+        </div>
       </div>
     </section>
   );

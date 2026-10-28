@@ -4,11 +4,13 @@ from datetime import date, datetime
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class InvitationCreateRequest(BaseModel):
-    expires_in_days: int = Field(default=7, ge=1, le=30)
+    expires_in_days: Literal[7] = 7
     notes: str | None = None
 
 
@@ -26,20 +28,21 @@ class InvitationResponse(BaseModel):
 
 
 class CandidatePortalViewResponse(BaseModel):
-    invitation_id: UUID
     status: str
     expires_at: datetime
-    notes: str | None = None
     candidate_name: str
     job_title: str
     department: str | None = None
     location: str | None = None
     employment_type: str | None = None
+    scheduled_date: str | None = None
+    scheduled_time: str | None = None
+    scheduled_duration_minutes: int | None = None
+    timezone: str | None = None
 
 
 class AvailableSlotResponse(BaseModel):
     availability_id: UUID
-    interviewer_id: UUID
     interviewer_name: str
     date: str
     start_time: str
@@ -49,10 +52,32 @@ class AvailableSlotResponse(BaseModel):
 
 
 class CandidateBookSlotRequest(BaseModel):
-    scheduled_date: date
+    token: str = Field(min_length=32, max_length=64)
+    availability_id: UUID
     scheduled_time: str = Field(min_length=1, max_length=20)
-    duration_minutes: int = Field(default=60, ge=15, le=480)
-    interviewer_user_id: UUID | None = None
+
+
+class CandidatePortalTokenRequest(BaseModel):
+    token: str = Field(min_length=32, max_length=64)
+
+
+class CandidatePortalMonthSlotsRequest(CandidatePortalTokenRequest):
+    month: date
+
+    @field_validator("month")
+    @classmethod
+    def validate_month_start(cls, value: date) -> date:
+        if value.day != 1:
+            raise ValueError("month must be the first day of a calendar month")
+        return value
+
+
+class CandidateBookingResponse(BaseModel):
+    status: str
+    scheduled_date: str
+    scheduled_time: str
+    scheduled_duration_minutes: int
+    timezone: str
 
 
 class AvailabilityCreateRequest(BaseModel):
