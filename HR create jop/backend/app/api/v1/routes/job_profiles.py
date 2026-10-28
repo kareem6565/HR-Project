@@ -1,4 +1,5 @@
 import uuid
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -22,13 +23,35 @@ def create_job_profile(
     ctx: RequestContext = Depends(get_request_context),
     db: Session = Depends(get_db),
 ):
+    provenance = None
+    raw_input_snapshot = dict(body.raw_input_snapshot or {})
+    if body.source_metadata is not None:
+        if not body.source_metadata.review_confirmed:
+            from app.services.errors import ValidationError
+
+            raise ValidationError("Confirm that you reviewed the source before saving it.")
+        if not body.source_original_listing_text or not body.source_original_listing_text.strip():
+            from app.services.errors import ValidationError
+
+            raise ValidationError("The original listing text is required with source details.")
+        raw_input_snapshot["original_listing_text"] = body.source_original_listing_text
+        provenance = {
+            "source": {
+                **body.source_metadata.model_dump(mode="json", exclude={"review_confirmed"}),
+                "reviewed_at": datetime.now(UTC).isoformat(),
+                "reviewed_by_user_id": str(ctx.user_id),
+                "availability_checked_by_hera": False,
+            },
+            "field_origins": body.field_origins or {},
+        }
     return JobProfileService().create_version(
         db,
         job_id=uuid.UUID(job_id),
         status=body.status,
         source=body.source,
         profile_data=body.profile_data,
-        raw_input_snapshot=body.raw_input_snapshot,
+        raw_input_snapshot=raw_input_snapshot or None,
+        provenance=provenance,
         organization_id=ctx.organization_id,
     )
 

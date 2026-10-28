@@ -11,6 +11,13 @@ import { getTalentPool } from "../../services/talentPoolService";
 const STATUS_LABEL = {
   hold: "Hold",
   advanced: "Advanced",
+  rejected: "Rejected for this role",
+};
+
+const DECISION_LABEL = {
+  advance: "Advance",
+  hold: "Hold",
+  reject: "Reject",
 };
 
 // Search/filter semantics belong to the page: the search box matches the
@@ -37,12 +44,13 @@ export default function TalentPoolList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [search, setSearch] = useState("");
+  const [includeRejected, setIncludeRejected] = useState(false);
   const navigate = useNavigate();
 
   const load = () => {
     setLoading(true);
     setError(false);
-    getTalentPool()
+    getTalentPool({ includeRejected })
       .then((data) => {
         setPool(data);
         setLoading(false);
@@ -53,7 +61,7 @@ export default function TalentPoolList() {
       });
   };
 
-  useEffect(load, []);
+  useEffect(load, [includeRejected]);
 
   const filtered = pool.filter((c) =>
     `${c.name} ${c.jobTitle} ${(c.skills || []).join(" ")} ${GROUP_SEARCH_LABEL[c.group] || ""} ${c.status}`
@@ -74,7 +82,41 @@ export default function TalentPoolList() {
     { key: "group", header: "Group", render: (c) => <GroupPill group={c.group} /> },
     { key: "status", header: "Status", render: (c) => STATUS_LABEL[c.status] || c.status || "—" },
     { key: "score", header: "Score", render: (c) => <ScoreCell score={c.score} variant="text" /> },
-    { key: "decision", header: "Decision", render: (c) => c.decision || "—" },
+    { key: "decision", header: "HR decision", render: (c) => DECISION_LABEL[c.decision] || c.decision || "—" },
+    {
+      key: "consentExpiresAt",
+      header: "Talent Pool consent until",
+      render: (c) => c.consentExpiresAt ? new Date(c.consentExpiresAt).toLocaleDateString() : "—",
+    },
+    {
+      key: "decisionCreatedAt",
+      header: "Decision date",
+      render: (c) => c.decisionCreatedAt ? new Date(c.decisionCreatedAt).toLocaleDateString() : "—",
+    },
+    {
+      key: "evidence",
+      header: "Previous evidence",
+      render: (c) => {
+        const items = c.evidence || [];
+        const verified = items.filter((item) => item.quote_verified && item.quote);
+        if (!items.length) return <span className="muted-note">No saved evidence</span>;
+        return (
+          <details onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
+            <summary>{verified.length} verified quote{verified.length === 1 ? "" : "s"} · {items.length} criteria</summary>
+            <ul>
+              {items.map((item, index) => (
+                <li key={`${item.requirement}-${index}`}>
+                  <strong>{item.requirement || "Requirement"}</strong>: {item.evidence_type}
+                  {item.quote_verified && item.quote
+                    ? <blockquote>{item.quote}</blockquote>
+                    : <span className="muted-note"> No verified quote</span>}
+                </li>
+              ))}
+            </ul>
+          </details>
+        );
+      },
+    },
     {
       key: "action",
       header: "Action",
@@ -97,10 +139,10 @@ export default function TalentPoolList() {
       <div className="section-head">
         <div>
           <p className="eyebrow">TALENT POOL</p>
-          <h2>Previously held or advanced applications</h2>
+          <h2>Previous applications to revisit</h2>
           <p className="muted-note">
-            This view contains applications HR marked Hold or Advance for earlier roles. Review opens the original
-            application so its evidence and decision stay tied to that job. Search includes stored profile skill tags;
+            This view contains applications HR marked Hold or Advance for earlier roles. Rejected applications are optional; rejection applies only to the original role. Review opens the original
+            application so its evidence and decision stay tied to that job. Only candidates with current Talent Pool consent appear here. Search includes stored profile skill tags;
             HERA does not calculate a new suitability score here.
           </p>
         </div>
@@ -114,8 +156,10 @@ export default function TalentPoolList() {
         onRetry={load}
         emptyMessage={
           search
-            ? "No held or advanced applications match your search."
-            : "No applications are currently on Hold or Advanced."
+            ? "No previous applications match your search."
+            : includeRejected
+              ? "No prior Hold, Advance, or Rejected applications with current Talent Pool consent are available."
+              : "No Hold or Advance applications with current Talent Pool consent are available. Turn on ‘Include rejected applications’ to include eligible prior rejections."
         }
         header={
           <div className="panel-title" style={{ padding: "18px 22px 0" }}>
@@ -129,6 +173,14 @@ export default function TalentPoolList() {
                   onChange={(e) => setSearch(e.target.value)}
                 />
               </div>
+              <label className="talent-pool-rejected-filter">
+                <input
+                  type="checkbox"
+                  checked={includeRejected}
+                  onChange={(event) => setIncludeRejected(event.target.checked)}
+                />
+                Include rejected applications
+              </label>
             </div>
           </div>
         }

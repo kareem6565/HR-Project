@@ -145,6 +145,11 @@ export async function updateCandidate(id, { email, phone } = {}) {
   return adaptFromBackend(data);
 }
 
+export async function archiveCandidate(id) {
+  const { data } = await apiClient.post(`/candidates/${id}/archive`);
+  return adaptFromBackend(data);
+}
+
 // Runs the backend's full CV-screening workflow for a job + uploaded PDFs:
 // candidate + resume upload + candidate profile extraction + job application
 // + evaluation for every uploaded CV.

@@ -6,7 +6,7 @@ import {
   suggestJobDraft,
   updateJob,
 } from "../../services/jobService";
-import { extractJobProfile } from "../../services/jobProfileService";
+import { createJobProfile, extractJobProfile, listJobProfiles } from "../../services/jobProfileService";
 import LoadingSpinner from "../../components/common/LoadingSpinner";
 
 const EMPTY_JOB = {
@@ -19,6 +19,11 @@ const EMPTY_JOB = {
   description: "",
   requirementsText: "",
   requiredSkillsText: "",
+  sourceName: "",
+  sourceUrl: "",
+  publishedAt: "",
+  applicationUrl: "",
+  sourceReviewConfirmed: false,
 };
 
 // The employment-type select preselects Full-time so an untouched default reads
@@ -36,6 +41,9 @@ export default function JobForm() {
   const [job, setJob] = useState(EMPTY_JOB);
   const jobRef = useRef(job);
   const userEditedFields = useRef(new Set());
+  const heraSuggestedFields = useRef(new Set());
+  const sourceProfileSaved = useRef(false);
+  const sourceImportId = useRef(globalThis.crypto?.randomUUID?.() || `source-${Date.now()}`);
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
 
@@ -60,6 +68,7 @@ export default function JobForm() {
         return;
       }
       const loadedJob = {
+        ...EMPTY_JOB,
         title: data.title || "",
         department: data.department || "",
         location: data.location || "",
@@ -185,6 +194,7 @@ export default function JobForm() {
       setAiFields(
         (current) => new Set([...Array.from(current), ...appliedNames])
       );
+      appliedNames.forEach((field) => heraSuggestedFields.current.add(field));
       setFillStatus("ready");
     } catch {
       setFillStatus("error");
@@ -194,6 +204,11 @@ export default function JobForm() {
 
   const onSubmit = async (e) => {
     e.preventDefault();
+    const hasSource = Boolean(job.sourceName.trim() || job.sourceUrl.trim() || job.applicationUrl.trim() || job.publishedAt);
+    if (hasSource && !job.sourceReviewConfirmed) {
+      setSavedMessage("Review the source details and confirm before saving them. HERA does not verify links or listing availability.");
+      return;
+    }
     setSaving(true);
 
     const payload = {
@@ -214,19 +229,63 @@ export default function JobForm() {
         .filter(Boolean),
     };
 
+    let jobSaved = false;
     try {
-      if (isEdit) {
-        await updateJob(id, payload);
-        setSavedId(id);
-        setSavedMessage("Job updated. Analyze it with HERA to build or refresh its profile.");
+      let targetId = isEdit ? id : savedId;
+      if (isEdit || savedId) {
+        targetId = id || savedId;
+        await updateJob(targetId, payload);
+        jobSaved = true;
+        setSavedId(targetId);
+        setSavedMessage("Job saved. Source details and your edits remain available for review.");
       } else {
         const created = await createJob(payload);
-        setSavedId(created?.id);
-        setSavedMessage("Job saved as a draft. Analyze it with HERA to build its profile.");
+        targetId = created?.id;
+        jobSaved = Boolean(targetId);
+        setSavedId(targetId);
       }
+      if (!targetId) throw new Error("The job could not be saved.");
+
+      if (hasSource && !sourceProfileSaved.current) {
+        const existing = await listJobProfiles(targetId);
+        const saved = existing.find(
+          (profile) => profile.provenance?.source?.source_import_id === sourceImportId.current
+        );
+        if (!saved) {
+          const fieldNames = ["title", "department", "location", "type", "experience", "description", "requirementsText", "requiredSkillsText"];
+          const fieldOrigins = Object.fromEntries(fieldNames.map((field) => [
+            field,
+            heraSuggestedFields.current.has(field)
+              ? (userEditedFields.current.has(field) ? "hr_edited_after_hera_suggestion" : "hera_suggested")
+              : (userEditedFields.current.has(field) ? "hr_entered_or_edited" : "not_provided"),
+          ]));
+          const requirements = [
+            ...payload.requirements.map((text) => ({ text, category: "important", dimension: "responsibility" })),
+            ...payload.requiredSkills.map((text) => ({ text, category: "must_have", dimension: "skill" })),
+          ];
+          await createJobProfile(targetId, {
+            status: "draft",
+            source: "hr_edited",
+            profile_data: { title: payload.title, summary: payload.description, requirements },
+            source_original_listing_text: job.description,
+            source_metadata: {
+              source_name: job.sourceName.trim(),
+              source_url: job.sourceUrl.trim() || null,
+              published_at: job.publishedAt || null,
+              application_url: job.applicationUrl.trim() || null,
+              source_import_id: sourceImportId.current,
+              review_confirmed: job.sourceReviewConfirmed,
+            },
+            field_origins: fieldOrigins,
+          });
+        }
+        sourceProfileSaved.current = true;
+      }
+      setSavedMessage("Job saved as a draft. Source details and HR edits are saved separately from HERA's profile suggestions.");
     } catch {
-      // Keep the form usable if the backend is unreachable; no unhandled
-      // rejection bubbles to the console.
+      setSavedMessage(jobSaved
+        ? "The job draft is saved, but source details could not be confirmed as saved. Your entries remain on this form; retry Save Draft before leaving."
+        : "The job could not be saved. Your entries are still on this form; try again when the connection is available.");
     } finally {
       setSaving(false);
     }
@@ -256,7 +315,7 @@ export default function JobForm() {
       : "Suggest fields with HERA";
 
   return (
-    <section className="content-grid">
+    <section className="content-grid job-form-grid">
       <div className="panel">
         <div className="panel-title">
           <div>
@@ -418,14 +477,15 @@ export default function JobForm() {
             />
           </label>
           <label>
-            Description
+            Description (original job listing text)
             <textarea
               name="description"
               rows="4"
               value={job.description}
               onChange={onChange}
-              placeholder="Describe the role; HERA uses this to suggest fields and build the job profile..."
+              placeholder="Paste the job listing text you are authorized to use. HERA will analyze this text only; it will not open or verify links."
             />
+            <small className="muted-note">This is the original text provided by HR. HERA does not fetch links or check whether the listing is still available.</small>
           </label>
           <label>
             Requirements (one per line)
@@ -457,6 +517,23 @@ export default function JobForm() {
               placeholder="C#, .NET, SQL Server, Docker"
             />
           </label>
+          <fieldset className="job-source-fields">
+            <legend>Listing source (optional)</legend>
+            <p className="muted-note">Keep source details separate from the listing text and HERA's suggestions.</p>
+            <label>Source name<input name="sourceName" value={job.sourceName} onChange={onChange} placeholder="e.g. Company careers page" required={Boolean(job.sourceUrl || job.applicationUrl || job.publishedAt)} /></label>
+            <label>Source link<input name="sourceUrl" type="url" value={job.sourceUrl} onChange={onChange} placeholder="https://..." /></label>
+            <label>Publication date<input name="publishedAt" type="date" value={job.publishedAt} onChange={onChange} /></label>
+            <label>Application link<input name="applicationUrl" type="url" value={job.applicationUrl} onChange={onChange} placeholder="https://..." /></label>
+            <label className="source-review-confirmation">
+              <input name="sourceReviewConfirmed" type="checkbox" checked={job.sourceReviewConfirmed} onChange={(event) => {
+                const nextJob = { ...jobRef.current, sourceReviewConfirmed: event.target.checked };
+                jobRef.current = nextJob;
+                setJob(nextJob);
+                userEditedFields.current.add("sourceReviewConfirmed");
+              }} />
+              I reviewed these source details. This records my review; HERA has not verified the link or listing status.
+            </label>
+          </fieldset>
           <button className="primary wide" type="submit" disabled={saving}>
             {saving
               ? "Saving..."

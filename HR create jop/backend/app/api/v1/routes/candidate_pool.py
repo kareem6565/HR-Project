@@ -83,10 +83,12 @@ def list_job_candidates(
 def list_talent_pool(
     ctx: RequestContext = Depends(get_request_context),
     db: Session = Depends(get_db),
+    include_rejected: bool = Query(default=False),
 ):
     rows = ReviewService().list_talent_pool(
         db,
         organization_id=ctx.organization_id,
+        include_rejected=include_rejected,
     )
 
     talent_pool = []
@@ -109,6 +111,16 @@ def list_talent_pool(
                 skills=row.skills,
                 decision=decision.decision if decision else None,
                 decision_created_at=decision.created_at if decision else None,
+                consent_expires_at=row.consent_expires_at,
+                evidence=[
+                    {
+                        "evidence_type": item.evidence_type,
+                        "requirement": item.requirement,
+                        "quote": item.quote,
+                        "quote_verified": item.quote_verified,
+                    }
+                    for item in row.evidence
+                ],
             )
         )
 

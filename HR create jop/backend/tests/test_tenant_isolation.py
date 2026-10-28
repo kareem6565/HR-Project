@@ -642,12 +642,9 @@ def test_list_queries_exclude_other_organization_data(client, recruiter_a, seede
     assert str(res["thread_a"].id) in thread_ids
     assert str(res["thread_b"].id) not in thread_ids
 
-    # 9. AI activity workflow runs list
+    # 9. AI activity observability is restricted to admin users.
     resp = client.get("/api/v1/ai-activity/runs", headers=headers)
-    assert resp.status_code == 200
-    run_ids = [r["id"] for r in resp.json()]
-    assert str(res["run_a"].id) in run_ids
-    assert str(res["run_b"].id) not in run_ids
+    assert resp.status_code == 403
 
 
 # ==============================================================================

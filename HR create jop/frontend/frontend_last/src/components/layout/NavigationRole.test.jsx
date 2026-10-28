@@ -105,16 +105,16 @@ describe("HERA UI-09: Simplified MVP Navigation and Role-Aware Controls", () => 
   });
 
   describe("Role-based Navigation Visibility", () => {
-    it("shows Settings and AI Activity links for 'admin' role", () => {
+    it("shows Settings but not the technical AI Activity page in navigation for 'admin' role", () => {
       renderSidebar("admin");
       expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
-      expect(screen.getByRole("link", { name: "AI Activity" })).toHaveAttribute("href", "/ai-activity");
+      expect(screen.queryByRole("link", { name: "AI Activity" })).not.toBeInTheDocument();
     });
 
-    it("shows Settings and AI Activity links for 'administrator' role equivalent", () => {
+    it("shows Settings but not the technical AI Activity page in navigation for 'administrator' role", () => {
       renderSidebar("administrator");
       expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
-      expect(screen.getByRole("link", { name: "AI Activity" })).toHaveAttribute("href", "/ai-activity");
+      expect(screen.queryByRole("link", { name: "AI Activity" })).not.toBeInTheDocument();
     });
 
     it("hides administrator controls for 'recruiter' role", () => {
@@ -150,6 +150,14 @@ describe("HERA UI-09: Simplified MVP Navigation and Role-Aware Controls", () => 
             <Routes>
               <Route path="/dashboard" element={<div>Dashboard Page</div>} />
               <Route
+                path="/ai-activity"
+                element={
+                  <ProtectedRoute allowedRoles={["admin", "administrator"]}>
+                    <div>Technical AI Activity Content</div>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
                 path="/settings"
                 element={
                   <ProtectedRoute allowedRoles={["admin", "administrator"]}>
@@ -182,6 +190,16 @@ describe("HERA UI-09: Simplified MVP Navigation and Role-Aware Controls", () => 
       expect(screen.queryByText("Secret Admin Settings Content")).not.toBeInTheDocument();
       expect(screen.getByText("Access Restricted")).toBeInTheDocument();
       expect(screen.getByText(/your account has the/i)).toHaveTextContent("guest");
+    });
+
+    it("allows administrators and blocks recruiters on the direct AI Activity route", () => {
+      const admin = renderDirectRoute("admin", "/ai-activity");
+      expect(screen.getByText("Technical AI Activity Content")).toBeInTheDocument();
+      admin.unmount();
+
+      renderDirectRoute("recruiter", "/ai-activity");
+      expect(screen.queryByText("Technical AI Activity Content")).not.toBeInTheDocument();
+      expect(screen.getByText("Access Restricted")).toBeInTheDocument();
     });
   });
 

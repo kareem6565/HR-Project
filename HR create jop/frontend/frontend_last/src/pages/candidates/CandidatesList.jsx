@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Search, Plus, ChevronRight } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { Search, Plus, ChevronRight, Archive } from "lucide-react";
 import Badge from "../../components/common/Badge";
 import Pagination from "../../components/common/Pagination";
 import LoadingSpinner from "../../components/common/LoadingSpinner";
 import EmptyState from "../../components/common/EmptyState";
 import ErrorState from "../../components/common/ErrorState";
-import { getCandidates } from "../../services/candidateService";
+import Modal from "../../components/common/Modal";
+import { archiveCandidate, getCandidates } from "../../services/candidateService";
 import { CandidateStatus } from "../../types/api";
 
 // Display labels for the org-wide roster's status vocabulary (the Candidate
@@ -24,9 +25,13 @@ export default function CandidatesList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("all");
+  const [status, setStatus] = useState(CandidateStatus.ACTIVE);
   const [sort, setSort] = useState("date");
   const [page, setPage] = useState(1);
+  const [candidateToArchive, setCandidateToArchive] = useState(null);
+  const [archiving, setArchiving] = useState(false);
+  const [archiveError, setArchiveError] = useState("");
+  const [archiveMessage, setArchiveMessage] = useState("");
   const navigate = useNavigate();
 
   const load = () => {
@@ -72,6 +77,30 @@ export default function CandidatesList() {
     return filtered.slice(start, start + PAGE_SIZE);
   }, [filtered, page]);
 
+  const confirmArchive = async () => {
+    if (!candidateToArchive || archiving) return;
+    setArchiving(true);
+    setArchiveError("");
+    try {
+      await archiveCandidate(candidateToArchive.id);
+      setCandidates((current) =>
+        current.map((candidate) =>
+          candidate.id === candidateToArchive.id
+            ? { ...candidate, status: CandidateStatus.ARCHIVED }
+            : candidate
+        )
+      );
+      setArchiveMessage(`${candidateToArchive.name} was archived. Their hiring history is retained.`);
+      setCandidateToArchive(null);
+    } catch (err) {
+      setArchiveError(
+        err?.response?.data?.detail || "Could not archive this candidate. Please try again."
+      );
+    } finally {
+      setArchiving(false);
+    }
+  };
+
   if (loading) return <LoadingSpinner label="Loading candidates..." />;
   if (error) return <ErrorState message="Unable to load candidates. Please try again." onRetry={load} />;
 
@@ -86,6 +115,12 @@ export default function CandidatesList() {
           <Plus size={18} /> New Screening
         </button>
       </div>
+
+      {archiveMessage && (
+        <p className="success-message" role="status">
+          {archiveMessage}
+        </p>
+      )}
 
       <div className="toolbar">
         <div className="search">
@@ -141,16 +176,7 @@ export default function CandidatesList() {
                     <tr
                       key={c.id}
                       className="clickable"
-                      tabIndex={0}
-                      role="link"
-                      aria-label={`View candidate profile for ${c.name}`}
                       onClick={() => navigate(`/candidates/${c.id}`)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          navigate(`/candidates/${c.id}`);
-                        }
-                      }}
                     >
                       <td>
                         <div className="candidate-cell">
@@ -162,7 +188,13 @@ export default function CandidatesList() {
                               .slice(0, 2)}
                           </div>
                           <div>
-                            <strong>{c.name}</strong>
+                            <Link
+                              to={`/candidates/${c.id}`}
+                              aria-label={`View candidate profile for ${c.name}`}
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              <strong>{c.name}</strong>
+                            </Link>
                             <span>{c.email || "—"}</span>
                           </div>
                         </div>
@@ -183,7 +215,24 @@ export default function CandidatesList() {
                       <td>{c.experience || "—"}</td>
                       <td>{c.appliedAt ? new Date(c.appliedAt).toLocaleDateString() : "—"}</td>
                       <td>
-                        <ChevronRight size={17} aria-hidden="true" />
+                        <div className="candidate-row-actions">
+                          {c.status === CandidateStatus.ACTIVE && (
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-small candidate-archive-action"
+                              aria-label={`Archive ${c.name}`}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setArchiveError("");
+                                setArchiveMessage("");
+                                setCandidateToArchive(c);
+                              }}
+                            >
+                              <Archive size={15} aria-hidden="true" /> Archive
+                            </button>
+                          )}
+                          <ChevronRight size={17} aria-hidden="true" />
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -212,6 +261,45 @@ export default function CandidatesList() {
           <Pagination total={filtered.length} pageSize={PAGE_SIZE} page={page} onPageChange={setPage} />
         </>
       )}
+
+      <Modal
+        open={Boolean(candidateToArchive)}
+        title="Archive candidate?"
+        onClose={() => {
+          if (!archiving) {
+            setCandidateToArchive(null);
+            setArchiveError("");
+          }
+        }}
+      >
+        <p>
+          Archive <strong>{candidateToArchive?.name}</strong>? They will leave the active candidate
+          list, while applications, CVs, evaluations, and hiring decisions remain available in
+          their history.
+        </p>
+        {archiveError && <p className="form-error" role="alert">{archiveError}</p>}
+        <div className="modal-actions">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => {
+              setCandidateToArchive(null);
+              setArchiveError("");
+            }}
+            disabled={archiving}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="btn btn-danger"
+            onClick={confirmArchive}
+            disabled={archiving}
+          >
+            {archiving ? "Archiving…" : "Archive candidate"}
+          </button>
+        </div>
+      </Modal>
     </section>
   );
 }

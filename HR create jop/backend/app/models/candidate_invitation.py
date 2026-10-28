@@ -19,6 +19,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 
 if TYPE_CHECKING:
+    from app.models.interview import Interview
+    from app.models.interview_availability import InterviewAvailability
     from app.models.job_application import JobApplication
     from app.models.organization import Organization
 
@@ -30,7 +32,7 @@ class CandidateInvitation(Base):
             "status IN ('pending', 'booked', 'expired', 'cancelled')",
             name="ck_candidate_invitations_status",
         ),
-        Index("ix_candidate_invitations_token", "token", unique=True),
+        Index("ix_candidate_invitations_token_hash", "token_hash", unique=True),
         Index("ix_candidate_invitations_app", "job_application_id"),
         Index("ix_candidate_invitations_org", "organization_id"),
     )
@@ -42,10 +44,18 @@ class CandidateInvitation(Base):
     job_application_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("job_applications.id", ondelete="CASCADE"), nullable=False
     )
-    token: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    booked_interview_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("interviews.id", ondelete="SET NULL"), nullable=True
+    )
+    booked_availability_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("interview_availabilities.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -55,3 +65,7 @@ class CandidateInvitation(Base):
 
     organization: Mapped[Organization] = relationship()
     job_application: Mapped[JobApplication] = relationship()
+    booked_interview: Mapped[Interview | None] = relationship(foreign_keys=[booked_interview_id])
+    booked_availability: Mapped[InterviewAvailability | None] = relationship(
+        foreign_keys=[booked_availability_id]
+    )

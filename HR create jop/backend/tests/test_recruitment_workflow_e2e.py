@@ -312,19 +312,82 @@ def test_candidate_invitation_enforces_advance_gate(db_session: Session) -> None
     )
     db_session.commit()
 
-    invitation = workflow.create_invitation(
+    issue = workflow.create_invitation(
         db_session,
         organization_id=org.id,
         job_application_id=application.id,
         actor_user_id=recruiter.id,
-        expires_in_days=5,
+        expires_in_days=7,
         notes="Please select an interview slot that fits your schedule.",
     )
     db_session.commit()
 
-    assert invitation.status == "pending"
-    assert len(invitation.token) >= 32
-    assert invitation.notes == "Please select an interview slot that fits your schedule."
+    assert issue.invitation.status == "pending"
+    assert len(issue.token) >= 32
+    assert issue.invitation.token_hash != issue.token
+    assert len(issue.invitation.token_hash) == 64
+    assert issue.invitation.notes == "Please select an interview slot that fits your schedule."
+
+    replacement = workflow.create_invitation(
+        db_session,
+        organization_id=org.id,
+        job_application_id=application.id,
+        actor_user_id=recruiter.id,
+    )
+    db_session.commit()
+    with pytest.raises(ValidationError, match="no longer active"):
+        workflow.get_candidate_view(db_session, token=issue.token)
+    assert replacement.invitation.status == "pending"
+
+
+def test_candidate_invitation_expires_and_withdrawn_availability_disappears(
+    db_session: Session,
+) -> None:
+    org, recruiter, interviewer, _job, _candidate, application = seed_test_pipeline(db_session)
+    workflow = SchedulingWorkflowService()
+    DecisionService().create(
+        db_session,
+        job_application_id=application.id,
+        user_id=recruiter.id,
+        decision="advance",
+        organization_id=org.id,
+    )
+    availability = workflow.publish_availability(
+        db_session,
+        organization_id=org.id,
+        interviewer_user_id=interviewer.id,
+        scheduled_date=date.today() + timedelta(days=2),
+        start_time="10:00",
+        end_time="11:00",
+        duration_minutes=60,
+        timezone_name="Africa/Cairo",
+    )
+    issue = workflow.create_invitation(
+        db_session,
+        organization_id=org.id,
+        job_application_id=application.id,
+        actor_user_id=recruiter.id,
+    )
+    db_session.commit()
+
+    month = availability.scheduled_date.replace(day=1)
+    assert workflow.list_available_slots_for_invitation(
+        db_session, token=issue.token, month=month
+    )
+    workflow.cancel_availability(
+        db_session,
+        organization_id=org.id,
+        availability_id=availability.id,
+    )
+    db_session.commit()
+    assert workflow.list_available_slots_for_invitation(
+        db_session, token=issue.token, month=month
+    ) == []
+
+    issue.invitation.expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+    db_session.commit()
+    with pytest.raises(ValidationError, match="expired"):
+        workflow.get_candidate_view(db_session, token=issue.token)
 
 
 def test_candidate_portal_view_redacts_internal_data(db_session: Session) -> None:
@@ -341,7 +404,7 @@ def test_candidate_portal_view_redacts_internal_data(db_session: Session) -> Non
     )
     db_session.commit()
 
-    invitation = workflow.create_invitation(
+    issue = workflow.create_invitation(
         db_session,
         organization_id=org.id,
         job_application_id=application.id,
@@ -349,7 +412,7 @@ def test_candidate_portal_view_redacts_internal_data(db_session: Session) -> Non
     )
     db_session.commit()
 
-    view = workflow.get_candidate_view(db_session, token=invitation.token)
+    view = workflow.get_candidate_view(db_session, token=issue.token)
     assert view["candidate_name"] == candidate.full_name
     assert view["job_title"] == job.title
     assert view["department"] == "Engineering"
@@ -391,7 +454,7 @@ def test_candidate_books_available_slot_and_prevents_double_booking(
     )
     db_session.commit()
 
-    invitation = workflow.create_invitation(
+    issue = workflow.create_invitation(
         db_session,
         organization_id=org.id,
         job_application_id=application.id,
@@ -402,38 +465,43 @@ def test_candidate_books_available_slot_and_prevents_double_booking(
     # 3. Check open slots
     open_slots = workflow.list_available_slots_for_invitation(
         db_session,
-        token=invitation.token,
-        scheduled_date=date(2026, 11, 28),
+        token=issue.token,
+        month=date(2026, 11, 1),
     )
     assert len(open_slots) == 2
     assert open_slots[0]["start_time"] == "09:00"
     assert open_slots[1]["start_time"] == "10:00"
 
+    with pytest.raises(ValidationError, match="Choose an interview time shown as available"):
+        workflow.candidate_book_slot(
+            db_session,
+            token=issue.token,
+            availability_id=open_slots[0]["availability_id"],
+            scheduled_time="09:30",
+        )
+
     # 4. Candidate books 09:00 slot
     booked_interview = workflow.candidate_book_slot(
         db_session,
-        token=invitation.token,
-        scheduled_date=date(2026, 11, 28),
+        token=issue.token,
+        availability_id=open_slots[0]["availability_id"],
         scheduled_time="09:00",
-        duration_minutes=60,
-        interviewer_user_id=interviewer.id,
     )
     db_session.commit()
 
     assert booked_interview.status == "scheduled"
     assert booked_interview.scheduled_time == "09:00"
 
-    db_session.refresh(invitation)
-    assert invitation.status == "booked"
+    db_session.refresh(issue.invitation)
+    assert issue.invitation.status == "booked"
 
-    # 5. Check remaining open slots — 09:00 is now occupied, only 10:00 remains!
+    # A used invitation cannot be reused to inspect or book another slot.
     remaining_slots = workflow.list_available_slots_for_invitation(
         db_session,
-        token=invitation.token,
-        scheduled_date=date(2026, 11, 28),
+        token=issue.token,
+        month=date(2026, 11, 1),
     )
-    assert len(remaining_slots) == 1
-    assert remaining_slots[0]["start_time"] == "10:00"
+    assert remaining_slots == []
 
     # 6. Attempting to book the occupied 09:00 slot fails with ConflictError (409)
     # Create another candidate & invitation
@@ -465,15 +533,13 @@ def test_candidate_books_available_slot_and_prevents_double_booking(
         workflow.candidate_book_slot(
             db_session,
             token=inv2.token,
-            scheduled_date=date(2026, 11, 28),
+            availability_id=open_slots[0]["availability_id"],
             scheduled_time="09:00",
-            duration_minutes=60,
-            interviewer_user_id=interviewer.id,
         )
 
 
-def test_candidate_cancel_and_reschedule_flow(db_session: Session) -> None:
-    """Stage I: Candidate can cancel an appointment and re-select another open slot."""
+def test_candidate_invitation_is_single_booking_and_requires_hr_reissue_to_reschedule(db_session: Session) -> None:
+    """Stage I: HR must cancel a booked interview before issuing a replacement link."""
     org, recruiter, interviewer, job, candidate, application = seed_test_pipeline(db_session)
     workflow = SchedulingWorkflowService()
 
@@ -493,7 +559,7 @@ def test_candidate_cancel_and_reschedule_flow(db_session: Session) -> None:
         decision="advance",
         organization_id=org.id,
     )
-    invitation = workflow.create_invitation(
+    issue = workflow.create_invitation(
         db_session,
         organization_id=org.id,
         job_application_id=application.id,
@@ -501,39 +567,51 @@ def test_candidate_cancel_and_reschedule_flow(db_session: Session) -> None:
     )
     db_session.commit()
 
+    slots = workflow.list_available_slots_for_invitation(
+        db_session, token=issue.token, month=date(2026, 11, 1)
+    )
     # Book 13:00
     interview = workflow.candidate_book_slot(
         db_session,
-        token=invitation.token,
-        scheduled_date=date(2026, 11, 29),
+        token=issue.token,
+        availability_id=slots[0]["availability_id"],
         scheduled_time="13:00",
-        duration_minutes=60,
-        interviewer_user_id=interviewer.id,
     )
     db_session.commit()
     assert interview.status == "scheduled"
 
-    # Cancel 13:00
-    cancelled = workflow.candidate_cancel_booking(
-        db_session,
-        token=invitation.token,
-        interview_id=interview.id,
-    )
-    db_session.commit()
-    assert cancelled.status == "cancelled"
+    # The same public link cannot cancel or move the booked interview.
+    with pytest.raises(ValidationError, match="already been used"):
+        workflow.candidate_book_slot(
+            db_session,
+            token=issue.token,
+            availability_id=slots[1]["availability_id"],
+            scheduled_time="14:00",
+        )
+    view = workflow.get_candidate_view(db_session, token=issue.token)
+    assert view["scheduled_time"] == interview.scheduled_time
 
-    # Re-book for 14:00
-    rebooked = workflow.candidate_book_slot(
+    with pytest.raises(ConflictError, match="Cancel it before issuing a replacement link"):
+        workflow.create_invitation(
+            db_session,
+            organization_id=org.id,
+            job_application_id=application.id,
+            actor_user_id=recruiter.id,
+        )
+
+    InterviewService().cancel(
         db_session,
-        token=invitation.token,
-        scheduled_date=date(2026, 11, 29),
-        scheduled_time="14:00",
-        duration_minutes=60,
-        interviewer_user_id=interviewer.id,
+        interview_id=interview.id,
+        organization_id=org.id,
+    )
+    replacement = workflow.create_invitation(
+        db_session,
+        organization_id=org.id,
+        job_application_id=application.id,
+        actor_user_id=recruiter.id,
     )
     db_session.commit()
-    assert rebooked.status == "scheduled"
-    assert rebooked.scheduled_time == "14:00"
+    assert replacement.invitation.status == "pending"
 
 
 # ===========================================================================

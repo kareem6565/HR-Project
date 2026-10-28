@@ -102,7 +102,8 @@ class JobProfileExtractionWorkflow:
     ) -> JobProfileExtractionResult:
         """Execute the extraction run, raising on any failure."""
         job = self._get_job(db, job_id=job_id, organization_id=organization_id)
-        raw_description = self._require_raw_description(job)
+        original_listing_text = self._source_listing_text(db, job)
+        raw_description = original_listing_text or self._require_raw_description(job)
 
         run = self._trace_service.start_run(
             db,
@@ -209,14 +210,25 @@ class JobProfileExtractionWorkflow:
         )
 
         make_current = not self._has_approved_profile(db, job)
+        previous_profile = self._profile_service.get_current_or_latest(db, job_id=job.id)
+        previous_provenance = previous_profile.provenance or {} if previous_profile else {}
+        inherited = {
+            key: previous_provenance[key]
+            for key in ("source", "field_origins")
+            if key in previous_provenance
+        }
+        raw_input_snapshot = dict(input_reference)
+        if original_listing_text is not None:
+            raw_input_snapshot["original_listing_text"] = original_listing_text
         profile = self._profile_service.create_version(
             db,
             job_id=job.id,
             status="draft",
             source="ai_extracted",
             profile_data=profile_data,
-            raw_input_snapshot=input_reference,
+            raw_input_snapshot=raw_input_snapshot,
             provenance={
+                **inherited,
                 "workflow": WORKFLOW_TYPE,
                 "provider": result.provider,
                 "model": result.model,
@@ -249,6 +261,13 @@ class JobProfileExtractionWorkflow:
         if not job.raw_description:
             raise ValidationError("Job has no raw description to extract from.")
         return job.raw_description
+
+    def _source_listing_text(self, db: Session, job: Job) -> str | None:
+        profile = self._profile_service.get_current_or_latest(db, job_id=job.id)
+        if profile is None or not isinstance(profile.raw_input_snapshot, dict):
+            return None
+        text = profile.raw_input_snapshot.get("original_listing_text")
+        return text if isinstance(text, str) and text.strip() else None
 
     def _has_approved_profile(self, db: Session, job: Job) -> bool:
         versions = self._profile_service.list_versions(db, job_id=job.id)

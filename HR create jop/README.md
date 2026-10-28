@@ -135,9 +135,6 @@ settings are supplied by the root `.env` and `docker-compose.yml`.
 | `OLLAMA_API_KEY`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL` | Ollama Cloud access and model; default model is `gemma4:31b`. |
 | `SOAL_API_KEY`, `SOAL_BASE_URL`, `SOAL_MODEL` | Optional Soal-compatible provider configuration. |
 | `JWT_SECRET_KEY` | Required signing secret; use a unique high-entropy value outside tests. |
-| `HR_SSO_SHARED_SECRET` | Shared high-entropy secret used to verify HR Manager sign-in assertions. Configure the same value in `HR manager` PHP. |
-| `HR_SSO_ORGANIZATION_ID` | Existing HERA organization UUID where authenticated HR Manager accounts receive recruiter identities. No schema migration is needed. |
-| `HR_SSO_ISSUER` | Expected issuer for signed HR Manager assertions; defaults to `hr-manager` and must match `HERA_SSO_ISSUER` in PHP. |
 | `ENABLE_SCREENING_WORKER` | Enables the embedded batch worker; defaults to `true`. |
 | `VITE_API_BASE_URL` | Frontend API base, including `/api/v1`; local proxy default is `/api/v1`. |
 

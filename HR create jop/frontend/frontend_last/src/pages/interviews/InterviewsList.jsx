@@ -207,9 +207,12 @@ export default function InterviewsList() {
           <h2>Interviews</h2>
           <p className="muted-note">{stats.thisWeek} scheduled this week</p>
         </div>
-        <button className="primary" onClick={() => navigate("/interviews/schedule")}>
-          <Plus size={18} /> Schedule Interview
-        </button>
+        <div className="interview-heading-actions">
+          <button className="btn-secondary" onClick={() => navigate("/interviews/availability")}>Manage availability</button>
+          <button className="primary" onClick={() => navigate("/interviews/schedule")}>
+            <Plus size={18} /> Schedule Interview
+          </button>
+        </div>
       </div>
 
       <div className="stats-grid">

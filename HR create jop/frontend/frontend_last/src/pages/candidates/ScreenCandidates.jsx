@@ -18,6 +18,8 @@ import {
   validateFile,
 } from "./screenCandidateUtils";
 
+const RECENT_BATCH_LIMIT = 3;
+
 export default function ScreenCandidates() {
   const [jobs, setJobs] = useState([]);
   const [jobId, setJobId] = useState("");
@@ -61,8 +63,8 @@ export default function ScreenCandidates() {
     setLoadingBatches(true);
     setBatchesLoadError("");
     try {
-      const batches = await getJobBatches(selectedJobId, 5);
-      setRecentBatches(batches || []);
+      const batches = await getJobBatches(selectedJobId, RECENT_BATCH_LIMIT);
+      setRecentBatches((batches || []).slice(0, RECENT_BATCH_LIMIT));
     } catch {
       setRecentBatches([]);
       setBatchesLoadError("Couldn't load recent screening batches. Try again.");
@@ -240,17 +242,10 @@ export default function ScreenCandidates() {
 
           {selectedJob && (
             <div className="job-summary-card">
-              <div className="job-summary-meta">
-                <span className="badge badge-teal">{selectedJob.title}</span>
-                {selectedJob.department && (
-                  <span className="muted-note">Dept: {selectedJob.department}</span>
-                )}
-                {selectedJob.location && (
-                  <span className="muted-note">Loc: {selectedJob.location}</span>
-                )}
-                {selectedJob.type && (
-                  <span className="muted-note">Type: {selectedJob.type}</span>
-                )}
+              <div className="job-summary-meta" style={{ alignItems: "center" }}>
+                <strong style={{ color: "var(--hera-ink)", fontSize: 14 }}>
+                  {selectedJob.title}
+                </strong>
                 <span
                   className={`badge badge-${
                     String(selectedJob.status).toLowerCase() === "active" ? "green" : "grey"
@@ -259,78 +254,86 @@ export default function ScreenCandidates() {
                   {selectedJob.status || "draft"}
                 </span>
               </div>
+              <p className="muted-note" style={{ margin: "5px 0 0", fontSize: 12 }}>
+                {[selectedJob.department, selectedJob.location, selectedJob.type]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
 
-              {selectedJob.description && (
-                <p style={{ marginTop: 8, fontSize: 13, color: "var(--hera-ink)" }}>
-                  {selectedJob.description}
-                </p>
-              )}
-
-              <div
-                style={{
-                  marginTop: 12,
-                  borderTop: "1px solid var(--hera-border)",
-                  paddingTop: 10,
-                }}
-              >
-                <p className="eyebrow" style={{ marginBottom: 6, fontSize: "10px" }}>
-                  RECORDED CRITERIA & REQUIREMENTS
-                </p>
-
-                {selectedJob.requirements?.length > 0 ? (
-                  <div style={{ marginBottom: 8 }}>
-                    <strong style={{ fontSize: "12px", display: "block", marginBottom: 4 }}>
-                      Requirements:
-                    </strong>
-                    <ul
-                      style={{
-                        margin: "0 0 8px 18px",
-                        padding: 0,
-                        fontSize: "12px",
-                        color: "var(--hera-ink)",
-                      }}
-                    >
-                      {selectedJob.requirements.map((req, idx) => (
-                        <li key={idx} dir="auto" style={{ marginBottom: 2 }}>
-                          {req}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-
-                {selectedJob.requiredSkills?.length > 0 ? (
-                  <div style={{ marginBottom: 8 }}>
-                    <strong style={{ fontSize: "12px", display: "block", marginBottom: 4 }}>
-                      Required Skills:
-                    </strong>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                      {selectedJob.requiredSkills.map((skill, idx) => (
-                        <span key={idx} className="badge badge-blue" style={{ fontSize: "11px" }}>
-                          {skill}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-
-                {!selectedJob.requirements?.length && !selectedJob.requiredSkills?.length && (
-                  <p className="muted-note" style={{ fontSize: "12px", margin: "4px 0" }}>
-                    No explicit criteria or skills configured on this job. Evaluator will screen against the general job description.
-                  </p>
-                )}
-
-                <p
-                  className="muted-note"
+              <details style={{ marginTop: 10, borderTop: "1px solid var(--hera-border)", paddingTop: 9 }}>
+                <summary
                   style={{
-                    fontSize: "11px",
-                    marginTop: 8,
-                    color: "var(--hera-muted)",
+                    color: "var(--hera-teal)",
+                    cursor: "pointer",
+                    fontSize: 12,
+                    fontWeight: 600,
                   }}
                 >
-                  Truthful criteria notice: Loaded directly from the job record. HERA does not fabricate criteria weights or mock approval statuses.
-                </p>
-              </div>
+                  Review job description & screening criteria
+                  <span className="muted-note" style={{ marginLeft: 8, fontWeight: 400 }}>
+                    {selectedJob.requirements?.length || 0} requirements · {selectedJob.requiredSkills?.length || 0} skills
+                  </span>
+                </summary>
+
+                <div style={{ paddingTop: 10 }}>
+                  {selectedJob.description && (
+                    <p style={{ margin: "0 0 12px", fontSize: 13, color: "var(--hera-ink)" }}>
+                      {selectedJob.description}
+                    </p>
+                  )}
+
+                  <p className="eyebrow" style={{ marginBottom: 6, fontSize: "10px" }}>
+                    RECORDED CRITERIA & REQUIREMENTS
+                  </p>
+
+                  {selectedJob.requirements?.length > 0 ? (
+                    <div style={{ marginBottom: 8 }}>
+                      <strong style={{ fontSize: "12px", display: "block", marginBottom: 4 }}>
+                        Requirements:
+                      </strong>
+                      <ul
+                        style={{
+                          margin: "0 0 8px 18px",
+                          padding: 0,
+                          fontSize: "12px",
+                          color: "var(--hera-ink)",
+                        }}
+                      >
+                        {selectedJob.requirements.map((req, idx) => (
+                          <li key={idx} dir="auto" style={{ marginBottom: 2 }}>
+                            {req}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+
+                  {selectedJob.requiredSkills?.length > 0 ? (
+                    <div style={{ marginBottom: 8 }}>
+                      <strong style={{ fontSize: "12px", display: "block", marginBottom: 4 }}>
+                        Required Skills:
+                      </strong>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                        {selectedJob.requiredSkills.map((skill, idx) => (
+                          <span key={idx} className="badge badge-blue" style={{ fontSize: "11px" }}>
+                            {skill}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {!selectedJob.requirements?.length && !selectedJob.requiredSkills?.length && (
+                    <p className="muted-note" style={{ fontSize: "12px", margin: "4px 0" }}>
+                      No explicit criteria or skills configured on this job. Evaluator will screen against the general job description.
+                    </p>
+                  )}
+
+                  <p className="muted-note" style={{ fontSize: "11px", marginTop: 8 }}>
+                    Criteria are shown as saved on the job. HERA does not fabricate weights or approval statuses.
+                  </p>
+                </div>
+              </details>
             </div>
           )}
 

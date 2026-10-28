@@ -23,6 +23,7 @@ import {
   Download,
   Languages,
   MessageSquareText,
+  Copy,
 } from "lucide-react";
 import LoadingSpinner from "../../components/common/LoadingSpinner";
 import ErrorState from "../../components/common/ErrorState";
@@ -40,6 +41,7 @@ import { downloadResume } from "../../services/resumeService";
 import { formatScore, parseScore } from "../../utils/score";
 import { BAND_CONFIG } from "../../components/common/ScoreBadge";
 import { getApplicationStatusGroup } from "../../utils/applicationStatus";
+import { createCandidateInterviewInvitation } from "../../services/interviewService";
 
 const DECISION_LABELS = {
   [HRDecisionValue.ADVANCE]: "Advance",
@@ -170,6 +172,9 @@ export default function ApplicationReview() {
   const [successMsg, setSuccessMsg] = useState("");
   const [downloading, setDownloading] = useState(false);
   const [cvError, setCvError] = useState("");
+  const [interviewInviteBusy, setInterviewInviteBusy] = useState(false);
+  const [interviewInviteUrl, setInterviewInviteUrl] = useState("");
+  const [interviewInviteMessage, setInterviewInviteMessage] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -343,6 +348,30 @@ export default function ApplicationReview() {
     }
   };
 
+  const createInterviewInvite = async () => {
+    setInterviewInviteBusy(true);
+    setInterviewInviteMessage("");
+    setInterviewInviteUrl("");
+    try {
+      const invitation = await createCandidateInterviewInvitation(applicationId);
+      setInterviewInviteUrl(`${window.location.origin}/interview/schedule#${invitation.token}`);
+      setInterviewInviteMessage("Link created. Share it with the candidate; it expires in 7 days and can schedule one interview.");
+    } catch (err) {
+      setInterviewInviteMessage(extractError(err));
+    } finally {
+      setInterviewInviteBusy(false);
+    }
+  };
+
+  const copyInterviewInvite = async () => {
+    try {
+      await navigator.clipboard.writeText(interviewInviteUrl);
+      setInterviewInviteMessage("Interview link copied.");
+    } catch {
+      setInterviewInviteMessage("Copy is unavailable here. Select and copy the link below.");
+    }
+  };
+
   return (
     <section>
       <div className="review-workspace-top">
@@ -446,6 +475,30 @@ export default function ApplicationReview() {
         />
       </div>
       </div>
+
+      {currentDecision === HRDecisionValue.ADVANCE && (
+        <section className="panel interview-invite-panel" aria-labelledby="interview-invite-title">
+          <div>
+            <p className="eyebrow">CANDIDATE SELF-SCHEDULING</p>
+            <h3 id="interview-invite-title">Let the candidate choose a time</h3>
+            <p>Publish interviewer availability first. The candidate link opens only the scheduling page and expires after 7 days.</p>
+          </div>
+          <div className="interview-invite-actions">
+            <button type="button" className="primary" onClick={createInterviewInvite} disabled={interviewInviteBusy}>
+              {interviewInviteBusy ? "Creating link…" : "Create scheduling link"}
+            </button>
+            <a href="/interviews/availability">Manage availability</a>
+          </div>
+          {interviewInviteUrl && (
+            <div className="interview-invite-link-row">
+              <label htmlFor="candidate-interview-link">Share this link with the candidate</label>
+              <div><input id="candidate-interview-link" readOnly value={interviewInviteUrl} /><button type="button" className="btn-secondary" onClick={copyInterviewInvite}><Copy size={15} aria-hidden="true" /> Copy link</button></div>
+              <small>Creating another link invalidates the previous unused link. The candidate can book once. To reschedule, cancel the existing interview first, then issue a new link.</small>
+            </div>
+          )}
+          {interviewInviteMessage && <p className="interview-invite-message" role="status">{interviewInviteMessage}</p>}
+        </section>
+      )}
 
       {/* =======================================================
           1. CANDIDATE PROFILE (AI Assisted)

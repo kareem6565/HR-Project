@@ -84,3 +84,14 @@ def update_candidate(
         email=body.email,
         phone=body.phone,
     )
+
+
+@router.post("/candidates/{candidate_id}/archive", response_model=CandidateResponse)
+def archive_candidate(
+    candidate_id: str,
+    ctx: RequestContext = Depends(get_request_context),
+    db: Session = Depends(get_db),
+):
+    return CandidateService().archive(
+        db, candidate_id=uuid.UUID(candidate_id), organization_id=ctx.organization_id
+    )

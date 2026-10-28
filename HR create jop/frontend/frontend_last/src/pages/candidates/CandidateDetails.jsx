@@ -12,6 +12,8 @@ import {
   Pencil,
   MessageSquareText,
   Save,
+  Copy,
+  ShieldCheck,
 } from "lucide-react";
 import LoadingSpinner from "../../components/common/LoadingSpinner";
 import Modal from "../../components/common/Modal";
@@ -20,6 +22,10 @@ import ErrorState from "../../components/common/ErrorState";
 import Badge from "../../components/common/Badge";
 import { getCandidateById, updateCandidate } from "../../services/candidateService";
 import { findCandidateApplications } from "../../services/interviewQuestionSetService";
+import {
+  createTalentPoolConsentLink,
+  withdrawTalentPoolConsent,
+} from "../../services/talentPoolService";
 
 const Info = ({ l, v }) => (
   <div className="info">
@@ -44,6 +50,10 @@ export default function CandidateDetails() {
   const [appsLoading, setAppsLoading] = useState(true);
   const [appsError, setAppsError] = useState(false);
   const [appsAttempt, setAppsAttempt] = useState(0);
+  const [consentLink, setConsentLink] = useState("");
+  const [consentExpiresAt, setConsentExpiresAt] = useState(null);
+  const [consentBusy, setConsentBusy] = useState(false);
+  const [consentMessage, setConsentMessage] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -108,6 +118,46 @@ export default function CandidateDetails() {
       );
     } finally {
       setSaving(false);
+    }
+  };
+
+  const createConsentLink = async () => {
+    setConsentBusy(true);
+    setConsentMessage("");
+    try {
+      const link = await createTalentPoolConsentLink(id);
+      setConsentLink(link.url);
+      setConsentExpiresAt(link.expiresAt);
+      setConsentMessage("Link created. Share it with the candidate; it expires in 7 days and can be used once.");
+    } catch (err) {
+      setConsentMessage(err?.response?.data?.detail || "Could not create a consent link.");
+    } finally {
+      setConsentBusy(false);
+    }
+  };
+
+  const copyConsentLink = async () => {
+    try {
+      await navigator.clipboard.writeText(consentLink);
+      setConsentMessage("Consent link copied.");
+    } catch {
+      setConsentMessage("Copy is unavailable here. Select and copy the link below.");
+    }
+  };
+
+  const recordConsentWithdrawal = async () => {
+    if (!window.confirm("Confirm that the candidate asked to withdraw Talent Pool consent? Their original application record and decision will remain unchanged.")) return;
+    setConsentBusy(true);
+    setConsentMessage("");
+    try {
+      const withdrawn = await withdrawTalentPoolConsent(id);
+      setConsentLink("");
+      setConsentExpiresAt(null);
+      setConsentMessage(withdrawn ? "Consent withdrawn. The candidate is no longer eligible for future-role discovery." : "No active Talent Pool consent was found.");
+    } catch (err) {
+      setConsentMessage(err?.response?.data?.detail || "Could not record the withdrawal.");
+    } finally {
+      setConsentBusy(false);
     }
   };
 
@@ -190,6 +240,34 @@ export default function CandidateDetails() {
           </div>
         </div>
       </div>
+
+      <section className="panel talent-consent-panel" aria-labelledby="talent-consent-heading">
+        <div>
+          <p className="eyebrow">OPTIONAL · TALENT POOL</p>
+          <h3 id="talent-consent-heading"><ShieldCheck size={17} aria-hidden="true" /> Future opportunities</h3>
+          <p className="muted-note">The candidate must choose on their own consent page. The link expires after 7 days; acceptance lasts 12 months within this organization.</p>
+          <p className="muted-note">Only the candidate profile and skill tags are covered. The original application, decision, CV, and evidence are not changed by this consent.</p>
+        </div>
+        <div className="talent-consent-actions">
+          <button type="button" className="btn-secondary" onClick={createConsentLink} disabled={consentBusy}>
+            {consentBusy ? "Working…" : "Create consent link"}
+          </button>
+          <button type="button" className="btn-secondary" onClick={recordConsentWithdrawal} disabled={consentBusy}>
+            Record candidate withdrawal
+          </button>
+        </div>
+        {consentLink && (
+          <div className="talent-consent-link">
+            <label htmlFor="talent-consent-link">One-time link</label>
+            <div>
+              <input id="talent-consent-link" readOnly value={consentLink} onFocus={(event) => event.target.select()} />
+              <button type="button" className="btn-secondary" onClick={copyConsentLink}><Copy size={15} /> Copy</button>
+            </div>
+            <small>Expires {consentExpiresAt ? new Date(consentExpiresAt).toLocaleString() : "in 7 days"}.</small>
+          </div>
+        )}
+        {consentMessage && <p className="form-success" role="status">{consentMessage}</p>}
+      </section>
 
       <div className="detail-grid">
         <div className="panel">

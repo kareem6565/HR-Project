@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import apiClient from "./apiClient";
 import { listCandidateProfiles, listCandidateResumes } from "./resumeService";
-import { getCandidateById } from "./candidateService";
+import { archiveCandidate, getCandidateById } from "./candidateService";
 
-vi.mock("./apiClient", () => ({ default: { get: vi.fn() } }));
+vi.mock("./apiClient", () => ({ default: { get: vi.fn(), post: vi.fn() } }));
 vi.mock("./resumeService", () => ({
   listCandidateProfiles: vi.fn(),
   listCandidateResumes: vi.fn(),
@@ -38,5 +38,28 @@ describe("getCandidateById profile contact sources", () => {
     expect(candidate.phone).toBe("");
     expect(candidate.profileEmail).toBe("ada.cv@example.com");
     expect(candidate.profilePhone).toBe("+1 555 0100");
+  });
+});
+
+describe("archiveCandidate", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("posts to the archive endpoint and maps the persisted candidate", async () => {
+    apiClient.post.mockResolvedValue({
+      data: {
+        id: "candidate-1",
+        full_name: "Ada Lovelace",
+        email: null,
+        phone: null,
+        status: "archived",
+      },
+    });
+
+    const result = await archiveCandidate("candidate-1");
+
+    expect(apiClient.post).toHaveBeenCalledWith("/candidates/candidate-1/archive");
+    expect(result).toMatchObject({ id: "candidate-1", name: "Ada Lovelace", status: "archived" });
   });
 });

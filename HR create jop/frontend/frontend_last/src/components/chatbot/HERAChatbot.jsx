@@ -35,10 +35,9 @@ const TOOL_LINKS = {
   search_candidates: () => ({ label: "View Candidates", to: "/candidates" }),
   get_talent_pool: () => ({ label: "Talent Pool", to: "/talent-pool" }),
   list_interviews: () => ({ label: "View Interviews", to: "/interviews" }),
-  get_ai_activity: () => ({ label: "View AI Activity", to: "/ai-activity" }),
 };
 
-function linksFromResults(toolResults) {
+export function linksFromResults(toolResults) {
   const links = [];
   for (const result of toolResults || []) {
     const make = TOOL_LINKS[result.tool];

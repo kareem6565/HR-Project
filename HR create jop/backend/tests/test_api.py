@@ -66,13 +66,22 @@ def create_org(client: httpx.Client, name: str = "Test Org") -> dict:
     return {"id": str(org.id), "name": org.name, "status": org.status}
 
 
-def create_user(client: httpx.Client, org_id: str, email: str = "hr@test.com") -> dict:
+def create_user(
+    client: httpx.Client,
+    org_id: str,
+    email: str = "hr@test.com",
+    role: str = "recruiter",
+) -> dict:
     """Create a bootstrap user in an organization via internal service."""
     from app.services.user_service import UserService
 
     db = next(client.app.dependency_overrides[get_db]())
     user = UserService().create(
-        db, organization_id=uuid.UUID(org_id), email=email, full_name="HR User"
+        db,
+        organization_id=uuid.UUID(org_id),
+        email=email,
+        full_name="HR User",
+        role=role,
     )
     return {
         "id": str(user.id),
@@ -100,6 +109,28 @@ class TestHealth:
         resp = client.get("/api/v1/health")
         assert resp.status_code == 200
         assert resp.json() == {"status": "ok"}
+
+
+class TestAIActivityAuthorization:
+    def test_ai_activity_is_admin_only_for_reads_and_retry(self, client: httpx.Client) -> None:
+        org = create_org(client)
+        recruiter = create_user(client, org["id"], "recruiter@test.com")
+        admin = create_user(client, org["id"], "admin@test.com", role="admin")
+        recruiter_headers = auth_headers(org["id"], recruiter["id"])
+        admin_headers = auth_headers(org["id"], admin["id"])
+
+        assert client.get("/api/v1/ai-activity/runs", headers=recruiter_headers).status_code == 403
+        assert client.get("/api/v1/ai-activity/stats", headers=recruiter_headers).status_code == 403
+        assert (
+            client.post(
+                f"/api/v1/ai-activity/runs/{uuid.uuid4()}/retry",
+                headers=recruiter_headers,
+            ).status_code
+            == 403
+        )
+
+        assert client.get("/api/v1/ai-activity/runs", headers=admin_headers).status_code == 200
+        assert client.get("/api/v1/ai-activity/stats", headers=admin_headers).status_code == 200
 
 
 # ---------------------------------------------------------------------------
@@ -295,6 +326,71 @@ class TestCandidates:
 
         resp = client.get(f"/api/v1/candidates/{cand['id']}", headers=h)
         assert resp.status_code == 200
+
+    def test_archive_candidate_preserves_record_and_is_idempotent(
+        self, client: httpx.Client
+    ) -> None:
+        org, user = bootstrap(client)
+        h = auth_headers(org["id"], user["id"])
+        cand = client.post(
+            "/api/v1/candidates", json={"full_name": "Archive Me"}, headers=h
+        ).json()
+        from app.services.resume_service import ResumeService
+
+        db = next(client.app.dependency_overrides[get_db]())
+        ResumeService().create(
+            db,
+            candidate_id=uuid.UUID(cand["id"]),
+            organization_id=uuid.UUID(org["id"]),
+            file_uri="resumes/archive-me.pdf",
+            original_filename="archive-me.pdf",
+        )
+
+        response = client.post(f"/api/v1/candidates/{cand['id']}/archive", headers=h)
+
+        assert response.status_code == 200
+        assert response.json()["id"] == cand["id"]
+        assert response.json()["status"] == "archived"
+        assert response.json()["full_name"] == "Archive Me"
+        assert response.json()["updated_at"]
+
+        archived_list = client.get("/api/v1/candidates", params={"status": "archived"}, headers=h)
+        active_list = client.get("/api/v1/candidates", params={"status": "active"}, headers=h)
+        assert [row["id"] for row in archived_list.json()] == [cand["id"]]
+        assert active_list.json() == []
+        resumes = client.get(f"/api/v1/candidates/{cand['id']}/resumes", headers=h)
+        assert resumes.status_code == 200
+        assert [resume["original_filename"] for resume in resumes.json()] == ["archive-me.pdf"]
+
+        again = client.post(f"/api/v1/candidates/{cand['id']}/archive", headers=h)
+        assert again.status_code == 200
+        assert again.json()["status"] == "archived"
+
+    def test_archive_candidate_is_organization_scoped(self, client: httpx.Client) -> None:
+        org1, user1 = bootstrap(client)
+        org2, user2 = bootstrap(client)
+        h1 = auth_headers(org1["id"], user1["id"])
+        h2 = auth_headers(org2["id"], user2["id"])
+        cand = client.post(
+            "/api/v1/candidates", json={"full_name": "Tenant Candidate"}, headers=h1
+        ).json()
+
+        response = client.post(f"/api/v1/candidates/{cand['id']}/archive", headers=h2)
+
+        assert response.status_code == 404
+        still_active = client.get(
+            f"/api/v1/candidates/{cand['id']}", headers=h1
+        )
+        assert still_active.status_code == 200
+        assert still_active.json()["status"] == "active"
+
+    def test_archive_candidate_not_found(self, client: httpx.Client) -> None:
+        org, user = bootstrap(client)
+        h = auth_headers(org["id"], user["id"])
+
+        response = client.post(f"/api/v1/candidates/{uuid.uuid4()}/archive", headers=h)
+
+        assert response.status_code == 404
 
     def test_candidate_cross_org_isolation(self, client: httpx.Client) -> None:
         org1, user1 = bootstrap(client)
@@ -2376,29 +2472,58 @@ class TestTalentPool:
         organization = db_session.get(models.Organization, uuid.UUID(org["id"]))
         user_obj = db_session.get(models.User, uuid.UUID(user["id"]))
 
-        hold_app, _job, _candidate, _resume = _seed_application_records(
+        hold_app, _job, hold_candidate, _resume = _seed_application_records(
             db_session, organization, user_obj
         )
         hold_app.status = "hold"
-        _seed_evaluation(db_session, hold_app, score="80.000")
+        hold_evaluation = _seed_evaluation(db_session, hold_app, score="80.000")
+        db_session.add(
+            models.MatchEvidence(
+                candidate_evaluation_id=hold_evaluation.id,
+                evidence_type="matched",
+                requirement_ref={"requirement_key": "req-1234567890abcdef", "text": "Python"},
+                candidate_evidence={"quote": "Built Python services.", "quote_verified": True},
+            )
+        )
         decision = models.HRDecision(
             job_application_id=hold_app.id,
             user_id=user_obj.id,
+            candidate_evaluation_id=hold_evaluation.id,
             decision="hold",
             reason="Hold for later.",
         )
         db_session.add(decision)
 
-        advanced_app, _job2, _candidate2, _resume2 = _seed_application_records(
+        advanced_app, _job2, advanced_candidate, _resume2 = _seed_application_records(
             db_session, organization, user_obj
         )
         advanced_app.status = "advanced"
         _seed_evaluation(db_session, advanced_app, score="95.000")
 
-        rejected_app, _job3, _candidate3, _resume3 = _seed_application_records(
+        rejected_app, _job3, rejected_candidate, _resume3 = _seed_application_records(
             db_session, organization, user_obj
         )
         rejected_app.status = "rejected"
+        db_session.flush()
+
+        consented_at = datetime.now(UTC)
+        for candidate in (hold_candidate, advanced_candidate, rejected_candidate):
+            db_session.add(
+                models.TalentPoolConsent(
+                    organization_id=organization.id,
+                    candidate_id=candidate.id,
+                    created_by_user_id=user_obj.id,
+                    token_hash=uuid.uuid4().hex * 2,
+                    link_expires_at=consented_at,
+                    link_used_at=consented_at,
+                    response="accepted",
+                    responded_at=consented_at,
+                    consent_text="Synthetic test consent text.",
+                    consent_version="test-v1",
+                    granted_at=consented_at,
+                    consent_expires_at=consented_at.replace(year=consented_at.year + 1),
+                )
+            )
         db_session.flush()
 
         other_org, other_user = bootstrap(client)
@@ -2407,7 +2532,7 @@ class TestTalentPool:
         other_app, _job4, _candidate4, _resume4 = _seed_application_records(
             db_session, other_organization, other_user_obj
         )
-        other_app.status = "hold"
+        other_app.status = "rejected"
         db_session.flush()
 
         resp = client.get("/api/v1/talent-pool", headers=h)
@@ -2421,8 +2546,28 @@ class TestTalentPool:
         assert hold_row["job_title"] == "Read Model Job"
         assert float(hold_row["score"]) == 80.0
         assert hold_row["decision"] == "hold"
+        assert hold_row["decision_created_at"]
+        assert hold_row["evidence"] == [
+            {
+                "evidence_type": "matched",
+                "requirement": "Python",
+                "quote": "Built Python services.",
+                "quote_verified": True,
+            }
+        ]
         assert hold_row["group"] == "must_review"
         assert hold_row["skills"] == ["Python"]
+        assert hold_row["consent_expires_at"]
+
+        rejected_resp = client.get("/api/v1/talent-pool?include_rejected=true", headers=h)
+        assert rejected_resp.status_code == 200
+        assert {row["application_id"] for row in rejected_resp.json()} == {
+            str(hold_app.id), str(advanced_app.id), str(rejected_app.id)
+        }
+        rejected_row = next(
+            row for row in rejected_resp.json() if row["application_id"] == str(rejected_app.id)
+        )
+        assert rejected_row["status"] == "rejected"
 
     def test_talent_pool_empty_without_hold_advanced(
         self, client: httpx.Client, db_session: Session
