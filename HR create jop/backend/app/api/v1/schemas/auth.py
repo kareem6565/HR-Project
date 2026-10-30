@@ -24,6 +24,7 @@ class UserProfileResponse(BaseModel):
     email: str
     full_name: str
     role: str
+    roles: list[str] = Field(validation_alias="effective_roles")
     organization_id: uuid.UUID
     is_active: bool
     status: str

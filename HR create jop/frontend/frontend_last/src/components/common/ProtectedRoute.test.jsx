@@ -79,6 +79,43 @@ describe("ProtectedRoute component", () => {
     expect(screen.getByTestId("sensitive-data")).toBeInTheDocument();
   });
 
+  it("allows a dual-role user when any assigned role matches the protected module", () => {
+    renderWithAuth(
+      {
+        status: "authenticated",
+        user: {
+          id: "u-3",
+          email: "hr-recruiter@test.com",
+          role: "recruiter",
+          roles: ["hr_operations", "recruiter"],
+        },
+        error: null,
+      },
+      ["admin", "recruiter"]
+    );
+
+    expect(screen.getByTestId("sensitive-data")).toBeInTheDocument();
+  });
+
+  it("denies an HR Operations-only user from the recruitment module", () => {
+    renderWithAuth(
+      {
+        status: "authenticated",
+        user: {
+          id: "u-4",
+          email: "hr-only@test.com",
+          role: "recruiter",
+          roles: ["hr_operations"],
+        },
+        error: null,
+      },
+      ["admin", "recruiter"]
+    );
+
+    expect(screen.queryByTestId("sensitive-data")).not.toBeInTheDocument();
+    expect(screen.getByText(/access restricted/i)).toBeInTheDocument();
+  });
+
   it("renders access-denied message without logging out when user lacks required role", () => {
     renderWithAuth(
       {

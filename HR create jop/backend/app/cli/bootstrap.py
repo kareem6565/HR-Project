@@ -148,6 +148,7 @@ def bootstrap_admin(
         # Update existing user safely
         existing_user.password_hash = pwd_hash
         existing_user.role = "admin"
+        existing_user.roles = ["admin"]
         existing_user.is_active = True
         existing_user.status = "active"
         existing_user.full_name = full_name_clean

@@ -38,6 +38,16 @@ def exchange_hr_assertion(
 
     try:
         organization_id = uuid.UUID(settings.hr_sso_organization_id)
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "The configured HERA organization ID is invalid. "
+                "Ask an administrator to verify it."
+            ),
+        ) from None
+
+    try:
         claims = jwt.decode(
             body.assertion,
             settings.hr_sso_shared_secret,
@@ -76,9 +86,10 @@ def exchange_hr_assertion(
             detail="The configured HERA organization does not exist.",
         )
 
-    # Stable shadow identity keeps the MySQL account authoritative while HERA
-    # retains its own organization-scoped user record in PostgreSQL.
+    # The verified HR session maps to a single shadow identity with grants in
+    # both workspaces. MySQL remains authoritative for HR Operations access.
     email = f"hrm.{employee_code.lower()}@sso.hera.local"
+    assigned_roles = ["recruiter", "hr_operations"]
     user = db.scalar(
         select(User).where(
             User.organization_id == organization_id,
@@ -92,24 +103,31 @@ def exchange_hr_assertion(
             full_name=full_name.strip()[:255],
             password_hash=None,
             role="recruiter",
+            roles=assigned_roles,
             is_active=True,
             status="active",
             token_version=1,
         )
         db.add(user)
         db.flush()
-    elif not user.is_active or user.status != "active" or user.role != "recruiter":
+    elif not user.is_active or user.status != "active" or user.role not in {"admin", "recruiter"}:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This HR account is not active for recruitment access.",
         )
     else:
         user.full_name = full_name.strip()[:255]
+        current_roles = user.effective_roles
+        updated_roles = list(dict.fromkeys([*current_roles, *assigned_roles]))
+        if updated_roles != current_roles:
+            user.roles = updated_roles
+            user.token_version += 1
 
     token = create_access_token(
         user_id=user.id,
         organization_id=user.organization_id,
         role=user.role,
+        roles=user.effective_roles,
         token_version=user.token_version,
     )
     return TokenResponse(
@@ -175,6 +193,7 @@ def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
         user_id=user.id,
         organization_id=user.organization_id,
         role=user.role,
+        roles=user.effective_roles,
         token_version=user.token_version,
     )
 

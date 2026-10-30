@@ -9,13 +9,14 @@ import * as authStorage from "../services/authStorage";
 
 // Test component exposing AuthContext values and actions
 function TestConsumer() {
-  const { status, user, error, isAuthenticated, isAdmin, isRecruiter, login, logout } = useAuth();
+  const { status, user, error, isAuthenticated, isAdmin, isRecruiter, isHROperations, login, loginWithHRAssertion, logout } = useAuth();
   return (
     <div>
       <div data-testid="status">{status}</div>
       <div data-testid="is-authenticated">{String(isAuthenticated)}</div>
       <div data-testid="is-admin">{String(isAdmin)}</div>
       <div data-testid="is-recruiter">{String(isRecruiter)}</div>
+      <div data-testid="is-hr-operations">{String(isHROperations)}</div>
       <div data-testid="user-email">{user?.email || "none"}</div>
       <div data-testid="user-role">{user?.role || "none"}</div>
       <div data-testid="error-message">{error || "none"}</div>
@@ -27,6 +28,9 @@ function TestConsumer() {
         Trigger Login
       </button>
       <button onClick={logout}>Trigger Logout</button>
+      <button onClick={() => loginWithHRAssertion("signed-hr-assertion").catch(() => {})}>
+        Trigger HR SSO
+      </button>
     </div>
   );
 }
@@ -77,6 +81,7 @@ describe("AuthContext lifecycle and session management", () => {
     expect(screen.getByTestId("is-authenticated").textContent).toBe("true");
     expect(screen.getByTestId("is-admin").textContent).toBe("true");
     expect(screen.getByTestId("is-recruiter").textContent).toBe("false");
+    expect(screen.getByTestId("is-hr-operations").textContent).toBe("false");
     expect(screen.getByTestId("user-email").textContent).toBe("admin@company.com");
   });
 
@@ -98,6 +103,71 @@ describe("AuthContext lifecycle and session management", () => {
     });
     expect(authStorage.getToken()).toBeNull();
     expect(screen.getByTestId("is-authenticated").textContent).toBe("false");
+  });
+
+  it("restores both workspace roles from the authenticated profile", async () => {
+    authStorage.setToken("saved-access-token");
+    vi.spyOn(authService, "getCurrentUser").mockResolvedValueOnce({
+      id: "user-hera-hr",
+      email: "hrm.hr001@sso.hera.local",
+      full_name: "Hera HR User",
+      role: "recruiter",
+      roles: ["recruiter", "hr_operations"],
+      organization_id: "org-456",
+      is_active: true,
+      status: "active",
+    });
+
+    render(
+      <AuthProvider>
+        <TestConsumer />
+      </AuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("status").textContent).toBe("authenticated");
+    });
+    expect(screen.getByTestId("is-recruiter").textContent).toBe("true");
+    expect(screen.getByTestId("is-hr-operations").textContent).toBe("true");
+  });
+
+  it("clears a prior recruitment session before exchanging a new HR assertion", async () => {
+    const user = userEvent.setup();
+    authStorage.setToken("previous-user-token");
+    vi.spyOn(authService, "getCurrentUser").mockResolvedValueOnce({
+      id: "previous-user",
+      email: "previous@company.com",
+      role: "recruiter",
+    });
+    vi.spyOn(authService, "exchangeHRSsoAssertion").mockImplementationOnce(async () => {
+      expect(authStorage.getToken()).toBeNull();
+      authStorage.setToken("new-hr-token");
+      return {
+        access_token: "new-hr-token",
+        user: {
+          id: "hr-user",
+          email: "hrm.hr001@sso.hera.local",
+          role: "recruiter",
+          roles: ["recruiter", "hr_operations"],
+        },
+      };
+    });
+
+    render(
+      <AuthProvider>
+        <TestConsumer />
+      </AuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("status").textContent).toBe("authenticated");
+    });
+    await user.click(screen.getByRole("button", { name: /trigger hr sso/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("user-email").textContent).toBe("hrm.hr001@sso.hera.local");
+    });
+    expect(authStorage.getToken()).toBe("new-hr-token");
   });
 
   it("transitions to unavailable and retains recoverable error when backend is down", async () => {

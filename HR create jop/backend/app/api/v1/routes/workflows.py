@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, Header, UploadFile
 from sqlalchemy.orm import Session
 
 from app.api.v1.deps import RequestContext, get_request_context
@@ -26,6 +26,7 @@ def extract_job_profile(
     job_id: str,
     ctx: RequestContext = Depends(get_request_context),
     db: Session = Depends(get_db),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", max_length=128),
 ):
     """Extract a versioned JobProfile draft from a job's raw description.
 
@@ -54,7 +55,10 @@ def extract_job_profile(
             structured_payload=_derive_extraction_payload(job),
         )
     result = JobProfileExtractionWorkflow(provider).run(
-        db, job_id=job_uuid, organization_id=ctx.organization_id
+        db,
+        job_id=job_uuid,
+        organization_id=ctx.organization_id,
+        request_key=idempotency_key,
     )
     if job.status == "draft":
         job.status = "awaiting_profile_review"
@@ -409,7 +413,7 @@ def _run_candidate_evaluation(
     from app.ai.workflows import CandidateEvaluationWorkflow
     from app.core.config import settings
     from app.models import JobApplication
-    from app.services.errors import NotFoundError, ValidationError
+    from app.services.errors import NotFoundError
     from app.services.job_profile_service import JobProfileService
     from app.services.job_service import JobService
     from app.services.resume_details_service import (

@@ -21,12 +21,21 @@ export async function createJobProfile(jobId, payload) {
 
 // Runs the AI job-profile extraction workflow; returns the created profile id
 // plus its workflow run (JobProfileExtractionResponse).
-export async function extractJobProfile(jobId) {
-  const { data } = await apiClient.post(`/jobs/${jobId}/extract-profile`);
+export async function extractJobProfile(jobId, idempotencyKey) {
+  const { data } = await apiClient.post(`/jobs/${jobId}/extract-profile`, null, {
+    headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
+  });
   return data;
 }
 
 export async function approveJobProfile(profileId) {
   const { data } = await apiClient.post(`/job-profiles/${profileId}/approve`);
+  return data;
+}
+
+export async function updateJobProfile(profileId, profileData) {
+  const { data } = await apiClient.patch(`/job-profiles/${profileId}`, {
+    profile_data: profileData,
+  });
   return data;
 }

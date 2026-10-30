@@ -14,7 +14,7 @@ function buildRawDescription(job) {
     ...(job.requirements || []).map((r) => `- ${r}`),
     ...(job.requiredSkills || []).map((s) => `Skills: ${s}`),
   ].filter(Boolean);
-  return parts.length ? parts.join("\n") : job.title || "";
+  return parts.length ? parts.join("\n") : "";
 }
 
 // raw_description is a derived composition (see buildRawDescription). The edit
@@ -38,7 +38,8 @@ function toBackendCreate(job) {
   return {
     title: job.title,
     raw_description: buildRawDescription(job),
-    status: job.status || "draft",
+    description_text: job.description || "",
+    status: "draft",
     department: job.department,
     location: job.location,
     job_type: job.type,
@@ -66,6 +67,7 @@ function toBackendUpdate(updates) {
     updates.requiredSkills !== undefined
   ) {
     body.raw_description = buildRawDescription(updates);
+    if (updates.description !== undefined) body.description_text = updates.description;
   }
   return body;
 }
@@ -76,7 +78,7 @@ function adaptFromBackend(job) {
     id: job.id,
     title: job.title,
     status: job.status,
-    description: job.raw_description || "",
+    description: job.description_text ?? job.raw_description ?? "",
     department: job.department || "",
     location: job.location || "",
     type: job.job_type || "Full-time",
@@ -85,6 +87,9 @@ function adaptFromBackend(job) {
     requiredSkills: job.required_skills || [],
     createdAt: job.created_at,
     applicants: job._applicantCount ?? 0,
+    sourceFileName: job.source_file_name || "",
+    sourceFileStatus: job.source_file_status || "",
+    sourceFileError: job.source_file_error || "",
   };
 }
 
@@ -113,9 +118,28 @@ export async function getJobById(id) {
   return adaptFromBackend(counted);
 }
 
-export async function createJob(job) {
-  const { data } = await apiClient.post("/jobs", toBackendCreate(job));
+export async function createJob(job, idempotencyKey) {
+  const { data } = await apiClient.post("/jobs", toBackendCreate(job), {
+    headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
+  });
   return adaptFromBackend(data);
+}
+
+export async function uploadJobSourceFile(jobId, file) {
+  const formData = new FormData();
+  formData.append("file", file);
+  const { data } = await apiClient.put(`/jobs/${jobId}/source-file`, formData);
+  return adaptFromBackend(data);
+}
+
+export async function downloadJobSourceFile(jobId, filename = "job-description") {
+  const { data } = await apiClient.get(`/jobs/${jobId}/source-file`, { responseType: "blob" });
+  const url = URL.createObjectURL(data);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 
 // Advisory HERA auto-fill for the JobForm. The endpoint only ever receives the

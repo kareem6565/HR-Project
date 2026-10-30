@@ -4,18 +4,20 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import JobDetails from "./JobDetails";
 import { deleteJob, getJobById, updateJob } from "../../services/jobService";
-import { approveJobProfile, extractJobProfile, listJobProfiles } from "../../services/jobProfileService";
+import { approveJobProfile, extractJobProfile, listJobProfiles, updateJobProfile } from "../../services/jobProfileService";
 
 vi.mock("../../services/jobService", () => ({
   getJobById: vi.fn(),
   deleteJob: vi.fn(),
   updateJob: vi.fn(),
+  downloadJobSourceFile: vi.fn(),
 }));
 
 vi.mock("../../services/jobProfileService", () => ({
   listJobProfiles: vi.fn(),
   extractJobProfile: vi.fn(),
   approveJobProfile: vi.fn(),
+  updateJobProfile: vi.fn(),
 }));
 
 function RouteProbe() {
@@ -88,6 +90,41 @@ describe("JobDetails", () => {
     expect(getJobById).toHaveBeenCalledTimes(2);
   });
 
+  it("lets a recruiter remove and add proposed requirements before approval", async () => {
+    const profile = {
+      id: "profile-1",
+      status: "draft",
+      source: "ai_extracted",
+      version_number: 1,
+      is_current: true,
+      profile_data: {
+        schema_version: "1.3",
+        title: "Senior Engineer",
+        requirements: [
+          { key: "req-1", text: "Python", category: "must_have", dimension: "skill", evidence_status: "uncertain" },
+        ],
+        coverage: { certification: "unspecified" },
+      },
+    };
+    listJobProfiles.mockResolvedValue([profile]);
+    updateJobProfile.mockResolvedValue(profile);
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole("button", { name: "Review / edit" }));
+    await user.click(screen.getByRole("button", { name: "Remove" }));
+    await user.click(screen.getByRole("button", { name: "Add requirement" }));
+    await user.type(screen.getByRole("textbox", { name: "Requirement 1" }), "Communicate with teams");
+    await user.click(screen.getByRole("button", { name: "Save review" }));
+
+    await waitFor(() => expect(updateJobProfile).toHaveBeenCalled());
+    expect(updateJobProfile.mock.calls[0][0]).toBe("profile-1");
+    expect(updateJobProfile.mock.calls[0][1].requirements).toEqual([
+      { text: "Communicate with teams", category: "must_have", dimension: "skill" },
+    ]);
+    expect(screen.getByRole("button", { name: "Approve" })).toBeInTheDocument();
+  });
+
   it("preserves the existing status update behavior", async () => {
     const user = userEvent.setup();
     renderPage();
@@ -114,8 +151,10 @@ describe("JobDetails", () => {
 
     expect(await screen.findByText(/Analyze the job description to create a draft/i)).toBeInTheDocument();
     expect(extractJobProfile).not.toHaveBeenCalled();
-    await user.click(screen.getByRole("button", { name: "Analyze with HERA" }));
-    await waitFor(() => expect(extractJobProfile).toHaveBeenCalledWith("job-1"));
+
+    await user.click(screen.getByRole("button", { name: "Run AI extraction" }));
+    await waitFor(() => expect(extractJobProfile).toHaveBeenCalledWith("job-1", expect.any(String)));
+
     expect(approveJobProfile).not.toHaveBeenCalled();
   });
 

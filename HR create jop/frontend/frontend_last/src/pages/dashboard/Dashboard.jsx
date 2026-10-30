@@ -73,9 +73,13 @@ export default function Dashboard() {
         <div className="dashboard-intro-actions">
           <span className="dashboard-live-indicator"><span aria-hidden="true" />Live workspace snapshot</span>
           <div className="dashboard-shortcuts" aria-label="Quick actions">
+            <Link className="btn btn-primary" to="/jobs/new">
+              Create vacancy <ArrowRight size={15} aria-hidden="true" />
+            </Link>
             <Link className="btn btn-primary" to="/applications">
               Review applications <ArrowRight size={15} aria-hidden="true" />
             </Link>
+            <Link className="btn btn-secondary" to="/evaluations">Evaluations</Link>
             <Link className="btn btn-secondary" to="/jobs">
               Manage jobs <BriefcaseBusiness size={15} aria-hidden="true" />
             </Link>
@@ -89,6 +93,21 @@ export default function Dashboard() {
         <StatCard icon={ClipboardList} label="Applications" value={stats.applications} />
         <StatCard icon={UserRoundCheck} label="Advanced applications" value={stats.advancedApplications} />
       </section>
+
+      {stats.totalJobs === 0 && stats.applications === 0 && (
+        <section className="dashboard-empty panel" aria-label="No recruitment records">
+          <div className="dashboard-empty-mark" aria-hidden="true"><BriefcaseBusiness size={20} /></div>
+          <div>
+            <h3>No recruitment records in this workspace yet</h3>
+            <p>Create a vacancy to start. You can then review candidates and evaluate applications from this organization.</p>
+            <div className="dashboard-shortcuts">
+              <Link className="btn btn-primary" to="/jobs/new">Create a vacancy</Link>
+              <Link className="btn btn-secondary" to="/candidates">Review candidates</Link>
+              <Link className="btn btn-secondary" to="/evaluations">Open evaluations</Link>
+            </div>
+          </div>
+        </section>
+      )}
 
       <section className="dashboard-section" aria-labelledby="pipeline-title">
         <div className="dashboard-section-heading">
@@ -124,7 +143,7 @@ export default function Dashboard() {
             </section>
 
           </div>
-        ) : (
+        ) : stats.totalJobs > 0 ? (
           <div className="dashboard-empty panel">
             <div className="dashboard-empty-mark" aria-hidden="true"><BriefcaseBusiness size={20} /></div>
             <div>
@@ -132,7 +151,7 @@ export default function Dashboard() {
               <p>When candidates apply to your jobs, their real application activity will appear here.</p>
             </div>
           </div>
-        )}
+        ) : null}
       </section>
     </div>
   );

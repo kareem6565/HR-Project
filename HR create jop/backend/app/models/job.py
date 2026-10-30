@@ -4,7 +4,16 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, Text, func
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -26,6 +35,7 @@ class Job(Base):
             name="ck_jobs_status",
         ),
         Index("ix_jobs_organization_id_status", "organization_id", "status"),
+        UniqueConstraint("organization_id", "idempotency_key", name="uq_jobs_org_idempotency_key"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -37,6 +47,7 @@ class Job(Base):
     )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     raw_description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    description_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="draft")
     department: Mapped[str | None] = mapped_column(String(100), nullable=True)
     location: Mapped[str | None] = mapped_column(String(100), nullable=True)
@@ -44,6 +55,13 @@ class Job(Base):
     experience: Mapped[str | None] = mapped_column(String(100), nullable=True)
     requirements: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
     required_skills: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    source_file_uri: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    source_file_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    source_file_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source_file_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    source_file_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    source_file_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

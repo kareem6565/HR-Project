@@ -5,11 +5,27 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.api.v1.deps import RequestContext, get_request_context
-from app.api.v1.schemas.job_profiles import JobProfileCreate, JobProfileResponse
+from app.api.v1.schemas.job_profiles import JobProfileCreate, JobProfileResponse, JobProfileUpdate
 from app.core.database import get_db
 from app.services.job_profile_service import JobProfileService
 
 router = APIRouter()
+
+
+@router.patch("/job-profiles/{profile_id}", response_model=JobProfileResponse)
+def update_job_profile(
+    profile_id: str,
+    body: JobProfileUpdate,
+    ctx: RequestContext = Depends(get_request_context),
+    db: Session = Depends(get_db),
+):
+    return JobProfileService().update_draft(
+        db,
+        profile_id=uuid.UUID(profile_id),
+        organization_id=ctx.organization_id,
+        edited_by_user_id=ctx.user_id,
+        profile_data=body.profile_data,
+    )
 
 
 @router.post(
@@ -94,5 +110,6 @@ def approve_job_profile(
     )
     job = JobService().get(db, job_id=profile.job_id, organization_id=ctx.organization_id)
     if job.status == "awaiting_profile_review":
+        JobService().validate_for_activation(db, job)
         job.status = "active"
     return profile

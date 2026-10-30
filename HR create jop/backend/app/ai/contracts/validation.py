@@ -70,7 +70,16 @@ def normalize_job_profile_requirements(value: Any) -> list[JobRequirement]:
         else:
             if any(not isinstance(item, dict) for item in value):
                 raise ValidationError("Job profile requirements contain unsupported items.")
-            requirements = [JobRequirement.model_validate(item) for item in value]
+            requirements = [
+                JobRequirement.model_validate(
+                    {
+                        key: item_value
+                        for key, item_value in item.items()
+                        if key not in {"evidence_status", "edited_by_hr"}
+                    }
+                )
+                for item in value
+            ]
     except PydanticValidationError as error:
         raise ValidationError(f"Invalid persisted job profile requirements: {error}") from error
 

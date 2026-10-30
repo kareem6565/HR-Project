@@ -103,7 +103,7 @@ def test_success_creates_profile_and_traces(db_session: Session) -> None:
     assert profile.source == "ai_extracted"
     assert profile.is_current is True
     assert profile.profile_data == {
-        "schema_version": "1.2",
+        "schema_version": "1.3",
         "title": "Data Engineer",
         "summary": "Builds pipelines",
         "requirements": [
@@ -112,19 +112,35 @@ def test_success_creates_profile_and_traces(db_session: Session) -> None:
                 "text": "Python",
                 "category": "must_have",
                 "dimension": "skill",
+                "evidence_status": "uncertain",
             }
         ],
         "quality_review": {"status": "unavailable", "findings": []},
+        "coverage": {
+            "skill": "uncertain",
+            "experience": "unspecified",
+            "education": "unspecified",
+            "certification": "unspecified",
+            "responsibility": "unspecified",
+        },
+        "conflicts": [],
     }
     assert profile.provenance == {
         "workflow": "job_profile_extraction",
         "provider": "fake",
         "model": "fake-model",
+        "workflow_run_id": str(run.id),
+        "workflow_step_trace_id": str(step.id),
+        "ai_trace_id": str(trace.id),
     }
     assert profile.raw_input_snapshot == {
         "entity": "job",
         "entity_id": str(job.id),
-        "raw_description_sha256": trace.input_reference["raw_description_sha256"],
+        "manual_description_sha256": trace.input_reference["manual_description_sha256"],
+        "uploaded_file_sha256": None,
+        "structured_specifications_sha256": trace.input_reference[
+            "structured_specifications_sha256"
+        ],
     }
     assert run.status == "completed"
     assert step.status == "completed"
@@ -134,13 +150,17 @@ def test_success_creates_profile_and_traces(db_session: Session) -> None:
     assert trace.input_reference == {
         "entity": "job",
         "entity_id": str(job.id),
-        "raw_description_sha256": trace.input_reference["raw_description_sha256"],
+        "manual_description_sha256": trace.input_reference["manual_description_sha256"],
+        "uploaded_file_sha256": None,
+        "structured_specifications_sha256": trace.input_reference[
+            "structured_specifications_sha256"
+        ],
     }
     assert "output_sha256" in trace.output_reference
     assert trace.token_usage == {"input_tokens": 10, "output_tokens": 5}
 
 
-def test_flat_v1_requirements_persisted_as_canonical_v1_2(db_session: Session) -> None:
+def test_flat_v1_requirements_persisted_as_canonical_v1_3(db_session: Session) -> None:
     organization = create_organization(db_session)
     create_user(db_session, organization)
     job = create_job(db_session, organization)
@@ -158,7 +178,7 @@ def test_flat_v1_requirements_persisted_as_canonical_v1_2(db_session: Session) -
 
     profile = db_session.get(JobProfile, result.profile_id)
     assert profile.profile_data == {
-        "schema_version": "1.2",
+        "schema_version": "1.3",
         "title": "Data Engineer",
         "summary": "Builds pipelines",
         "requirements": [
@@ -167,9 +187,18 @@ def test_flat_v1_requirements_persisted_as_canonical_v1_2(db_session: Session) -
                 "text": "Python",
                 "category": "important",
                 "dimension": "skill",
+                "evidence_status": "uncertain",
             }
         ],
         "quality_review": {"status": "unavailable", "findings": []},
+        "coverage": {
+            "skill": "uncertain",
+            "experience": "unspecified",
+            "education": "unspecified",
+            "certification": "unspecified",
+            "responsibility": "unspecified",
+        },
+        "conflicts": [],
     }
 
 
@@ -224,9 +253,13 @@ def test_quality_review_persists_only_exact_source_quotes(db_session: Session) -
                     },
                     {
                         "finding_type": "not_measurable",
-                        "source_quote": "Build reliable services.",
-                        "concern": "The expected level of reliability is not measurable.",
-                        "question_for_hr": "What reliability target should the role meet?",
+
+                        "source_quote": "At least 3 years of backend experience.",
+                        "concern": (
+                            "The required experience does not specify what experience is relevant."
+                        ),
+                        "question_for_hr": "Which backend experience should qualify?",
+
                     },
                     {
                         "finding_type": "unclear_requirement",
@@ -236,7 +269,7 @@ def test_quality_review_persists_only_exact_source_quotes(db_session: Session) -
                     },
                 ]
             },
-        }
+        },
     )
     workflow = JobProfileExtractionWorkflow(provider)
     db_session.commit()
@@ -251,6 +284,7 @@ def test_quality_review_persists_only_exact_source_quotes(db_session: Session) -
             "text": "Python",
             "category": "must_have",
             "dimension": "skill",
+            "evidence_status": "uncertain",
         }
     ]
     review = profile.profile_data["quality_review"]
@@ -267,8 +301,8 @@ def test_quality_review_persists_only_exact_source_quotes(db_session: Session) -
 
     prompt = json.loads(provider.last_input)
     assert "Do not add, rewrite, or infer requirements" in prompt["trusted_task_instructions"]
-    assert "<<<JOB_DESCRIPTION_START>>>" in prompt["job_description_source"]
-    assert raw_description in prompt["job_description_source"]
+    assert "<<<MANUAL_DESCRIPTION_START>>>" in prompt["manual_description_source"]
+    assert raw_description in prompt["manual_description_source"]
 
 
 def test_quality_review_with_four_exact_quotes_is_verified(db_session: Session) -> None:
@@ -513,7 +547,7 @@ def test_missing_raw_description_rejected_before_traces(db_session: Session) -> 
     workflow, _ = make_workflow()
     db_session.commit()
 
-    with pytest.raises(ValidationError, match="no raw description"):
+    with pytest.raises(ValidationError, match="Add a description"):
         workflow.run(db_session, job_id=job.id, organization_id=organization.id)
     db_session.commit()
 

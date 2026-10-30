@@ -52,6 +52,7 @@ class UserService:
             full_name=full_name.strip(),
             password_hash=pwd_hash,
             role=role,
+            roles=[role],
             is_active=True,
             status="active",
             token_version=1,
@@ -59,7 +60,6 @@ class UserService:
         db.add(user)
         db.flush()
         return user
-
 
     def get(
         self,
@@ -85,9 +85,12 @@ class UserService:
         """Update role for an organization user and invalidate their existing sessions."""
         user = self.get(db, user_id=user_id, organization_id=organization_id)
         if new_role not in ("admin", "recruiter"):
-            raise ValidationError(f"Invalid role: {new_role!r}. Allowed roles: 'admin', 'recruiter'.")
+            raise ValidationError(
+                f"Invalid role: {new_role!r}. Allowed roles: 'admin', 'recruiter'."
+            )
         old_role = user.role
         user.role = new_role
+        user.roles = [new_role]
         user.token_version += 1
         db.flush()
         return user, old_role, new_role
@@ -106,7 +109,7 @@ class UserService:
             raise ValidationError(f"Invalid status: {new_status!r}.")
         old_status = user.status
         user.status = new_status
-        user.is_active = (new_status == "active")
+        user.is_active = new_status == "active"
         if not user.is_active:
             user.token_version += 1
         db.flush()

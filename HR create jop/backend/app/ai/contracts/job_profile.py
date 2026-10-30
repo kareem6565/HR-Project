@@ -16,7 +16,10 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from app.ai.contracts.schema import JOB_PROFILE_EXTRACTION_SCHEMA_VERSION, SchemaVersion
 
 RequirementCategory = Literal["must_have", "important", "nice_to_have"]
-RequirementDimension = Literal["skill", "experience", "education", "responsibility"]
+RequirementDimension = Literal[
+    "skill", "experience", "education", "certification", "responsibility"
+]
+RequirementSource = Literal["manual_description", "uploaded_file", "structured_specification"]
 JobQualityFindingType = Literal[
     "unclear_requirement",
     "potential_conflict",
@@ -34,6 +37,7 @@ REQUIREMENT_DIMENSIONS: tuple[RequirementDimension, ...] = (
     "skill",
     "experience",
     "education",
+    "certification",
     "responsibility",
 )
 
@@ -56,7 +60,7 @@ def requirement_key(text: str, category: str) -> str:
 
 
 class JobRequirement(BaseModel):
-    """A single structured job requirement (contract schema v1.1).
+    """A structured job requirement with optional source evidence (schema v1.3).
 
     The LLM proposes only ``text``, ``category``, and ``dimension``. The
     ``key`` is always recomputed by ``requirement_key()``; any key present in
@@ -69,6 +73,8 @@ class JobRequirement(BaseModel):
     text: Annotated[str, Field(min_length=1)]
     category: RequirementCategory
     dimension: RequirementDimension
+    source: RequirementSource | None = None
+    source_quote: Annotated[str, Field(min_length=1)] | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -106,7 +112,7 @@ class JobDescriptionQualityReview(BaseModel):
 
 
 class JobProfileExtractionOutput(BaseModel):
-    """A job profile extracted from a raw job description (schema v1.2).
+    """A job profile extracted from supported job sources (schema v1.3).
 
     ``requirements`` accepts the v1.0 flat ``list[str]`` shape and v1.1
     structured requirements for read compatibility. The optional v1.2 quality

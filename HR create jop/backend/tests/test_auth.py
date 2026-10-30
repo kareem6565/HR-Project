@@ -281,11 +281,24 @@ def test_hr_sso_exchange_provisions_recruiter(client, seeded_org, monkeypatch) -
     data = response.json()
     assert data["user"]["email"] == "hrm.hr001@sso.hera.local"
     assert data["user"]["role"] == "recruiter"
+    assert data["user"]["roles"] == ["recruiter", "hr_operations"]
     profile = client.get(
         "/api/v1/auth/me", headers={"Authorization": f"Bearer {data['access_token']}"}
     )
     assert profile.status_code == 200
     assert profile.json()["id"] == data["user"]["id"]
+    assert set(profile.json()["roles"]) == {"recruiter", "hr_operations"}
+    recruitment = client.get(
+        "/api/v1/jobs", headers={"Authorization": f"Bearer {data['access_token']}"}
+    )
+    assert recruitment.status_code == 200
+
+    second_response = client.post(
+        "/api/v1/auth/sso/exchange",
+        json={"assertion": _hr_manager_assertion()},
+    )
+    assert second_response.status_code == 200
+    assert second_response.json()["user"]["id"] == data["user"]["id"]
 
 
 def test_hr_sso_exchange_rejects_invalid_assertion(client, seeded_org, monkeypatch) -> None:
@@ -312,6 +325,32 @@ def test_hr_sso_exchange_rejects_non_hr_role(client, seeded_org, monkeypatch) ->
     assert response.status_code == 403
 
 
+def test_hr_sso_exchange_reports_missing_organization_setup(client, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "hr_sso_shared_secret", "test-shared-hr-secret-key-with-32chars")
+    monkeypatch.setattr(settings, "hr_sso_organization_id", str(uuid.uuid4()))
+
+    response = client.post(
+        "/api/v1/auth/sso/exchange",
+        json={"assertion": _hr_manager_assertion()},
+    )
+
+    assert response.status_code == 503
+    assert "organization" in response.json()["detail"].lower()
+
+
+def test_hr_sso_exchange_reports_invalid_organization_configuration(client, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "hr_sso_shared_secret", "test-shared-hr-secret-key-with-32chars")
+    monkeypatch.setattr(settings, "hr_sso_organization_id", "not-a-uuid")
+
+    response = client.post(
+        "/api/v1/auth/sso/exchange",
+        json={"assertion": _hr_manager_assertion()},
+    )
+
+    assert response.status_code == 503
+    assert "organization id is invalid" in response.json()["detail"].lower()
+
+
 # ==============================================================================
 # 4. Identity Endpoint: GET /auth/me
 # ==============================================================================
@@ -330,6 +369,7 @@ def test_auth_me_with_valid_bearer_token(client, seeded_recruiter) -> None:
     assert data["id"] == str(seeded_recruiter.id)
     assert data["email"] == seeded_recruiter.email
     assert data["role"] == "recruiter"
+    assert data["roles"] == ["recruiter"]
     assert data["organization_id"] == str(seeded_recruiter.organization_id)
     assert "password_hash" not in data
 
@@ -348,6 +388,22 @@ def test_auth_me_rejects_legacy_headers_without_bearer_token(client, seeded_recr
         },
     )
     assert resp.status_code == 401
+
+
+def test_auth_me_rejects_legacy_identity_headers_in_production(
+    client, seeded_recruiter, monkeypatch
+) -> None:
+    monkeypatch.setattr(settings, "app_env", "production")
+
+    response = client.get(
+        "/api/v1/auth/me",
+        headers={
+            "X-User-Id": str(seeded_recruiter.id),
+            "X-Organization-Id": str(seeded_recruiter.organization_id),
+        },
+    )
+
+    assert response.status_code == 401
 
 
 def test_auth_me_rejects_expired_token(client, seeded_recruiter) -> None:
@@ -444,6 +500,33 @@ def test_recruiter_forbidden_from_user_provisioning(client, seeded_recruiter) ->
         headers=h,
     )
     assert resp.status_code == 403
+
+
+def test_hr_operations_only_user_cannot_access_recruitment_api(
+    client, db_session, seeded_org
+) -> None:
+    hr_only = User(
+        organization_id=seeded_org.id,
+        email="hr-only@heratest.com",
+        full_name="HR Operations Only",
+        role="recruiter",
+        roles=["hr_operations"],
+        password_hash=None,
+    )
+    db_session.add(hr_only)
+    db_session.commit()
+
+    token = create_access_token(
+        user_id=hr_only.id,
+        organization_id=hr_only.organization_id,
+        role=hr_only.role,
+        roles=hr_only.effective_roles,
+        token_version=hr_only.token_version,
+    )
+    response = client.get("/api/v1/jobs", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 403
+    assert "admin, recruiter" in response.json()["detail"]
 
 
 def test_admin_can_access_ai_settings_and_provision_users(client, seeded_admin) -> None:

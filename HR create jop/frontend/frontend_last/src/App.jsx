@@ -85,7 +85,7 @@ function AuthenticatedRoutes() {
           <Route
             path="/settings"
             element={
-              <ProtectedRoute allowedRoles={["admin", "administrator"]}>
+<ProtectedRoute allowedRoles={["admin", "administrator"]}>
                 <AISettings />
               </ProtectedRoute>
             }

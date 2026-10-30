@@ -239,7 +239,13 @@ def test_valid_evaluation_explanation_output() -> None:
 
 def test_requirement_category_and_dimension_enums_are_locked() -> None:
     assert REQUIREMENT_CATEGORIES == ("must_have", "important", "nice_to_have")
-    assert REQUIREMENT_DIMENSIONS == ("skill", "experience", "education", "responsibility")
+    assert REQUIREMENT_DIMENSIONS == (
+        "skill",
+        "experience",
+        "education",
+        "certification",
+        "responsibility",
+    )
 
 
 # --------------------------------------------------------------------------- #

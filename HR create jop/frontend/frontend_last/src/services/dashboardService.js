@@ -19,6 +19,7 @@ export async function getDashboardStats() {
   return {
     candidatesWithApplications: new Set(apps.map((a) => a.candidateId).filter(Boolean)).size,
     activeJobs: jobs.filter((j) => j.status === "active").length,
+    totalJobs: jobs.length,
     applications: apps.length,
     shortlisted:
       apps.filter((a) => a.status === "advanced" || a.status === "ready_for_review").length,

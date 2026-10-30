@@ -22,6 +22,7 @@ describe("Recruitment dashboard", () => {
     getDashboardStats.mockResolvedValue({
       candidatesWithApplications: 12,
       activeJobs: 3,
+      totalJobs: 5,
       applications: 16,
       shortlisted: 4,
       advancedApplications: 2,
@@ -48,6 +49,7 @@ describe("Recruitment dashboard", () => {
     getDashboardStats.mockResolvedValue({
       candidatesWithApplications: 0,
       activeJobs: 1,
+      totalJobs: 1,
       applications: 0,
       shortlisted: 0,
       advancedApplications: 0,
@@ -58,5 +60,22 @@ describe("Recruitment dashboard", () => {
 
     expect(await screen.findByText("No applications yet")).toBeTruthy();
     expect(screen.getByText(/their real application activity will appear here/i)).toBeTruthy();
+  });
+
+  it("shows next actions when the recruiter has no organization records", async () => {
+    getDashboardStats.mockResolvedValue({
+      candidatesWithApplications: 0,
+      activeJobs: 0,
+      totalJobs: 0,
+      applications: 0,
+      advancedApplications: 0,
+    });
+    getApplicationsByJob.mockResolvedValue([]);
+    render(<MemoryRouter><Dashboard /></MemoryRouter>);
+
+    expect(await screen.findByText("No recruitment records in this workspace yet")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Create a vacancy" }).getAttribute("href")).toBe("/jobs/new");
+    expect(screen.getByRole("link", { name: "Review candidates" }).getAttribute("href")).toBe("/candidates");
+    expect(screen.getByRole("link", { name: "Open evaluations" }).getAttribute("href")).toBe("/evaluations");
   });
 });

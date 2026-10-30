@@ -46,6 +46,17 @@ class StorageProvider(ABC):
         """Persist a temporary batch file and return its opaque storage key."""
 
     @abstractmethod
+    def save_job_file(
+        self,
+        *,
+        organization_id: uuid.UUID,
+        job_id: uuid.UUID,
+        extension: str,
+        stream: Callable[[], bytes],
+    ) -> str:
+        """Persist a job description file and return its opaque storage key."""
+
+    @abstractmethod
     def delete(self, *, file_uri: str) -> None:
         """Delete the file at ``file_uri``. Missing files are a no-op."""
 
@@ -79,7 +90,7 @@ class LocalFileSystemStorage(StorageProvider):
 
         raw = file_uri.strip()
         if raw.startswith("local://"):
-            raw = raw[len("local://"):].lstrip("/\\")
+            raw = raw[len("local://") :].lstrip("/\\")
 
         p = Path(raw)
         if p.is_absolute():
@@ -115,7 +126,9 @@ class LocalFileSystemStorage(StorageProvider):
         try:
             target_path.relative_to(self._root_dir)
         except ValueError:
-            raise StoragePathTraversalError("Access denied: target path escapes storage root.") from None
+            raise StoragePathTraversalError(
+                "Access denied: target path escapes storage root."
+            ) from None
 
         target_path.parent.mkdir(parents=True, exist_ok=True)
         target_path.write_bytes(stream())
@@ -144,6 +157,27 @@ class LocalFileSystemStorage(StorageProvider):
                 "Access denied: target path escapes storage root."
             ) from None
 
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        target_path.write_bytes(stream())
+        return relative_key
+
+    def save_job_file(
+        self,
+        *,
+        organization_id: uuid.UUID,
+        job_id: uuid.UUID,
+        extension: str,
+        stream: Callable[[], bytes],
+    ) -> str:
+        clean_ext = re.sub(r"[^a-zA-Z0-9]", "", extension).lower() or "bin"
+        relative_key = f"job-descriptions/{organization_id}/{job_id}.{clean_ext}"
+        target_path = (self._root_dir / relative_key).resolve()
+        try:
+            target_path.relative_to(self._root_dir)
+        except ValueError:
+            raise StoragePathTraversalError(
+                "Access denied: target path escapes storage root."
+            ) from None
         target_path.parent.mkdir(parents=True, exist_ok=True)
         target_path.write_bytes(stream())
         return relative_key

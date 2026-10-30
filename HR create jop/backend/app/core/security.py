@@ -8,13 +8,13 @@ Provides:
 
 from __future__ import annotations
 
+import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
-import uuid
 
+import jwt
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
-import jwt
 
 from app.core.config import settings
 
@@ -52,6 +52,7 @@ def create_access_token(
     user_id: uuid.UUID,
     organization_id: uuid.UUID,
     role: str,
+    roles: list[str] | None = None,
     token_version: int,
     expires_delta: timedelta | None = None,
 ) -> str:
@@ -66,6 +67,7 @@ def create_access_token(
         "sub": str(user_id),
         "org_id": str(organization_id),
         "role": role,
+        "roles": list(dict.fromkeys(roles or [role])),
         "token_version": token_version,
         "iat": int(now.timestamp()),
         "exp": int(expire.timestamp()),

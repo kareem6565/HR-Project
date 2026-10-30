@@ -35,13 +35,14 @@ class JobProfileService:
         provenance: dict[str, Any] | None = None,
         organization_id: uuid.UUID | None = None,
         make_current: bool = True,
+        request_key: str | None = None,
     ) -> JobProfile:
         """Create a new job profile version without overwriting prior versions."""
         if status not in VALID_STATUSES:
             raise ValidationError(f"Invalid job profile status: {status!r}.")
         if source not in VALID_SOURCES:
             raise ValidationError(f"Invalid job profile source: {source!r}.")
-        job = self._get_job(db, job_id=job_id, organization_id=organization_id)
+        self._get_job(db, job_id=job_id, organization_id=organization_id)
 
         version_number = self._next_version_number(db, job_id=job_id)
         if make_current:
@@ -50,6 +51,7 @@ class JobProfileService:
         profile = JobProfile(
             job_id=job_id,
             version_number=version_number,
+            request_key=request_key,
             status=status,
             source=source,
             raw_input_snapshot=raw_input_snapshot,
@@ -84,7 +86,7 @@ class JobProfileService:
         organization_id: uuid.UUID | None = None,
     ) -> list[JobProfile]:
         """Return all profile versions for a job ordered by version number."""
-        job = self._get_job(db, job_id=job_id, organization_id=organization_id)
+        self._get_job(db, job_id=job_id, organization_id=organization_id)
         return list(
             db.scalars(
                 select(JobProfile)
@@ -111,6 +113,12 @@ class JobProfileService:
             raise NotFoundError("JobProfile was not found.")
         if profile.status == "approved":
             raise InvalidStateError("JobProfile is already approved.")
+        if profile.status != "draft":
+            raise InvalidStateError("Only a draft job profile can be approved.")
+        if profile.job.status == "awaiting_profile_review":
+            from app.services.job_service import JobService
+
+            JobService.validate_required_vacancy_fields(profile.job)
 
         self._clear_current(db, job_id=profile.job_id)
         profile.status = "approved"
@@ -137,6 +145,106 @@ class JobProfileService:
 
         db.flush()
         return profile
+
+    def update_draft(
+        self,
+        db: Session,
+        *,
+        profile_id: uuid.UUID,
+        organization_id: uuid.UUID,
+        edited_by_user_id: uuid.UUID,
+        profile_data: dict[str, Any],
+    ) -> JobProfile:
+        """Validate recruiter edits and keep unverified changes visibly uncertain."""
+        profile = self.get_version(db, profile_id=profile_id, organization_id=organization_id)
+        if profile.status != "draft":
+            raise InvalidStateError("Only a draft job profile can be edited.")
+        editor = db.get(User, edited_by_user_id)
+        if editor is None or editor.organization_id != profile.job.organization_id:
+            raise NotFoundError("JobProfile was not found.")
+
+        from app.ai.contracts import validate_job_profile_extraction
+
+        requirements = []
+        for item in profile_data.get("requirements", []):
+            if not isinstance(item, dict):
+                requirements.append(item)
+                continue
+            requirements.append(
+                {
+                    key: value
+                    for key, value in item.items()
+                    if key not in {"evidence_status", "edited_by_hr"}
+                }
+            )
+        validated = validate_job_profile_extraction(
+            {
+                "schema_version": profile_data.get("schema_version", "1.3"),
+                "title": profile_data.get("title"),
+                "summary": profile_data.get("summary"),
+                "requirements": requirements,
+            }
+        )
+        previous = {
+            item.get("key"): item
+            for item in (profile.profile_data.get("requirements") or [])
+            if isinstance(item, dict)
+        }
+        next_requirements = []
+        for item in validated.requirements:
+            serialized = item.model_dump(exclude_none=True)
+            old = previous.get(item.key)
+            if old and old.get("text") == item.text:
+                for field in ("source", "source_quote", "evidence_status", "edited_by_hr"):
+                    if field in old:
+                        serialized[field] = old[field]
+            else:
+                serialized["evidence_status"] = "uncertain"
+                serialized["edited_by_hr"] = True
+            next_requirements.append(serialized)
+
+        edited_profile_data = {
+            **(profile.profile_data or {}),
+            "schema_version": validated.schema_version,
+            "title": validated.title,
+            "summary": validated.summary,
+            "requirements": next_requirements,
+        }
+        profile.status = "superseded"
+        db.flush()
+        provenance = {
+            **(profile.provenance or {}),
+            "edited_from_profile_id": str(profile.id),
+            "edited_by_user_id": str(edited_by_user_id),
+        }
+        edited = self.create_version(
+            db,
+            job_id=profile.job_id,
+            status="draft",
+            source="hr_edited",
+            profile_data=edited_profile_data,
+            raw_input_snapshot=profile.raw_input_snapshot,
+            provenance=provenance,
+            organization_id=organization_id,
+        )
+        from app.services.audit_service import AuditService
+
+        AuditService().log_event(
+            db,
+            action="job_profile.edited",
+            entity_type="job_profile",
+            organization_id=profile.job.organization_id,
+            actor_user_id=edited_by_user_id,
+            entity_id=edited.id,
+            metadata={
+                "job_id": str(profile.job_id),
+                "edited_from_profile_id": str(profile.id),
+                "version_number": edited.version_number,
+            },
+            flush=False,
+        )
+        db.flush()
+        return edited
 
     def get_current_or_latest(
         self,

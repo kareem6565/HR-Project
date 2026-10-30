@@ -18,11 +18,12 @@ import Badge from "../../components/common/Badge";
 import ErrorState from "../../components/common/ErrorState";
 import LoadingSpinner from "../../components/common/LoadingSpinner";
 import Modal from "../../components/common/Modal";
-import { getJobById, deleteJob, updateJob } from "../../services/jobService";
+import { getJobById, deleteJob, updateJob, downloadJobSourceFile } from "../../services/jobService";
 import {
   listJobProfiles,
   extractJobProfile,
   approveJobProfile,
+  updateJobProfile,
 } from "../../services/jobProfileService";
 
 const REQUIREMENT_TONE = {
@@ -264,6 +265,10 @@ export default function JobDetails() {
   const [profilesLoading, setProfilesLoading] = useState(false);
   const [profileError, setProfileError] = useState("");
   const [profileBusy, setProfileBusy] = useState(false);
+  const [editingProfileId, setEditingProfileId] = useState(null);
+  const [editedRequirements, setEditedRequirements] = useState([]);
+  const [activationError, setActivationError] = useState("");
+  const extractionKey = React.useRef(null);
 
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
@@ -323,8 +328,10 @@ export default function JobDetails() {
   const onExtract = async () => {
     setProfileBusy(true);
     setProfileError("");
+    extractionKey.current ||= globalThis.crypto?.randomUUID?.() || `extract-${Date.now()}-${Math.random()}`;
     try {
-      await extractJobProfile(id);
+      await extractJobProfile(id, extractionKey.current);
+      extractionKey.current = null;
       reloadProfiles();
     } catch (err) {
       setProfileError(
@@ -345,6 +352,29 @@ export default function JobDetails() {
       setProfileError(
         err?.response?.data?.detail || "Could not approve this job profile."
       );
+    } finally {
+      setProfileBusy(false);
+    }
+  };
+
+  const beginProfileEdit = (profile) => {
+    setEditingProfileId(profile.id);
+    setEditedRequirements((profile.profile_data?.requirements || []).map((item) => ({ ...item })));
+    setProfileError("");
+  };
+
+  const saveProfileEdits = async (profile) => {
+    setProfileBusy(true);
+    setProfileError("");
+    try {
+      await updateJobProfile(profile.id, {
+        ...profile.profile_data,
+        requirements: editedRequirements,
+      });
+      setEditingProfileId(null);
+      reloadProfiles();
+    } catch (error) {
+      setProfileError(error?.response?.data?.detail || "Could not save profile edits. Check each requirement and retry.");
     } finally {
       setProfileBusy(false);
     }
@@ -374,8 +404,13 @@ export default function JobDetails() {
 
   const onChangeStatus = async () => {
     const next = job.status === "active" ? "closed" : "active";
-    const updated = await updateJob(job.id, { status: next });
-    if (updated) setJob(updated);
+    setActivationError("");
+    try {
+      const updated = await updateJob(job.id, { status: next });
+      if (updated) setJob(updated);
+    } catch (error) {
+      setActivationError(error?.response?.data?.detail || "Vacancy status could not be updated.");
+    }
   };
 
   const isActive = job?.status === "active";
@@ -467,6 +502,8 @@ export default function JobDetails() {
         </div>
       </header>
 
+      {activationError && <p className="form-error" role="alert">{activationError}</p>}
+
       <div className="detail-grid job-details-grid">
         <div className="panel job-details-description-panel">
           <div className="job-details-section-heading">
@@ -479,6 +516,17 @@ export default function JobDetails() {
             <p className="job-description job-details-description">{description}</p>
           ) : (
             <p className="job-details-empty-copy">No separate job description has been provided.</p>
+          )}
+          {job.sourceFileName && (
+            <div className="muted-note" role="status">
+              Original file: {job.sourceFileName} · text extraction {job.sourceFileStatus || "pending"}
+              {job.sourceFileError ? ` · ${job.sourceFileError}` : ""}
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => downloadJobSourceFile(job.id, job.sourceFileName)}
+              >Download original file</button>
+            </div>
           )}
         </div>
 
@@ -586,36 +634,192 @@ export default function JobDetails() {
             </div>
           </div>
         ) : (
-          <>
-            {profiles.filter((profile) => profile.is_current).map((profile) => (
-              <JobProfileCard
-                key={profile.id}
-                profile={profile}
-                profileBusy={profileBusy}
-                onApprove={onApprove}
-              />
-            ))}
-            {profiles.some((profile) => !profile.is_current) && (
-              <details className="previous-profile-versions">
-                <summary>Previous versions ({profiles.filter((profile) => !profile.is_current).length})</summary>
-                <div className="previous-profile-list">
-                  {profiles
-                    .filter((profile) => !profile.is_current)
-                    .slice()
-                    .reverse()
-                    .map((profile) => (
-                      <JobProfileCard
-                        key={profile.id}
-                        profile={profile}
-                        profileBusy={profileBusy}
-                        onApprove={onApprove}
-                      />
-                    ))}
+
+          profiles
+            .slice()
+            .reverse()
+            .map((profile) => {
+              const data = profile.profile_data || {};
+              const requirements = Array.isArray(data.requirements) ? data.requirements : [];
+              return (
+                <div className="profile-card" key={profile.id}>
+                  <div className="profile-card-head">
+                    <div>
+                      <strong>{data.title || "Extracted Job Profile"}</strong>
+                      <span className="muted-note">
+                        v{profile.version_number} · {sourceLabel(profile.source)}
+                        {profile.is_current ? " · current" : ""}
+                      </span>
+                    </div>
+                    <div className="profile-card-actions">
+                      <Badge status={profile.status} />
+                      {profile.status === "draft" && (
+                        <>
+                          {editingProfileId !== profile.id && (
+                            <button type="button" className="btn btn-secondary" onClick={() => beginProfileEdit(profile)}>Review / edit</button>
+                          )}
+                          <button
+                            className="primary"
+                            disabled={profileBusy || editingProfileId === profile.id}
+                            onClick={() => onApprove(profile.id)}
+                          >
+                            <FileCheck2 size={16} /> Approve
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {data.summary && <p className="muted-note">{data.summary}</p>}
+
+                  {data.coverage && (
+                    <section aria-label="Requirement category coverage">
+                      <h4>Coverage</h4>
+                      <ul>
+                        {Object.entries(data.coverage).map(([dimension, coverage]) => (
+                          <li key={dimension}>{dimension.replaceAll("_", " ")}: {coverage}</li>
+                        ))}
+                      </ul>
+                    </section>
+                  )}
+
+                  {data.conflicts?.length > 0 && (
+                    <section className="job-quality-review" aria-label="Conflicting source details">
+                      <h4>Conflicting source details · review required</h4>
+                      <ul>
+                        {data.conflicts.map((conflict, index) => (
+                          <li key={`${conflict.field}-${index}`}>
+                            <strong>{conflict.field.replaceAll("_", " ")}</strong>
+                            <ul>{conflict.values.map((value, valueIndex) => (
+                              <li key={`${value.source}-${valueIndex}`}>{value.value} · {value.source}</li>
+                            ))}</ul>
+                          </li>
+                        ))}
+                      </ul>
+                    </section>
+                  )}
+
+                  {profile.status === "draft" && editingProfileId === profile.id && (
+                    <section className="profile-requirement-editor" aria-label="Edit proposed requirements">
+                      <h4>Review proposed requirements</h4>
+                      {editedRequirements.map((requirement, index) => (
+                        <div className="profile-requirement-row" key={`${requirement.key || "new"}-${index}`}>
+                          <input
+                            aria-label={`Requirement ${index + 1}`}
+                            value={requirement.text || ""}
+                            onChange={(event) => setEditedRequirements((current) => current.map((item, row) => row === index ? { ...item, text: event.target.value } : item))}
+                          />
+                          <select
+                            aria-label={`Requirement ${index + 1} category`}
+                            value={requirement.category || "must_have"}
+                            onChange={(event) => setEditedRequirements((current) => current.map((item, row) => row === index ? { ...item, category: event.target.value } : item))}
+                          >
+                            <option value="must_have">Required</option>
+                            <option value="important">Important</option>
+                            <option value="nice_to_have">Preferred</option>
+                          </select>
+                          <select
+                            aria-label={`Requirement ${index + 1} type`}
+                            value={requirement.dimension || "skill"}
+                            onChange={(event) => setEditedRequirements((current) => current.map((item, row) => row === index ? { ...item, dimension: event.target.value } : item))}
+                          >
+                            {["skill", "experience", "education", "certification", "responsibility"].map((dimension) => (
+                              <option key={dimension} value={dimension}>{dimension}</option>
+                            ))}
+                          </select>
+                          <button type="button" className="btn btn-secondary" onClick={() => setEditedRequirements((current) => current.filter((_, row) => row !== index))}>Remove</button>
+                        </div>
+                      ))}
+                      <div className="profile-card-actions">
+                        <button type="button" className="btn btn-secondary" onClick={() => setEditedRequirements((current) => [...current, { text: "", category: "must_have", dimension: "skill" }])}>Add requirement</button>
+                        <button type="button" className="primary" disabled={profileBusy} onClick={() => saveProfileEdits(profile)}>Save review</button>
+                        <button type="button" className="btn btn-secondary" onClick={() => setEditingProfileId(null)}>Cancel</button>
+                      </div>
+                    </section>
+                  )}
+
+                  {requirements.length > 0 && (
+                    <>
+                      <h4>Requirements</h4>
+                      <div className="chips">
+                        {requirements.map((req) => (
+                          <span className={REQUIREMENT_TONE[req.category] || "chip"} key={req.key || req.text} title={req.source_quote ? `Source: ${req.source} — ${req.source_quote}` : "Source not verified; recruiter review required"}>
+                            {req.text}
+                            {req.category ? ` · ${req.category.replaceAll("_", " ")}` : ""}
+                            {req.evidence_status === "uncertain" ? " · source uncertain" : ""}
+                          </span>
+                        ))}
+                      </div>
+                    </>
+                  )}
+
+                  <section
+                    className="job-quality-review"
+                    aria-label="Job description quality review"
+                  >
+                    <h4>Job description quality check</h4>
+                    {!data.quality_review || data.quality_review.status === "unavailable" ? (
+                      <p>
+                        A quality review was not returned. Review the original description before
+                        approving this profile.
+                      </p>
+                    ) : (
+                      <>
+                        {data.quality_review.status === "partially_verified" && (
+                          <p role="status">
+                            Some findings were omitted because their quotes could not be verified
+                            against the source description.
+                          </p>
+                        )}
+                        {data.quality_review.findings?.length ? (
+                          <ul>
+                            {data.quality_review.findings.map((finding, index) => (
+                              <li key={`${finding.finding_type}-${index}`}>
+                                <strong>
+                                  {QUALITY_FINDING_LABEL[finding.finding_type] || "Review"}
+                                </strong>
+                                <blockquote dir="auto">{finding.source_quote}</blockquote>
+                                <p>{finding.concern}</p>
+                                <p className="job-quality-question">
+                                  <span>Question for HR: </span>{finding.question_for_hr}
+                                </p>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : data.quality_review.status === "partially_verified" ? (
+                          <p>
+                            No verified findings remain. Review the source description before
+                            approving this profile.
+                          </p>
+                        ) : (
+                          <p>
+                            HERA did not flag an obvious issue. Please review the source description
+                            yourself; this check does not guarantee completeness.
+                          </p>
+                        )}
+                      </>
+                    )}
+                  </section>
+
                 </div>
               </details>
             )}
           </>
         )}
+
+
+        <div className="profile-card-actions footer-actions job-profile-footer">
+          <button
+            type="button"
+            className="btn-secondary"
+            disabled={profileBusy || (!job.description && !job.sourceFileName && !job.experience && !job.requiredSkills?.length && !job.requirements?.length)}
+            onClick={onExtract}
+            title={job.description || job.sourceFileName ? "" : "Add description text or supported job specifications first."}
+          >
+            <Sparkles size={16} aria-hidden="true" /> {currentProfile ? "Re-run AI extraction" : "Run AI extraction"}
+          </button>
+        </div>
+
       </div>
 
       <Modal

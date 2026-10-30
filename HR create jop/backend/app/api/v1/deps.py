@@ -9,13 +9,14 @@ Provides:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import uuid
+from dataclasses import dataclass
 
-from fastapi import Depends, Header, HTTPException, status
 import jwt
+from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import decode_access_token
 from app.models.user import User
@@ -28,6 +29,7 @@ class RequestContext:
     user_id: uuid.UUID
     organization_id: uuid.UUID
     role: str
+    roles: frozenset[str]
     user: User
     auth_scheme: str = "bearer"
 
@@ -65,7 +67,11 @@ async def get_request_context(
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Token has expired.",
-                headers={"WWW-Authenticate": 'Bearer error="invalid_token", error_description="The token has expired"'},
+                headers={
+                    "WWW-Authenticate": (
+                        'Bearer error="invalid_token", error_description="The token has expired"'
+                    )
+                },
             ) from None
         except (jwt.InvalidTokenError, ValueError, KeyError):
             raise HTTPException(
@@ -103,18 +109,30 @@ async def get_request_context(
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Token has been revoked.",
-                headers={"WWW-Authenticate": 'Bearer error="invalid_token", error_description="Token has been revoked"'},
+                headers={
+                    "WWW-Authenticate": (
+                        'Bearer error="invalid_token", error_description="Token has been revoked"'
+                    )
+                },
             )
 
         return RequestContext(
             user_id=user.id,
             organization_id=user.organization_id,
             role=user.role,
+            roles=frozenset(user.effective_roles),
             user=user,
             auth_scheme="bearer",
         )
 
     # Local development / test mode with X-User-Id and X-Organization-Id headers
+    if settings.app_env not in {"development", "test"}:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing authentication credentials.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     if x_user_id is None and x_organization_id is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -167,6 +185,7 @@ async def get_request_context(
         user_id=user.id,
         organization_id=user.organization_id,
         role=user.role or "recruiter",
+        roles=frozenset(user.effective_roles or [user.role or "recruiter"]),
         user=user,
         auth_scheme="header",
     )
@@ -181,7 +200,7 @@ def require_roles(*allowed_roles: str):
     async def role_checker(
         ctx: RequestContext = Depends(get_request_context),
     ) -> RequestContext:
-        if ctx.role not in allowed_roles:
+        if not ctx.roles.intersection(allowed_roles):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Operation not permitted. Required role: {', '.join(allowed_roles)}.",

@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     CheckConstraint,
     DateTime,
@@ -47,6 +48,9 @@ class User(Base):
     role: Mapped[str] = mapped_column(
         String(50), nullable=False, default="recruiter", server_default=text("'recruiter'")
     )
+    roles: Mapped[list[str]] = mapped_column(
+        JSON, nullable=False, default=list, server_default=text("'[]'")
+    )
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default=text("true")
     )
@@ -61,8 +65,14 @@ class User(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
 
-
     organization: Mapped[Organization] = relationship(back_populates="users")
     created_jobs: Mapped[list[Job]] = relationship(back_populates="created_by")
     approved_job_profiles: Mapped[list[JobProfile]] = relationship(back_populates="approved_by")
     hr_decisions: Mapped[list[HRDecision]] = relationship(back_populates="user")
+
+    @property
+    def effective_roles(self) -> list[str]:
+        """Return explicit grants, falling back to the legacy primary role."""
+        if self.roles:
+            return list(dict.fromkeys(self.roles))
+        return [self.role] if self.role else []

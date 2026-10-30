@@ -5,6 +5,11 @@ import { setUnauthorizedHandler } from "../services/apiClient";
 
 export const AuthContext = createContext(null);
 
+function rolesForUser(user) {
+  if (Array.isArray(user?.roles) && user.roles.length > 0) return user.roles;
+  return user?.role ? [user.role] : [];
+}
+
 export function AuthProvider({ children }) {
   const [status, setStatus] = useState("initializing"); // "initializing" | "authenticated" | "unauthenticated" | "unavailable"
   const [user, setUser] = useState(null);
@@ -66,6 +71,9 @@ export function AuthProvider({ children }) {
   );
 
   const loginWithHRAssertion = useCallback(async (assertion) => {
+    clearToken();
+    setUser(null);
+    setStatus("unauthenticated");
     setError(null);
     const data = await authService.exchangeHRSsoAssertion(assertion);
     const profile = data?.user || (await authService.getCurrentUser());
@@ -93,8 +101,11 @@ export function AuthProvider({ children }) {
     error,
     token: getToken(),
     isAuthenticated: status === "authenticated",
-    isAdmin: user?.role === "admin" || user?.role === "administrator",
-    isRecruiter: user?.role === "recruiter",
+    roles: rolesForUser(user),
+    isAdmin: rolesForUser(user).some((role) => role === "admin" || role === "administrator"),
+    isRecruiter: rolesForUser(user).includes("recruiter"),
+    isHROperations: rolesForUser(user).includes("hr_operations"),
+    hasAnyRole: (...requiredRoles) => requiredRoles.some((role) => rolesForUser(user).includes(role)),
     role: user?.role || null,
     login,
     loginWithHRAssertion,

@@ -12,7 +12,7 @@ from typing import Annotated
 from pydantic import BeforeValidator, ValidationInfo
 
 AI_CONTRACT_SCHEMA_VERSION = "1.1"
-JOB_PROFILE_EXTRACTION_SCHEMA_VERSION = "1.2"
+JOB_PROFILE_EXTRACTION_SCHEMA_VERSION = "1.3"
 INTERVIEW_QUESTION_SCHEMA_VERSION = "1.2"
 
 # Phase 4.2 introduced ``1.2`` for the structured per-requirement match evidence
@@ -23,6 +23,7 @@ EVIDENCE_CONTRACT_SCHEMA_VERSION = "1.2"
 SUPPORTED_SCHEMA_VERSIONS = frozenset(
     {
         "1.0",
+        "1.3",
         AI_CONTRACT_SCHEMA_VERSION,
         JOB_PROFILE_EXTRACTION_SCHEMA_VERSION,
         INTERVIEW_QUESTION_SCHEMA_VERSION,

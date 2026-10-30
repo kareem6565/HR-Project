@@ -14,4 +14,4 @@ def test_single_alembic_head() -> None:
     cfg.set_main_option("script_location", str(backend_root / "alembic"))
     script = ScriptDirectory.from_config(cfg)
     heads = script.get_heads()
-    assert heads == ["019_interview_portal"], f"Expected single head, got {heads}"
+    assert heads == ["019_job_vacancy_files"], f"Expected single head, got {heads}"

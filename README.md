@@ -11,6 +11,19 @@ creates an organization-scoped recruiter identity in PostgreSQL the first time
 an HR manager account enters recruitment. The MySQL HR account remains the
 source of truth for password verification and the HR role.
 
+An authenticated HR user receives both `recruiter` and `hr_operations`
+workspace roles on the same HERA identity. Recruitment API routes require the
+`recruiter` or `admin` role; HR Operations continues to use the PHP/MySQL HR
+session and its existing page-level role checks. If SSO setup or organization
+association fails, Recruitment displays an actionable message and denies entry.
+
+Recruitment provides an organization-scoped dashboard and vacancy workflow.
+Vacancies begin as drafts; activation requires a complete vacancy and an
+HR-approved job profile. Job descriptions can combine manual text, structured
+specifications, and retained PDF/DOCX sources. AI profile proposals include
+source evidence and uncertainty markers, can be edited by HR, and are never
+used for evaluation until approved.
+
 ## Local prerequisites
 
 - Python 3.11 or newer

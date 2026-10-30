@@ -49,16 +49,13 @@ export default function ProtectedRoute({ children, allowedRoles }) {
   }
 
   if (allowedRoles && allowedRoles.length > 0) {
-    const userRole = user.role;
-    const isAllowed = allowedRoles.some((r) => {
-      if (r === userRole) return true;
-      if (
-        (r === "admin" || r === "administrator") &&
-        (userRole === "admin" || userRole === "administrator")
-      ) {
-        return true;
-      }
-      return false;
+    const userRoles = Array.isArray(user.roles) && user.roles.length > 0
+      ? user.roles
+      : [user.role].filter(Boolean);
+    const isAllowed = allowedRoles.some((role) => {
+      if (userRoles.includes(role)) return true;
+      return (role === "admin" || role === "administrator") &&
+        userRoles.some((userRole) => userRole === "admin" || userRole === "administrator");
     });
 
     if (!isAllowed) {
@@ -70,7 +67,7 @@ export default function ProtectedRoute({ children, allowedRoles }) {
             </div>
             <h2>Access Restricted</h2>
             <p className="auth-subtitle" style={{ margin: "12px 0 24px" }}>
-              This section is restricted to <strong>{allowedRoles.join(", ")}</strong> accounts. Your account has the <strong>{userRole || "unknown"}</strong> role.
+              This section is restricted to <strong>{allowedRoles.join(", ")}</strong> accounts. Your account has <strong>{userRoles.join(", ") || "unknown"}</strong> access.
             </p>
             <Link to="/dashboard" className="btn btn-primary">
               Return to Dashboard

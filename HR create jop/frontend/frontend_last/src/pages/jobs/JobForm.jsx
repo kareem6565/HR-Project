@@ -4,6 +4,7 @@ import {
   createJob,
   getJobById,
   suggestJobDraft,
+  uploadJobSourceFile,
   updateJob,
 } from "../../services/jobService";
 import { createJobProfile, extractJobProfile, listJobProfiles } from "../../services/jobProfileService";
@@ -46,6 +47,12 @@ export default function JobForm() {
   const sourceImportId = useRef(globalThis.crypto?.randomUUID?.() || `source-${Date.now()}`);
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
+  const [jobFile, setJobFile] = useState(null);
+  const [saveError, setSaveError] = useState("");
+  const idempotencyKey = useRef(
+    globalThis.crypto?.randomUUID?.() || `vacancy-${Date.now()}-${Math.random()}`
+  );
+  const extractionKey = useRef(null);
 
   // Advisory HERA auto-fill ("Fill with HERA") doesn't persist anything; it
   // only pre-fills empty fields, all of which stay fully editable.
@@ -78,6 +85,9 @@ export default function JobForm() {
         description: data.description || "",
         requirementsText: (data.requirements || []).join("\n"),
         requiredSkillsText: (data.requiredSkills || []).join(", "),
+        sourceFileName: data.sourceFileName || "",
+        sourceFileStatus: data.sourceFileStatus || "",
+        sourceFileError: data.sourceFileError || "",
       };
       jobRef.current = loadedJob;
       setJob(loadedJob);
@@ -204,9 +214,11 @@ export default function JobForm() {
 
   const onSubmit = async (e) => {
     e.preventDefault();
-    const hasSource = Boolean(job.sourceName.trim() || job.sourceUrl.trim() || job.applicationUrl.trim() || job.publishedAt);
-    if (hasSource && !job.sourceReviewConfirmed) {
-      setSavedMessage("Review the source details and confirm before saving them. HERA does not verify links or listing availability.");
+
+    setSaveError("");
+    if (!job.description.trim() && !jobFile && !job.sourceFileName) {
+      setSaveError("Add a job description or upload a PDF/DOCX description file before saving.");
+
       return;
     }
     setSaving(true);
@@ -217,7 +229,7 @@ export default function JobForm() {
       location: job.location,
       type: job.type,
       experience: job.experience,
-      status: job.status,
+      status: "draft",
       description: job.description,
       requirements: job.requirementsText
         .split("\n")
@@ -231,61 +243,52 @@ export default function JobForm() {
 
     let jobSaved = false;
     try {
-      let targetId = isEdit ? id : savedId;
-      if (isEdit || savedId) {
-        targetId = id || savedId;
-        await updateJob(targetId, payload);
-        jobSaved = true;
-        setSavedId(targetId);
-        setSavedMessage("Job saved. Source details and your edits remain available for review.");
-      } else {
-        const created = await createJob(payload);
-        targetId = created?.id;
-        jobSaved = Boolean(targetId);
-        setSavedId(targetId);
-      }
-      if (!targetId) throw new Error("The job could not be saved.");
 
-      if (hasSource && !sourceProfileSaved.current) {
-        const existing = await listJobProfiles(targetId);
-        const saved = existing.find(
-          (profile) => profile.provenance?.source?.source_import_id === sourceImportId.current
-        );
-        if (!saved) {
-          const fieldNames = ["title", "department", "location", "type", "experience", "description", "requirementsText", "requiredSkillsText"];
-          const fieldOrigins = Object.fromEntries(fieldNames.map((field) => [
-            field,
-            heraSuggestedFields.current.has(field)
-              ? (userEditedFields.current.has(field) ? "hr_edited_after_hera_suggestion" : "hera_suggested")
-              : (userEditedFields.current.has(field) ? "hr_entered_or_edited" : "not_provided"),
-          ]));
-          const requirements = [
-            ...payload.requirements.map((text) => ({ text, category: "important", dimension: "responsibility" })),
-            ...payload.requiredSkills.map((text) => ({ text, category: "must_have", dimension: "skill" })),
-          ];
-          await createJobProfile(targetId, {
-            status: "draft",
-            source: "hr_edited",
-            profile_data: { title: payload.title, summary: payload.description, requirements },
-            source_original_listing_text: job.description,
-            source_metadata: {
-              source_name: job.sourceName.trim(),
-              source_url: job.sourceUrl.trim() || null,
-              published_at: job.publishedAt || null,
-              application_url: job.applicationUrl.trim() || null,
-              source_import_id: sourceImportId.current,
-              review_confirmed: job.sourceReviewConfirmed,
-            },
-            field_origins: fieldOrigins,
-          });
+      if (isEdit || savedId) {
+        const targetId = savedId || id;
+        await updateJob(targetId, payload);
+        if (jobFile) {
+          const uploaded = await uploadJobSourceFile(targetId, jobFile);
+          setJob((current) => ({
+            ...current,
+            sourceFileName: uploaded.sourceFileName,
+            sourceFileStatus: uploaded.sourceFileStatus,
+            sourceFileError: uploaded.sourceFileError,
+          }));
+          if (uploaded.sourceFileStatus === "failed") {
+            setSaveError(`File saved, but text extraction failed: ${uploaded.sourceFileError || "Try another PDF/DOCX or correct the source."}`);
+            setSaving(false);
+            return;
+          }
         }
-        sourceProfileSaved.current = true;
+        setSavedId(targetId);
+        setSavedMessage("Job updated. Analyze it with HERA to build or refresh its profile.");
+      } else {
+        const created = await createJob(payload, idempotencyKey.current);
+        setSavedId(created?.id);
+        if (jobFile && created?.id) {
+          const uploaded = await uploadJobSourceFile(created.id, jobFile);
+          setJob((current) => ({
+            ...current,
+            sourceFileName: uploaded.sourceFileName,
+            sourceFileStatus: uploaded.sourceFileStatus,
+            sourceFileError: uploaded.sourceFileError,
+          }));
+          if (uploaded.sourceFileStatus === "failed") {
+            setSaveError(`Vacancy and file were saved, but text extraction failed: ${uploaded.sourceFileError || "Try another PDF/DOCX or correct the source."}`);
+            setSaving(false);
+            return;
+          }
+        }
+        setSavedMessage("Job saved as a draft. Analyze it with HERA to build its profile.");
       }
-      setSavedMessage("Job saved as a draft. Source details and HR edits are saved separately from HERA's profile suggestions.");
-    } catch {
-      setSavedMessage(jobSaved
-        ? "The job draft is saved, but source details could not be confirmed as saved. Your entries remain on this form; retry Save Draft before leaving."
-        : "The job could not be saved. Your entries are still on this form; try again when the connection is available.");
+    } catch (error) {
+      setSaveError(
+        error?.response?.data?.detail ||
+          error?.message ||
+          "The vacancy could not be saved. Your form entries and selected file are still here; retry when ready."
+      );
+
     } finally {
       setSaving(false);
     }
@@ -296,8 +299,10 @@ export default function JobForm() {
     if (!targetId) return;
     setAnalyzStatus("running");
     setAnalyzError("");
+    extractionKey.current ||= globalThis.crypto?.randomUUID?.() || `extract-${Date.now()}-${Math.random()}`;
     try {
-      await extractJobProfile(targetId);
+      await extractJobProfile(targetId, extractionKey.current);
+      extractionKey.current = null;
       navigate(`/jobs/${targetId}`);
     } catch (error) {
       setAnalyzStatus("error");
@@ -398,6 +403,7 @@ export default function JobForm() {
             {analyzError}
           </p>
         )}
+        {saveError && <p className="hera-note hera-error" role="alert">{saveError}</p>}
 
         <form onSubmit={onSubmit}>
           <label>
@@ -451,17 +457,7 @@ export default function JobForm() {
               <option>Internship</option>
             </select>
           </label>
-          <label>
-            Job Status
-            <select name="status" value={job.status} onChange={onChange}>
-              <option value="draft">Draft</option>
-              <option value="active">Posted (active)</option>
-            </select>
-            <small className="muted-note">
-              Save as a draft, run Analyze with HERA, then approve the profile
-              on the job page to publish it.
-            </small>
-          </label>
+          <p className="muted-note">New vacancies are saved as drafts. Activation is available after required details are complete and the job profile is approved.</p>
           <label>
             Experience
             {aiFields.has("experience") && (
@@ -486,6 +482,21 @@ export default function JobForm() {
               placeholder="Paste the job listing text you are authorized to use. HERA will analyze this text only; it will not open or verify links."
             />
             <small className="muted-note">This is the original text provided by HR. HERA does not fetch links or check whether the listing is still available.</small>
+          </label>
+          <label>
+            Job description file (PDF or DOCX)
+            <input
+              type="file"
+              accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              onChange={(event) => setJobFile(event.target.files?.[0] || null)}
+            />
+            {jobFile && <small className="muted-note">Selected: {jobFile.name}</small>}
+            {!jobFile && job.sourceFileName && (
+              <small className="muted-note">
+                Saved file: {job.sourceFileName} · text extraction {job.sourceFileStatus || "pending"}
+                {job.sourceFileError ? ` · ${job.sourceFileError}` : ""}
+              </small>
+            )}
           </label>
           <label>
             Requirements (one per line)

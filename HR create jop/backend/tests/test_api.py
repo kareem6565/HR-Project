@@ -210,6 +210,68 @@ class TestJobs:
         assert resp.status_code == 200
         assert resp.json()["title"] == "Engineer"
 
+    def test_repeated_create_with_idempotency_key_returns_same_vacancy(
+        self, client: httpx.Client
+    ) -> None:
+        org, user = bootstrap(client)
+        headers = {**auth_headers(org["id"], user["id"]), "Idempotency-Key": "vacancy-123"}
+
+        first = client.post("/api/v1/jobs", json={"title": "Engineer"}, headers=headers)
+        retry = client.post("/api/v1/jobs", json={"title": "Engineer"}, headers=headers)
+
+        assert first.status_code == retry.status_code == 201
+        assert first.json()["id"] == retry.json()["id"]
+        assert (
+            len(
+                [
+                    job
+                    for job in client.get("/api/v1/jobs", headers=headers).json()
+                    if job["title"] == "Engineer"
+                ]
+            )
+            == 1
+        )
+
+    def test_activation_rejects_incomplete_vacancy(self, client: httpx.Client) -> None:
+        org, user = bootstrap(client)
+        headers = auth_headers(org["id"], user["id"])
+        job = client.post("/api/v1/jobs", json={"title": "Engineer"}, headers=headers).json()
+
+        response = client.patch(
+            f"/api/v1/jobs/{job['id']}", json={"status": "active"}, headers=headers
+        )
+
+        assert response.status_code == 422
+        assert "job description" in response.json()["detail"]
+
+    def test_source_file_is_retained_on_extraction_failure_and_tenant_scoped(
+        self, client: httpx.Client, monkeypatch, tmp_path
+    ) -> None:
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, "storage_root_dir", str(tmp_path))
+        org, user = bootstrap(client)
+        other_org, other_user = bootstrap(client)
+        own_headers = auth_headers(org["id"], user["id"])
+        other_headers = auth_headers(other_org["id"], other_user["id"])
+        job = client.post("/api/v1/jobs", json={"title": "Engineer"}, headers=own_headers).json()
+
+        upload = client.put(
+            f"/api/v1/jobs/{job['id']}/source-file",
+            files={"file": ("requirements.txt", b"raw source retained", "text/plain")},
+            headers=own_headers,
+        )
+
+        assert upload.status_code == 200
+        assert upload.json()["source_file_name"] == "requirements.txt"
+        assert upload.json()["source_file_status"] == "failed"
+        assert "Only .pdf and .docx" in upload.json()["source_file_error"]
+        downloaded = client.get(f"/api/v1/jobs/{job['id']}/source-file", headers=own_headers)
+        assert downloaded.status_code == 200
+        assert downloaded.content == b"raw source retained"
+        denied = client.get(f"/api/v1/jobs/{job['id']}/source-file", headers=other_headers)
+        assert denied.status_code == 404
+
     def test_list_jobs(self, client: httpx.Client) -> None:
         org, user = bootstrap(client)
         h = auth_headers(org["id"], user["id"])
@@ -1477,7 +1539,7 @@ class TestJobScreening:
             "/api/v1/jobs",
             json={
                 "title": "Screening Test Job",
-                "status": "active",
+                "status": "draft",
                 "raw_description": "Build and maintain backend services.",
             },
             headers=h,
@@ -1560,7 +1622,7 @@ class TestJobScreening:
             "/api/v1/jobs",
             json={
                 "title": "Screening Details Job",
-                "status": "active",
+                "status": "draft",
                 "raw_description": "Hiring an engineer with backend experience.",
                 "required_skills": ["Python", "Data Engineering", "Postgres"],
                 "requirements": ["Machine Learning"],
@@ -1628,7 +1690,7 @@ class TestJobScreening:
             "/api/v1/jobs",
             json={
                 "title": "Screening Empty Job",
-                "status": "active",
+                "status": "draft",
                 "raw_description": "A job description.",
             },
             headers=h,
@@ -1754,6 +1816,16 @@ def _seed_evaluation(
 
 def _approve_job_profile(client: httpx.Client, headers: dict, job_id: str) -> str:
     """Extract a JobProfile draft for a job and approve it via the HR endpoint."""
+    completed = client.patch(
+        f"/api/v1/jobs/{job_id}",
+        json={
+            "job_type": "Full-time",
+            "experience": "2 years",
+            "requirements": ["Role-specific experience"],
+        },
+        headers=headers,
+    )
+    assert completed.status_code == 200, completed.text
     extract = client.post(f"/api/v1/jobs/{job_id}/extract-profile", headers=headers)
     assert extract.status_code == 201, extract.text
     profile_id = extract.json()["profile_id"]
@@ -2363,9 +2435,7 @@ class TestTriggerEvaluation:
         )
         profile.profile_data = {
             "title": "Read Model Job",
-            "requirements": [
-                {"text": "Python", "category": "must_have", "dimension": "skill"}
-            ],
+            "requirements": [{"text": "Python", "category": "must_have", "dimension": "skill"}],
             "skills": ["Python"],
         }
         db_session.flush()
@@ -2595,7 +2665,7 @@ class TestScreeningApprovalGate:
             "/api/v1/jobs",
             json={
                 "title": "Gate Test Job",
-                "status": "active",
+                "status": "draft",
                 "raw_description": "Build and maintain backend services.",
             },
             headers=headers,
@@ -2710,7 +2780,7 @@ class TestScreeningApprovalGate:
 
         job_resp = client.get(f"/api/v1/jobs/{job['id']}", headers=h)
         assert job_resp.status_code == 200
-        assert job_resp.json()["status"] == "active"  # untouched by the failed screen
+        assert job_resp.json()["status"] == "draft"  # failed screening leaves the vacancy a draft
 
 
 class _RecordingQuestionProvider:

@@ -5,7 +5,7 @@ import uuid
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.api.v1.deps import RequestContext, get_request_context
+from app.api.v1.deps import RequestContext, require_roles
 from app.api.v1.schemas.candidate_portal import (
     AvailableSlotResponse,
     CandidateBookingResponse,
@@ -31,7 +31,7 @@ router = APIRouter()
 def create_candidate_invitation(
     application_id: str,
     body: InvitationCreateRequest,
-    ctx: RequestContext = Depends(get_request_context),
+    ctx: RequestContext = Depends(require_roles("admin", "recruiter")),
     db: Session = Depends(get_db),
 ):
     """Generate a candidate self-scheduling invitation (HR-authenticated).

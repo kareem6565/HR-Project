@@ -63,6 +63,10 @@ class JobProfileCreate(BaseModel):
         return value
 
 
+class JobProfileUpdate(BaseModel):
+    profile_data: dict[str, Any]
+
+
 class JobProfileResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

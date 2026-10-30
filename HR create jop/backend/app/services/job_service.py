@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import Job, JobApplication, JobProfile
@@ -33,6 +34,7 @@ class JobService:
         organization_id: uuid.UUID,
         title: str,
         raw_description: str | None = None,
+        description_text: str | None = None,
         status: str = "draft",
         department: str | None = None,
         location: str | None = None,
@@ -41,13 +43,26 @@ class JobService:
         requirements: list[str] | None = None,
         required_skills: list[str] | None = None,
         created_by_user_id: uuid.UUID | None = None,
+        idempotency_key: str | None = None,
     ) -> Job:
-        """Create a new job."""
+        """Create a draft vacancy, replaying requests with the same scoped key."""
+        if idempotency_key:
+            existing = db.scalar(
+                select(Job).where(
+                    Job.organization_id == organization_id,
+                    Job.idempotency_key == idempotency_key,
+                )
+            )
+            if existing is not None:
+                return existing
+        if status != "draft":
+            raise ValidationError("New vacancies must be saved as drafts before activation.")
         job = Job(
             organization_id=organization_id,
             created_by_user_id=created_by_user_id,
             title=title,
             raw_description=raw_description,
+            description_text=description_text,
             status=status,
             department=department,
             location=location,
@@ -55,9 +70,23 @@ class JobService:
             experience=experience,
             requirements=requirements or [],
             required_skills=required_skills or [],
+            idempotency_key=idempotency_key,
         )
         db.add(job)
-        db.flush()
+        try:
+            db.flush()
+        except IntegrityError:
+            db.rollback()
+            if idempotency_key:
+                replay = db.scalar(
+                    select(Job).where(
+                        Job.organization_id == organization_id,
+                        Job.idempotency_key == idempotency_key,
+                    )
+                )
+                if replay is not None:
+                    return replay
+            raise
         return job
 
     def get(
@@ -108,6 +137,7 @@ class JobService:
         organization_id: uuid.UUID,
         title: str | None = None,
         raw_description: str | None = None,
+        description_text: str | None = None,
         status: str | None = None,
         department: str | None = None,
         location: str | None = None,
@@ -122,8 +152,8 @@ class JobService:
             job.title = title
         if raw_description is not None:
             job.raw_description = raw_description
-        if status is not None:
-            job.status = status
+        if description_text is not None:
+            job.description_text = description_text
         if department is not None:
             job.department = department
         if location is not None:
@@ -136,5 +166,44 @@ class JobService:
             job.requirements = requirements
         if required_skills is not None:
             job.required_skills = required_skills
+        if status is not None:
+            if status == "active":
+                self.validate_for_activation(db, job)
+            job.status = status
         db.flush()
         return job
+
+    def validate_for_activation(self, db: Session, job: Job) -> None:
+        """Ensure a vacancy is complete and has an approved evaluation profile."""
+        self.validate_required_vacancy_fields(job)
+        has_approved_profile = db.scalar(
+            select(func.count())
+            .select_from(JobProfile)
+            .where(JobProfile.job_id == job.id, JobProfile.status == "approved")
+        )
+        if not has_approved_profile:
+            raise InvalidStateError(
+                "Approve a reviewed job requirements profile before activating this vacancy."
+            )
+
+    @staticmethod
+    def validate_required_vacancy_fields(job: Job) -> None:
+        """Validate title, source description, and required specifications."""
+        missing = []
+        if not job.title.strip():
+            missing.append("job title")
+        description = (
+            job.description_text if job.description_text is not None else job.raw_description
+        )
+        if not (description or job.source_file_text or "").strip():
+            missing.append("job description")
+        if not (job.job_type or "").strip():
+            missing.append("employment type")
+        if not (job.experience or "").strip():
+            missing.append("required experience")
+        if not (job.requirements or job.required_skills):
+            missing.append("at least one requirement or required skill")
+        if missing:
+            raise ValidationError(
+                "Complete these required fields before activation: " + ", ".join(missing) + "."
+            )

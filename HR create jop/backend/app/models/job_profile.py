@@ -43,6 +43,7 @@ class JobProfile(Base):
             name="ck_job_profiles_approved_metadata",
         ),
         UniqueConstraint("job_id", "version_number", name="uq_job_profiles_job_id_version"),
+        UniqueConstraint("job_id", "request_key", name="uq_job_profiles_job_request_key"),
         Index("ix_job_profiles_job_id_version_number", "job_id", "version_number"),
         Index("ix_job_profiles_job_id_status", "job_id", "status"),
         Index(
@@ -59,6 +60,7 @@ class JobProfile(Base):
         UUID(as_uuid=True), ForeignKey("jobs.id", ondelete="RESTRICT"), nullable=False
     )
     version_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    request_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
     status: Mapped[str] = mapped_column(String(50), nullable=False)
     source: Mapped[str] = mapped_column(String(50), nullable=False)
     raw_input_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
