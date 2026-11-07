@@ -43,13 +43,14 @@ if ($hrSuitePage === 'reports' && !$isHr) { http_response_code(403); exit('غي�
     body[data-page="notifications"] [data-module]:not([data-module="notifications"]),
     body[data-page="reports"] [data-module]:not([data-module="reports"]) { display:none !important; }
   </style>
-  <link rel="stylesheet" href="/BIC2_Mvp/assets/hera-brand.css" />
+  <link rel="stylesheet" href="/BIC2_Mvp/assets/hera-brand.css?v=hera-unified-20261030-7" />
   <script src="/BIC2_Mvp/assets/hera-language.js" defer></script>
 </head>
 <body class="hera-theme min-h-screen" data-page="<?= htmlspecialchars($hrSuitePage, ENT_QUOTES, 'UTF-8') ?>">
+  <?php require __DIR__ . '/includes/hera-shell.php'; ?>
   <header class="sticky top-0 z-40 border-b border-slate-700/60 bg-slate-950/90 backdrop-blur">
     <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-      <div class="flex items-center gap-3"><img src="/BIC2_Mvp/assets/hera-mark.svg" alt="HERA" class="w-10 h-10 rounded-xl bg-white p-1 object-contain" /><div><p class="font-extrabold text-white">HERA <span class="text-indigo-300">إدارة الموارد البشرية</span></p><p class="text-xs text-slate-400 mt-1">مرحبًا <?= htmlspecialchars($user['name']) ?> — <?= htmlspecialchars($user['role']) ?></p></div></div>
+      <div class="flex items-center gap-3"><img src="/BIC2_Mvp/assets/animated-logo.gif" width="40" height="40" alt="HERA" class="w-10 h-10 rounded-xl bg-white p-1 object-contain" /><div><p class="font-extrabold text-white">HERA <span class="text-indigo-300">إدارة الموارد البشرية</span></p><p class="text-xs text-slate-400 mt-1">مرحبًا <?= htmlspecialchars($user['name']) ?> — <?= htmlspecialchars($user['role']) ?></p></div></div>
       <nav class="flex flex-wrap gap-2 text-xs">
         <a class="btn btn-muted" href="/BIC2_Mvp/leaves.php">الإجازات</a>
         <a class="btn btn-muted" href="/BIC2_Mvp/payroll.php">الرواتب</a>

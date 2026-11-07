@@ -59,13 +59,14 @@ if ($currentUser['role'] === 'employee' && $targetUserId !== (int)$currentUser['
     ::-webkit-scrollbar-track { background: #0f172a; }
     ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
   </style>
-  <link rel="stylesheet" href="/BIC2_Mvp/assets/hera-brand.css" />
+  <link rel="stylesheet" href="/BIC2_Mvp/assets/hera-brand.css?v=hera-unified-20261030-7" />
   <script src="/BIC2_Mvp/assets/hera-language.js" defer></script>
 </head>
 <body class="hera-theme hera-has-extra-sidebar hera-profile-layout min-h-screen p-4 md:p-8">
+  <?php require __DIR__ . '/includes/hera-shell.php'; ?>
 
   <aside class="hera-extra-sidebar" aria-label="HERA navigation">
-    <a class="hera-extra-brand" href="/BIC2_Mvp/employee.php"><img src="/BIC2_Mvp/assets/hera-mark.svg" alt="HERA" /><span><strong>HERA</strong><small>بوابة الموارد البشرية</small></span></a>
+    <a class="hera-extra-brand" href="/BIC2_Mvp/employee.php"><img src="/BIC2_Mvp/assets/animated-logo.gif" width="40" height="40" alt="HERA" /><span><strong>HERA</strong><small>بوابة الموارد البشرية</small></span></a>
     <nav>
       <a href="/BIC2_Mvp/employee.php">الرئيسية</a>
       <a href="/BIC2_Mvp/attendance.php">سجل الحضور</a>

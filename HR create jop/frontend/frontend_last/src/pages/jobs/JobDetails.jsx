@@ -802,12 +802,9 @@ export default function JobDetails() {
                   </section>
 
                 </div>
-              </details>
-            )}
-          </>
+              );
+            })
         )}
-
-
         <div className="profile-card-actions footer-actions job-profile-footer">
           <button
             type="button"

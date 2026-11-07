@@ -1,6 +1,7 @@
 import React from "react";
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import fs from "fs";
 import path from "path";
@@ -116,6 +117,34 @@ describe("HERA UI-10: Responsive, Bidirectional Text (dir='auto'), and Visual QA
     it("renders chatbot on secondary/overview pages like /dashboard", () => {
       renderWithRoute("/dashboard");
       expect(screen.getByRole("button", { name: /open hera assistant/i })).toBeInTheDocument();
+    });
+
+    it("opens the mobile navigation drawer and closes it with Escape", async () => {
+      const user = userEvent.setup();
+      renderWithRoute("/dashboard");
+
+      const menuButton = screen.getByRole("button", { name: /open navigation menu/i });
+      await user.click(menuButton);
+      expect(menuButton).toHaveAttribute("aria-expanded", "true");
+      expect(document.querySelector(".sidebar")).toHaveClass("is-open");
+
+      await user.keyboard("{Escape}");
+      expect(menuButton).toHaveAttribute("aria-expanded", "false");
+      expect(document.querySelector(".sidebar")).not.toHaveClass("is-open");
+    });
+
+    it("closes the mobile navigation drawer after following a route", async () => {
+      const user = userEvent.setup();
+      renderWithRoute("/dashboard");
+
+      await user.click(screen.getByRole("button", { name: /open navigation menu/i }));
+      await user.click(screen.getByRole("link", { name: "Jobs" }));
+
+      expect(screen.getByRole("button", { name: /open navigation menu/i })).toHaveAttribute(
+        "aria-expanded",
+        "false"
+      );
+      expect(document.querySelector(".sidebar")).not.toHaveClass("is-open");
     });
   });
 

@@ -261,16 +261,17 @@ $cntAbsentCalc   = $totalEmp - $cntPresentToday;
     @keyframes spin { to { transform: rotate(360deg); } }
   </style>
   </style>
-  <link rel="stylesheet" href="/BIC2_Mvp/assets/hera-brand.css" />
+  <link rel="stylesheet" href="/BIC2_Mvp/assets/hera-brand.css?v=hera-unified-20261030-7" />
   <script src="/BIC2_Mvp/assets/hera-language.js" defer></script>
 </head>
 <body class="hera-theme min-h-screen flex">
+<?php require __DIR__ . '/includes/hera-shell.php'; ?>
 
 <!-- ══════════════════════════════════ SIDEBAR ══════════════════════════════════ -->
 <aside class="sidebar w-64 flex-shrink-0 flex flex-col min-h-screen sticky top-0 h-screen overflow-y-auto hidden md:flex">
   <div class="p-6 border-b border-white/05">
     <div class="flex items-center gap-3">
-      <img src="/BIC2_Mvp/assets/hera-mark.svg" alt="HERA" class="w-10 h-10 object-contain rounded-xl bg-white p-1" />
+      <img src="/BIC2_Mvp/assets/animated-logo.gif" width="40" height="40" alt="HERA" class="w-10 h-10 object-contain rounded-xl bg-white p-1" />
       <div>
         <p class="font-bold text-white text-sm">HERA</p>
         <p class="text-xs text-slate-400">Recruitment System</p>

@@ -120,7 +120,7 @@ html[dir="rtl"] .hera-extra-sidebar { inset-inline-start: auto; inset-inline-end
 html[dir="rtl"] .hera-extra-sidebar { inset: 0 0 0 auto; left: auto; right: 0; }
 html[dir="ltr"] .hera-extra-sidebar { inset: 0 auto 0 0; left: 0; right: auto; }
 .hera-extra-brand { display: flex; align-items: center; gap: 11px; padding: 5px 10px 35px; color: #fff; text-decoration: none; }
-.hera-extra-brand img { width: 38px; height: 38px; padding: 4px; border: 1px solid rgba(233,217,138,.25); border-radius: 11px; background: #fff; object-fit: contain; }
+.hera-extra-brand img { display: block; flex: 0 0 40px; width: 40px; min-width: 40px; max-width: 40px; height: 40px; max-height: 40px; padding: 0; border: 0; border-radius: 10px; object-fit: cover; }
 .hera-extra-brand strong, .hera-extra-brand small { display: block; }
 .hera-extra-brand strong { font-size: 18px; line-height: 1.3; }
 .hera-extra-brand small { color: #A6B8B2; font-size: 11px; }
@@ -224,6 +224,285 @@ body.hera-auth-page .card-glass [class*="text-white"]:not(button),
 body.hera-auth-page .card-glass [class*="text-slate-"] { color: var(--hera-ink) !important; }
 body.hera-auth-page input { color: var(--hera-ink) !important; background: #F8FAF9 !important; border-color: var(--hera-border) !important; }
 body.hera-auth-page .btn-gradient { background: var(--hera-teal) !important; box-shadow: 0 6px 18px rgba(27,58,58,.2) !important; }
+
+/* Unified Smart HR shell, based on the HERA recruitment workspace. */
+:root {
+  --hera-sidebar-width: 248px;
+  --hera-page-gutter: clamp(16px, 3vw, 42px);
+  --hera-shell-shadow: 0 8px 24px rgba(27, 58, 58, .055);
+  --hera-transition: 180ms ease;
+}
+body.hera-unified-app {
+  display: grid !important;
+  grid-template-columns: var(--hera-sidebar-width) minmax(0, 1fr) !important;
+  min-height: 100vh;
+  min-height: 100dvh;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow-x: clip;
+  color: var(--hera-ink) !important;
+  background: var(--hera-cream-subtle) !important;
+  font-family: Inter, Cairo, system-ui, sans-serif !important;
+}
+html[dir="rtl"] body.hera-unified-app { direction: rtl; }
+html[dir="ltr"] body.hera-unified-app { direction: ltr; }
+body.hera-unified-app *, body.hera-unified-app *::before, body.hera-unified-app *::after { box-sizing: border-box; }
+body.hera-unified-app .hera-shell-sidebar {
+  position: sticky;
+  grid-column: 1;
+  grid-row: 1;
+  inset-block-start: 0;
+  display: flex;
+  flex-direction: column;
+  width: var(--hera-sidebar-width);
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  padding: 22px 14px 18px;
+  overflow-y: auto;
+  color: #fff;
+  background: linear-gradient(180deg, #1B3A3A 0%, #082A24 100%);
+  border: 0;
+  box-shadow: none;
+  z-index: 60;
+}
+body.hera-unified-app .hera-shell-brand { display: flex; align-items: center; gap: 11px; min-height: 48px; padding: 2px 8px 22px; color: #fff; text-decoration: none; }
+body.hera-unified-app .hera-shell-brand img, body.hera-unified-app .hera-shell-mobile-brand img { display: block; flex: 0 0 40px; width: 40px; min-width: 40px; max-width: 40px; height: 40px; max-height: 40px; padding: 0; border: 0; border-radius: 10px; object-fit: cover; }
+body.hera-unified-app .hera-shell-brand strong, body.hera-unified-app .hera-shell-brand small { display: block; }
+body.hera-unified-app .hera-shell-brand strong { font-size: 18px; line-height: 1.3; letter-spacing: .01em; }
+body.hera-unified-app .hera-shell-brand small { margin-top: 2px; color: #C3D0CC; font-size: 11px; }
+body.hera-unified-app .hera-shell-account { display: flex; align-items: center; gap: 10px; margin: 0 2px 13px; padding: 12px 9px; border-block: 1px solid rgba(255,255,255,.1); }
+body.hera-unified-app .hera-shell-avatar { display: grid; place-items: center; flex: 0 0 38px; width: 38px; height: 38px; border: 1px solid rgba(233,217,138,.36); border-radius: 50%; color: #1B3A3A; background: var(--hera-gold); font-weight: 800; }
+body.hera-unified-app .hera-shell-account-copy { min-width: 0; }
+body.hera-unified-app .hera-shell-account-copy strong, body.hera-unified-app .hera-shell-account-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+body.hera-unified-app .hera-shell-account-copy strong { color: #fff; font-size: 13px; }
+body.hera-unified-app .hera-shell-account-copy small { margin-top: 3px; color: #C3D0CC; font-size: 11px; }
+body.hera-unified-app .hera-shell-workspace-link { display: flex; align-items: center; justify-content: space-between; min-height: 42px; margin: 0 2px 8px; padding: 0 11px; border: 1px solid rgba(233,217,138,.28); border-radius: 10px; color: #F2E7AF; background: rgba(233,217,138,.08); font-size: 12px; font-weight: 700; text-decoration: none; }
+body.hera-unified-app .hera-shell-workspace-link:hover { background: rgba(233,217,138,.14); }
+body.hera-unified-app .hera-shell-nav { display: grid; align-content: start; gap: 3px; }
+body.hera-unified-app .hera-shell-nav-label { margin: 10px 11px 6px; color: #AEC0BA; font-size: 10px; font-weight: 800; letter-spacing: .06em; }
+body.hera-unified-app .hera-shell-nav-link { display: flex; align-items: center; gap: 11px; width: 100%; min-height: 44px; padding: 10px 12px; border: 0; border-radius: 10px; color: #D0DBD7; background: transparent; font: inherit; font-size: 13px; font-weight: 550; text-align: start; text-decoration: none; cursor: pointer; transition: color var(--hera-transition), background var(--hera-transition), box-shadow var(--hera-transition); }
+body.hera-unified-app .hera-shell-nav-link:hover { color: #fff; background: rgba(255,255,255,.08); }
+body.hera-unified-app .hera-shell-nav-link.is-active { color: #fff; background: rgba(255,255,255,.12); box-shadow: inset -3px 0 0 var(--hera-gold); font-weight: 700; }
+html[dir="ltr"] body.hera-unified-app .hera-shell-nav-link.is-active { box-shadow: inset 3px 0 0 var(--hera-gold); }
+body.hera-unified-app .hera-shell-nav-icon { display: grid; flex: 0 0 21px; width: 21px; height: 21px; place-items: center; color: currentColor; }
+body.hera-unified-app .hera-shell-nav-icon svg { display: block; width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+body.hera-unified-app .hera-shell-nav-link.is-active .hera-shell-nav-icon { color: var(--hera-gold); }
+body.hera-unified-app .hera-shell-signout { display: flex; align-items: center; min-height: 44px; margin-top: auto; padding: 10px 12px; border-top: 1px solid rgba(255,255,255,.1); color: #F3C2BC; font-size: 13px; text-decoration: none; }
+body.hera-unified-app .hera-shell-signout:hover { color: #fff; }
+body.hera-unified-app .hera-shell-content { grid-column: 2; grid-row: 1; min-width: 0; max-width: 100%; overflow-x: clip; color: var(--hera-ink); background: var(--hera-cream-subtle); }
+body.hera-unified-app .hera-shell-mobilebar { display: none; }
+body.hera-unified-app > aside.sidebar, body.hera-unified-app .hera-shell-content > aside.sidebar,
+body.hera-unified-app .hera-shell-content > aside.hera-extra-sidebar { display: none !important; }
+body.hera-unified-app .hera-shell-content > main { min-width: 0; max-width: 100%; margin: 0; overflow: visible !important; color: var(--hera-ink); }
+body.hera-unified-app .hera-shell-content > header,
+body.hera-unified-app .hera-shell-content main > header,
+body.hera-unified-app .hera-shell-content header.sticky {
+  color: var(--hera-ink) !important;
+  background: rgba(255,255,255,.96) !important;
+  border-color: var(--hera-border) !important;
+  box-shadow: 0 1px 0 rgba(27,58,58,.04);
+  backdrop-filter: blur(12px);
+}
+/* The shared sidebar replaces each legacy page header's logo and horizontal navigation. */
+body.hera-unified-app .hera-shell-content > header > div > div:first-child,
+body.hera-unified-app .hera-shell-content > header > div > a:first-child,
+body.hera-unified-app .hera-shell-content > header > div > nav { display: none !important; }
+body.hera-unified-app .hera-shell-content > header > div { min-height: 0; justify-content: flex-start; }
+body.hera-unified-app .hera-shell-content h1,
+body.hera-unified-app .hera-shell-content h2,
+body.hera-unified-app .hera-shell-content h3,
+body.hera-unified-app .hera-shell-content h4 { color: var(--hera-ink) !important; }
+body.hera-unified-app .hera-shell-content [class*="text-white"]:not(button):not(.btn),
+body.hera-unified-app .hera-shell-content [class*="text-slate-200"],
+body.hera-unified-app .hera-shell-content [class*="text-slate-100"] { color: var(--hera-ink) !important; }
+body.hera-unified-app .hera-shell-content [class*="text-slate-400"],
+body.hera-unified-app .hera-shell-content [class*="text-slate-300"],
+body.hera-unified-app .hera-shell-content [class*="text-gray-400"] { color: #66736F !important; }
+body.hera-unified-app .hera-shell-content [class*="bg-slate-950"],
+body.hera-unified-app .hera-shell-content [class*="bg-slate-900"],
+body.hera-unified-app .hera-shell-content [class*="bg-slate-800"] { background: #F8FAF9 !important; }
+body.hera-unified-app .hera-shell-content .card,
+body.hera-unified-app .hera-shell-content .card-glass,
+body.hera-unified-app .hera-shell-content .panel,
+body.hera-unified-app .hera-shell-content .modal-box,
+body.hera-unified-app .hera-shell-content .stat-card {
+  color: var(--hera-ink) !important;
+  background: #fff !important;
+  border: 1px solid var(--hera-border) !important;
+  border-radius: 14px !important;
+  box-shadow: var(--hera-shell-shadow) !important;
+  backdrop-filter: none !important;
+}
+body.hera-unified-app .hera-shell-content .stat-card { border-top: 3px solid var(--hera-sky) !important; }
+body.hera-unified-app .hera-shell-content .btn-primary,
+body.hera-unified-app .hera-shell-content .btn-success,
+body.hera-unified-app .hera-shell-content .btn-danger,
+body.hera-unified-app .hera-shell-content button[class*="bg-indigo-"],
+body.hera-unified-app .hera-shell-content button[class*="bg-blue-600"] {
+  min-height: 44px;
+  color: #fff !important;
+  background: var(--hera-teal) !important;
+  border: 1px solid var(--hera-teal) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 4px 12px rgba(27,58,58,.12) !important;
+  transform: none !important;
+}
+body.hera-unified-app .hera-shell-content .btn-primary:hover,
+body.hera-unified-app .hera-shell-content .btn-success:hover,
+body.hera-unified-app .hera-shell-content button[class*="bg-indigo-"]:hover,
+body.hera-unified-app .hera-shell-content button[class*="bg-blue-600"]:hover { background: #315759 !important; }
+body.hera-unified-app .hera-shell-content .btn-danger,
+body.hera-unified-app .hera-shell-content button[class*="bg-red-"] { background: #B54743 !important; border-color: #B54743 !important; }
+body.hera-unified-app .hera-shell-content .btn-muted,
+body.hera-unified-app .hera-shell-content .btn-ghost { color: var(--hera-teal) !important; background: #fff !important; border: 1px solid var(--hera-border) !important; box-shadow: none !important; transform: none !important; }
+body.hera-unified-app .hera-shell-content .btn-ghost:hover,
+body.hera-unified-app .hera-shell-content .btn-muted:hover { background: #F2F6F4 !important; }
+body.hera-unified-app .hera-shell-content input:not([type="checkbox"]):not([type="radio"]),
+body.hera-unified-app .hera-shell-content select,
+body.hera-unified-app .hera-shell-content textarea,
+body.hera-unified-app .hera-shell-content .input,
+body.hera-unified-app .hera-shell-content .form-input {
+  min-height: 44px;
+  color: var(--hera-ink) !important;
+  background: #fff !important;
+  border: 1px solid #C9D2CE !important;
+  border-radius: 9px !important;
+  box-shadow: none !important;
+}
+body.hera-unified-app .hera-shell-content input:focus,
+body.hera-unified-app .hera-shell-content select:focus,
+body.hera-unified-app .hera-shell-content textarea:focus { outline: 3px solid rgba(27,58,58,.2); outline-offset: 1px; border-color: var(--hera-teal) !important; }
+body.hera-unified-app .hera-shell-content table { min-width: 600px; border-collapse: collapse; color: var(--hera-ink); }
+body.hera-unified-app .hera-table-scroll { width: 100%; max-width: 100%; overflow-x: auto; overscroll-behavior-inline: contain; -webkit-overflow-scrolling: touch; }
+body.hera-unified-app .hera-shell-content table th { color: #53625E !important; background: #F3F6F4 !important; border-color: var(--hera-border) !important; }
+body.hera-unified-app .hera-shell-content table td { border-color: #E9EDEA !important; }
+body.hera-unified-app .hera-shell-content tbody tr:hover { background: #F6F9F7 !important; }
+body.hera-unified-app .hera-shell-content .badge,
+body.hera-unified-app .hera-shell-content [class*="badge-"] { border-radius: 999px; }
+body.hera-unified-app .hera-shell-content .modal-overlay { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 16px; background: rgba(20,37,35,.58) !important; }
+body.hera-unified-app .hera-shell-content .modal-content,
+body.hera-unified-app .hera-shell-content .modal-box { max-width: min(680px, calc(100vw - 32px)); max-height: min(90vh, 900px); overflow: auto; }
+body.hera-unified-app .hera-shell-content .max-w-6xl,
+body.hera-unified-app .hera-shell-content .max-w-7xl { width: min(100%, 1440px); max-width: 1440px; }
+body.hera-unified-app .hera-shell-content form.grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); }
+body.hera-unified-app .hera-shell-content :focus-visible { outline: 3px solid #6FA8B8; outline-offset: 2px; }
+.hera-shell-backdrop { display: none; }
+body.hera-unified-app [hidden] { display: none !important; }
+
+body.hera-unified-app:not(.light-mode) { color: #EDF2EF !important; background: #111A18 !important; }
+body.hera-unified-app:not(.light-mode) .hera-shell-content { color: #EDF2EF; background: #111A18; }
+body.hera-unified-app:not(.light-mode) .hera-shell-content h1,
+body.hera-unified-app:not(.light-mode) .hera-shell-content h2,
+body.hera-unified-app:not(.light-mode) .hera-shell-content h3,
+body.hera-unified-app:not(.light-mode) .hera-shell-content h4 { color: #EDF2EF !important; }
+body.hera-unified-app:not(.light-mode) .hera-shell-content > header,
+body.hera-unified-app:not(.light-mode) .hera-shell-content main > header,
+body.hera-unified-app:not(.light-mode) .hera-shell-content header.sticky { color: #EDF2EF !important; background: rgba(26,37,34,.96) !important; border-color: #35443F !important; }
+body.hera-unified-app:not(.light-mode) .hera-shell-content .card,
+body.hera-unified-app:not(.light-mode) .hera-shell-content .card-glass,
+body.hera-unified-app:not(.light-mode) .hera-shell-content .panel,
+body.hera-unified-app:not(.light-mode) .hera-shell-content .stat-card,
+body.hera-unified-app:not(.light-mode) .hera-shell-content .modal-box { color: #EDF2EF !important; background: #1A2522 !important; border-color: #35443F !important; }
+body.hera-unified-app:not(.light-mode) .hera-shell-content input:not([type="checkbox"]):not([type="radio"]),
+body.hera-unified-app:not(.light-mode) .hera-shell-content select,
+body.hera-unified-app:not(.light-mode) .hera-shell-content textarea { color: #EDF2EF !important; background: #202E2A !important; border-color: #52625C !important; }
+body.hera-unified-app:not(.light-mode) .hera-shell-content table { color: #EDF2EF; }
+body.hera-unified-app:not(.light-mode) .hera-shell-content table th { color: #EDF2EF !important; background: #202E2A !important; border-color: #35443F !important; }
+body.hera-unified-app:not(.light-mode) .hera-shell-content table td { border-color: #35443F !important; }
+body.hera-unified-app:not(.light-mode) .hera-shell-content tbody tr:hover { background: #202E2A !important; }
+body.hera-unified-app:not(.light-mode) .hera-shell-content h1,
+body.hera-unified-app:not(.light-mode) .hera-shell-content h2,
+body.hera-unified-app:not(.light-mode) .hera-shell-content h3,
+body.hera-unified-app:not(.light-mode) .hera-shell-content h4,
+body.hera-unified-app:not(.light-mode) .hera-shell-content [class*="text-white"]:not(button):not(.btn),
+body.hera-unified-app:not(.light-mode) .hera-shell-content [class*="text-slate-100"],
+body.hera-unified-app:not(.light-mode) .hera-shell-content [class*="text-slate-200"] { color: #EDF2EF !important; }
+body.hera-unified-app:not(.light-mode) .hera-shell-content [class*="text-slate-400"],
+body.hera-unified-app:not(.light-mode) .hera-shell-content [class*="text-slate-300"],
+body.hera-unified-app:not(.light-mode) .hera-shell-content [class*="text-slate-500"],
+body.hera-unified-app:not(.light-mode) .hera-shell-content [class*="text-slate-600"],
+body.hera-unified-app:not(.light-mode) .hera-shell-content [class*="text-gray-400"],
+body.hera-unified-app:not(.light-mode) .hera-shell-content [class*="text-gray-500"],
+body.hera-unified-app:not(.light-mode) .hera-shell-content [class*="text-gray-600"] { color: #B8C5BF !important; }
+body.hera-unified-app:not(.light-mode) .hera-shell-content [class*="text-blue-"],
+body.hera-unified-app:not(.light-mode) .hera-shell-content [class*="text-cyan-"] { color: #7CC7F2 !important; }
+body.hera-unified-app:not(.light-mode) .hera-shell-content [class*="text-green-"],
+body.hera-unified-app:not(.light-mode) .hera-shell-content [class*="text-emerald-"] { color: #80D9A7 !important; }
+body.hera-unified-app:not(.light-mode) .hera-shell-content [class*="text-red-"],
+body.hera-unified-app:not(.light-mode) .hera-shell-content [class*="text-rose-"] { color: #FF918B !important; }
+body.hera-unified-app:not(.light-mode) .hera-shell-content [class*="text-amber-"],
+body.hera-unified-app:not(.light-mode) .hera-shell-content [class*="text-yellow-"] { color: #FFD27A !important; }
+body.hera-unified-app:not(.light-mode) .hera-shell-content [class*="text-indigo-"],
+body.hera-unified-app:not(.light-mode) .hera-shell-content [class*="text-violet-"] { color: #C4AEFF !important; }
+body.hera-unified-app:not(.light-mode) .hera-shell-content [class*="bg-slate-950"],
+body.hera-unified-app:not(.light-mode) .hera-shell-content [class*="bg-slate-900"],
+body.hera-unified-app:not(.light-mode) .hera-shell-content [class*="bg-slate-800"] { background-color: #202E2A !important; }
+body.hera-unified-app:not(.light-mode) .hera-shell-content .btn-ghost,
+body.hera-unified-app:not(.light-mode) .hera-shell-content .btn-muted,
+body.hera-unified-app:not(.light-mode) .hera-shell-content #themeToggleBtn { color: #1B3A3A !important; }
+body.hera-unified-app:not(.light-mode) .hera-shell-content .btn-ghost [class*="text-"],
+body.hera-unified-app:not(.light-mode) .hera-shell-content .btn-muted [class*="text-"],
+body.hera-unified-app:not(.light-mode) .hera-shell-content #themeToggleBtn [class*="text-"] { color: inherit !important; }
+
+@media (max-width: 1100px) and (min-width: 901px) {
+  :root { --hera-sidebar-width: 84px; --hera-page-gutter: 22px; }
+  body.hera-unified-app .hera-shell-sidebar { align-items: center; padding-inline: 10px; }
+  body.hera-unified-app .hera-shell-brand { justify-content: center; padding-inline: 0; }
+  body.hera-unified-app .hera-shell-brand > span,
+  body.hera-unified-app .hera-shell-account-copy,
+  body.hera-unified-app .hera-shell-nav-label,
+  body.hera-unified-app .hera-shell-nav-text,
+  body.hera-unified-app .hera-shell-workspace-arrow { display: none; }
+  body.hera-unified-app .hera-shell-account { justify-content: center; width: 100%; margin-inline: 0; padding-inline: 0; }
+  body.hera-unified-app .hera-shell-nav { width: 100%; }
+  body.hera-unified-app .hera-shell-nav-link { justify-content: center; width: 56px; min-height: 48px; margin-inline: auto; padding: 10px; }
+  body.hera-unified-app .hera-shell-nav-icon { flex-basis: 24px; width: 24px; height: 24px; }
+  body.hera-unified-app .hera-shell-nav-icon svg { width: 22px; height: 22px; }
+  body.hera-unified-app .hera-shell-workspace-link,
+  body.hera-unified-app .hera-shell-signout { justify-content: center; width: 56px; min-height: 48px; margin-inline: auto; padding: 10px; }
+}
+@media (max-width: 900px) {
+  body.hera-unified-app { display: block !important; min-height: 100vh; }
+  body.hera-unified-app .hera-shell-sidebar { position: fixed; inset-block: 0; inset-inline-start: 0; z-index: 100; width: min(300px, calc(100vw - 56px)); height: 100vh; height: 100dvh; padding: max(18px, env(safe-area-inset-top)) 14px max(18px, env(safe-area-inset-bottom)); transform: translateX(-105%); visibility: hidden; transition: transform 220ms ease, visibility 220ms ease; box-shadow: 0 18px 44px rgba(8,42,36,.24); }
+  html[dir="rtl"] body.hera-unified-app .hera-shell-sidebar { transform: translateX(105%); }
+  body.hera-unified-app .hera-shell-sidebar.is-open { transform: translateX(0); visibility: visible; }
+  html[dir="rtl"] body.hera-unified-app .hera-shell-sidebar.is-open { transform: translateX(0); }
+  body.hera-unified-app .hera-shell-content { width: 100%; min-height: 100vh; margin: 0 !important; padding: 0 !important; }
+  body.hera-unified-app .hera-shell-mobilebar { position: sticky; inset-block-start: 0; z-index: 50; display: flex; align-items: center; justify-content: space-between; min-height: 60px; padding: 7px max(16px, env(safe-area-inset-right)) 7px max(16px, env(safe-area-inset-left)); color: var(--hera-ink); background: rgba(255,255,255,.97); border-bottom: 1px solid var(--hera-border); box-shadow: 0 4px 14px rgba(27,58,58,.04); }
+  body.hera-unified-app:not(.light-mode) .hera-shell-mobilebar { color: #EDF2EF; background: rgba(26,37,34,.97); border-color: #35443F; }
+  body.hera-unified-app .hera-shell-mobile-brand { display: inline-flex; align-items: center; gap: 9px; color: var(--hera-teal); text-decoration: none; font-size: 14px; font-weight: 800; }
+  body.hera-unified-app .hera-shell-mobile-brand img { flex-basis: 36px; width: 36px; min-width: 36px; max-width: 36px; height: 36px; max-height: 36px; }
+  body.hera-unified-app .hera-shell-mobile-brand small { display: block; color: var(--hera-muted); font-size: 10px; font-weight: 500; }
+  body.hera-unified-app .hera-shell-menu-toggle { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: 48px; min-height: 46px; padding: 0 12px; border: 1px solid var(--hera-border); border-radius: 11px; color: var(--hera-teal); background: #fff; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+  body.hera-unified-app:not(.light-mode) .hera-shell-menu-toggle { color: #EDF2EF; background: #202E2A; border-color: #52625C; }
+  body.hera-unified-app .hera-shell-backdrop:not([hidden]) { position: fixed; inset: 0; z-index: 90; display: block; background: rgba(14,30,27,.54); touch-action: none; }
+  body.hera-menu-open { overflow: hidden !important; }
+  body.hera-unified-app .hera-shell-content > main { width: 100%; }
+  body.hera-unified-app .hera-shell-content > main > div:first-child:not(.max-w-6xl) { min-width: 0; }
+}
+@media (max-width: 640px) {
+  :root { --hera-page-gutter: 16px; }
+  body.hera-unified-app .hera-shell-content main { padding-inline: 16px !important; }
+  body.hera-unified-app .hera-shell-content main > header { margin-inline: -16px; padding-inline: 16px !important; }
+  body.hera-unified-app .hera-shell-content .max-w-6xl,
+  body.hera-unified-app .hera-shell-content .max-w-7xl { width: 100%; }
+  body.hera-unified-app .hera-shell-content .modal-overlay { padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom)); }
+  body.hera-unified-app .hera-shell-content .modal-content,
+  body.hera-unified-app .hera-shell-content .modal-box { width: 100%; max-width: 100%; max-height: calc(100dvh - 24px); padding: 16px !important; border-radius: 14px !important; }
+  body.hera-unified-app .hera-shell-content .hera-table-scroll { margin-inline: -16px; width: calc(100% + 32px); padding-inline: 16px; }
+  body.hera-unified-app .hera-shell-content table { min-width: 560px; }
+  body.hera-unified-app .hera-shell-content form.grid { grid-template-columns: minmax(0, 1fr); }
+  body.hera-unified-app .hera-shell-content [class*="grid-cols-"] { min-width: 0; }
+  body.hera-unified-app .hera-shell-content .flex.items-center.justify-between { flex-wrap: wrap; }
+  body.hera-unified-app .hera-shell-content button,
+  body.hera-unified-app .hera-shell-content a[class*="btn"] { min-height: 44px; }
+  body.hera-unified-app .hera-shell-content header .hidden.sm\:inline,
+  body.hera-unified-app .hera-shell-content header .hidden.md\:inline { display: none !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  body.hera-unified-app *, body.hera-unified-app *::before, body.hera-unified-app *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+}
 
 /* HERA reference dashboard shell, shared by the HR management views. */
 :root {

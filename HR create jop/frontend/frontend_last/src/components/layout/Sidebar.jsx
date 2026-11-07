@@ -38,11 +38,11 @@ const ADMIN_NAV_ITEMS = [
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ isOpen = false }) {
   const { isAdmin } = useAuth();
 
   return (
-    <aside className="sidebar" aria-label="Sidebar navigation">
+    <aside id="hera-primary-navigation" className={`sidebar${isOpen ? " is-open" : ""}`} aria-label="Sidebar navigation">
       <div className="brand">
         <div className="brand-icon">
           <BrandIcon size={20} />

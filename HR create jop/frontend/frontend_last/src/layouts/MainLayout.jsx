@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import Sidebar from "../components/layout/Sidebar";
 import Navbar from "../components/layout/Navbar";
@@ -6,6 +6,20 @@ import HERAChatbot from "../components/chatbot/HERAChatbot";
 
 export default function MainLayout() {
   const { pathname } = useLocation();
+  const [isNavigationOpen, setIsNavigationOpen] = useState(false);
+
+  useEffect(() => {
+    setIsNavigationOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!isNavigationOpen) return undefined;
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") setIsNavigationOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isNavigationOpen]);
 
   // Keep the AI chatbot out of the primary screening and candidate review workflow
   // to avoid distracting or obstructing human decision-making and resume processing.
@@ -20,9 +34,20 @@ export default function MainLayout() {
       <a href="#main-content" className="skip-to-content">
         Skip to main content
       </a>
-      <Sidebar />
+      <button
+        className={`mobile-nav-backdrop ${isNavigationOpen ? "is-visible" : ""}`}
+        type="button"
+        aria-label="Close navigation menu"
+        tabIndex={isNavigationOpen ? 0 : -1}
+        onClick={() => setIsNavigationOpen(false)}
+      />
+      <Sidebar isOpen={isNavigationOpen} />
       <div className="main">
-        <Navbar pathname={pathname} />
+        <Navbar
+          pathname={pathname}
+          isNavigationOpen={isNavigationOpen}
+          onMenuToggle={() => setIsNavigationOpen((open) => !open)}
+        />
         <main className="page-content" id="main-content" tabIndex={-1}>
           <Outlet />
         </main>

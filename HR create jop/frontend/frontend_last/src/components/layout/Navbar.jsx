@@ -1,16 +1,26 @@
 import React from "react";
-import { LogOut, User as UserIcon } from "lucide-react";
+import { LogOut, Menu, User as UserIcon, X } from "lucide-react";
 import useAuth from "../../hooks/useAuth";
 import { BRAND } from "../../config/brand";
 import { getTitleForPath } from "../../config/routes";
 
-export default function Navbar({ pathname }) {
+export default function Navbar({ pathname, isNavigationOpen = false, onMenuToggle }) {
   const { user, logout } = useAuth();
 
   const matchedTitle = getTitleForPath(pathname);
 
   return (
     <header className="topbar">
+      <button
+        className="mobile-menu-toggle"
+        type="button"
+        aria-label={isNavigationOpen ? "Close navigation menu" : "Open navigation menu"}
+        aria-controls="hera-primary-navigation"
+        aria-expanded={isNavigationOpen}
+        onClick={onMenuToggle}
+      >
+        {isNavigationOpen ? <X size={20} aria-hidden="true" /> : <Menu size={20} aria-hidden="true" />}
+      </button>
       <div>
         <p className="eyebrow">{BRAND.eyebrow}</p>
         <h1>{matchedTitle}</h1>
