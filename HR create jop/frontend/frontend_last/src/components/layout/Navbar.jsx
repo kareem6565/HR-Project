@@ -2,12 +2,15 @@ import React from "react";
 import { LogOut, Menu, User as UserIcon, X } from "lucide-react";
 import useAuth from "../../hooks/useAuth";
 import { BRAND } from "../../config/brand";
+import { HR_MANAGER_LOGOUT_URL } from "../../config/hrManager";
 import { getTitleForPath } from "../../config/routes";
 
 export default function Navbar({ pathname, isNavigationOpen = false, onMenuToggle }) {
   const { user, logout } = useAuth();
 
   const matchedTitle = getTitleForPath(pathname);
+  const handleLogout = () =>
+    logout(() => window.location.replace(HR_MANAGER_LOGOUT_URL));
 
   return (
     <header className="topbar">
@@ -80,7 +83,7 @@ export default function Navbar({ pathname, isNavigationOpen = false, onMenuToggl
         <button
           className="icon-btn"
           type="button"
-          onClick={logout}
+          onClick={handleLogout}
           title="Sign out"
           aria-label="Sign out"
         >

@@ -29,3 +29,13 @@ usual. Do not commit local environment files or signing secrets.
 
 The manager login and legacy pages assume the Apache document root maps this
 folder to `/BIC2_Mvp`, matching the existing application links.
+
+## Email sign-in upgrade
+
+The sign-in form uses email for accounts that have one. For an existing
+`attendance_db`, sign in with the temporary **legacy employee-code** option,
+then open `update_db_hr.php` once while signed in as HR or admin. This adds a
+nullable, unique email column without deleting existing data. Add each current
+user's real email from the employee management screen; new employee accounts
+require a unique email. Accounts without an email can keep using the legacy
+option until one is assigned.

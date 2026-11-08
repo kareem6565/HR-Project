@@ -29,7 +29,7 @@ if ($method === 'GET') {
 
     if ($action === 'list') {
         $stmt = $pdo->query(
-            "SELECT u.id, u.emp_code, u.name, u.role, u.category_id, u.manager_id, m.name AS manager_name, c.name AS category_name,
+            "SELECT u.id, u.emp_code, u.email, u.name, u.role, u.category_id, u.manager_id, m.name AS manager_name, c.name AS category_name,
                     u.basic_salary, u.yearly_vacation_days, u.created_at
              FROM users u
              LEFT JOIN categories c ON c.id = u.category_id
@@ -41,7 +41,7 @@ if ($method === 'GET') {
 
     if ($action === 'get' && !empty($_GET['id'])) {
         $stmt = $pdo->prepare(
-            "SELECT u.id, u.emp_code, u.name, u.role, u.category_id, u.manager_id, m.name AS manager_name, c.name AS category_name,
+            "SELECT u.id, u.emp_code, u.email, u.name, u.role, u.category_id, u.manager_id, m.name AS manager_name, c.name AS category_name,
                     u.basic_salary, u.yearly_vacation_days
              FROM users u
              LEFT JOIN categories c ON c.id = u.category_id
@@ -68,26 +68,34 @@ if ($method === 'POST') {
 
     // ── CREATE ─────────────────────────────────────────────────────────────────
     if ($body['action'] === 'create') {
-        $required = ['emp_code', 'name', 'password', 'role', 'basic_salary'];
+        $required = ['emp_code', 'email', 'name', 'password', 'role', 'basic_salary'];
         foreach ($required as $field) {
             if (empty($body[$field])) jsonResponse(false, "الحقل '{$field}' مطلوب.");
         }
+
+        $email = strtolower(trim((string)$body['email']));
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) jsonResponse(false, 'البريد الإلكتروني غير صالح.');
 
         // Check unique emp_code
         $chk = $pdo->prepare("SELECT id FROM users WHERE emp_code = ?");
         $chk->execute([trim($body['emp_code'])]);
         if ($chk->fetch()) jsonResponse(false, 'كود الموظف مستخدم بالفعل.');
 
+        $emailCheck = $pdo->prepare('SELECT id FROM users WHERE email = ? LIMIT 1');
+        $emailCheck->execute([$email]);
+        if ($emailCheck->fetch()) jsonResponse(false, 'البريد الإلكتروني مستخدم بالفعل.');
+
         $hash = password_hash($body['password'], PASSWORD_BCRYPT, ['cost' => 12]);
         $categoryId = !empty($body['category_id']) ? (int)$body['category_id'] : null;
         $role = in_array($body['role'] ?? '', ['admin', 'hr', 'manager', 'employee']) ? $body['role'] : 'employee';
 
         $stmt = $pdo->prepare(
-            "INSERT INTO users (emp_code, name, password_hash, role, category_id, basic_salary, yearly_vacation_days)
-             VALUES (?, ?, ?, ?, ?, ?, ?)"
+            "INSERT INTO users (emp_code, email, name, password_hash, role, category_id, basic_salary, yearly_vacation_days)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
         );
         $stmt->execute([
             trim($body['emp_code']),
+            $email,
             trim($body['name']),
             $hash,
             $role,
@@ -113,6 +121,15 @@ if ($method === 'POST') {
         if (!empty($body['emp_code'])) {
             $fields[] = 'emp_code = ?';
             $params[] = trim($body['emp_code']);
+        }
+        if (array_key_exists('email', $body)) {
+            $email = strtolower(trim((string)$body['email']));
+            if (!filter_var($email, FILTER_VALIDATE_EMAIL)) jsonResponse(false, 'البريد الإلكتروني غير صالح.');
+            $emailCheck = $pdo->prepare('SELECT id FROM users WHERE email = ? AND id <> ? LIMIT 1');
+            $emailCheck->execute([$email, (int)$body['id']]);
+            if ($emailCheck->fetch()) jsonResponse(false, 'البريد الإلكتروني مستخدم بالفعل.');
+            $fields[] = 'email = ?';
+            $params[] = $email;
         }
         if (!empty($body['role'])) {
             $fields[] = 'role = ?';

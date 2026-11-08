@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import decode_access_token
+from app.models.organization import Organization
 from app.models.user import User
 
 
@@ -104,6 +105,13 @@ async def get_request_context(
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
+        organization = db.get(Organization, user.organization_id)
+        if organization is None or organization.status != "active":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Organization access is inactive.",
+            )
+
         token_version = payload.get("token_version")
         if token_version is None or user.token_version != token_version:
             raise HTTPException(
@@ -162,11 +170,9 @@ async def get_request_context(
             detail="X-Organization-Id must be a valid UUID.",
         ) from None
 
-    from app.models.organization import Organization
-
     organization = db.get(Organization, parsed_org_id)
-    if organization is None:
-        raise HTTPException(status_code=404, detail="Organization not found.")
+    if organization is None or organization.status != "active":
+        raise HTTPException(status_code=403, detail="Organization access is inactive.")
 
     user = db.get(User, parsed_user_id)
     if user is None:

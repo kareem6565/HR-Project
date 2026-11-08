@@ -9,7 +9,7 @@ for every hiring decision.
 
 | Capability | Status | Notes |
 | --- | --- | --- |
-| Authentication and role-aware access | Implemented | Local login, token handling, admin/recruiter roles, organization scoping. |
+| Authentication and role-aware access | Implemented | HR Manager is the user-facing sign-in; short-lived SSO assertions establish recruitment JWT sessions, with admin/recruiter roles and organization scoping. |
 | Job management | Implemented | Create/edit jobs, extract and review structured job profiles, approval workflow, and source-grounded job-profile quality notes. |
 | CV intake and screening | Implemented | PDF/DOCX upload, asynchronous batches, text extraction, candidate profiles, evidence verification, deterministic score, retryable item failures, and review links. |
 | Screening progress | Implemented | The UI polls the batch API automatically and reports progress from terminal item counts; no simulated per-file progress. |
@@ -86,10 +86,11 @@ Start the frontend in another PowerShell window:
 Set-Location frontend\frontend_last
 Copy-Item .env.example .env
 npm install
-npm run dev -- --host 127.0.0.1 --port 5174
+npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
-Open <http://127.0.0.1:5174>. API docs are at <http://127.0.0.1:8000/docs>;
+Open <http://127.0.0.1:5173>. The HR Manager SSO launch URL must use this
+same frontend port (`HERA_FRONTEND_URL` in `HR manager/.env`). API docs are at <http://127.0.0.1:8000/docs>;
 the health endpoint is <http://127.0.0.1:8000/api/v1/health>.
 
 ### Admin account
