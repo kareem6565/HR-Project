@@ -1,7 +1,7 @@
 """store multiple workspace roles for one organization-scoped user
 
 Revision ID: 018_dual_workspace_roles
-Revises: 017_question_review
+Revises: 019_interview_portal
 Create Date: 2026-10-28
 """
 

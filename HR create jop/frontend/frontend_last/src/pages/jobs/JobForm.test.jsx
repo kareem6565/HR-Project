@@ -10,7 +10,7 @@ import {
   uploadJobSourceFile,
   updateJob,
 } from "../../services/jobService";
-import { createJobProfile, extractJobProfile, listJobProfiles } from "../../services/jobProfileService";
+import { extractJobProfile } from "../../services/jobProfileService";
 import JobForm from "./JobForm";
 
 vi.mock("../../services/jobService", () => ({

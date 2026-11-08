@@ -8,7 +8,6 @@ from app.api.v1.routes.auth import router as auth_router
 from app.api.v1.routes.availability import router as availability_router
 from app.api.v1.routes.candidate_pool import router as candidate_pool_router
 from app.api.v1.routes.candidate_portal import router as candidate_portal_router
-from app.api.v1.routes.talent_pool_consent import router as talent_pool_consent_router
 from app.api.v1.routes.candidate_profiles import router as candidate_profiles_router
 from app.api.v1.routes.candidates import router as candidates_router
 from app.api.v1.routes.chat import router as chat_router
@@ -26,6 +25,7 @@ from app.api.v1.routes.jobs import router as jobs_router
 from app.api.v1.routes.observability import router as observability_router
 from app.api.v1.routes.resumes import router as resumes_router
 from app.api.v1.routes.screening_batches import router as screening_batches_router
+from app.api.v1.routes.talent_pool_consent import router as talent_pool_consent_router
 from app.api.v1.routes.users import router as users_router
 from app.api.v1.routes.workflows import router as workflows_router
 

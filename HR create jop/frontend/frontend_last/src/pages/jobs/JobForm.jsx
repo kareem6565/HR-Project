@@ -7,7 +7,7 @@ import {
   uploadJobSourceFile,
   updateJob,
 } from "../../services/jobService";
-import { createJobProfile, extractJobProfile, listJobProfiles } from "../../services/jobProfileService";
+import { extractJobProfile } from "../../services/jobProfileService";
 import LoadingSpinner from "../../components/common/LoadingSpinner";
 
 const EMPTY_JOB = {
@@ -43,8 +43,6 @@ export default function JobForm() {
   const jobRef = useRef(job);
   const userEditedFields = useRef(new Set());
   const heraSuggestedFields = useRef(new Set());
-  const sourceProfileSaved = useRef(false);
-  const sourceImportId = useRef(globalThis.crypto?.randomUUID?.() || `source-${Date.now()}`);
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
   const [jobFile, setJobFile] = useState(null);
@@ -241,7 +239,6 @@ export default function JobForm() {
         .filter(Boolean),
     };
 
-    let jobSaved = false;
     try {
 
       if (isEdit || savedId) {

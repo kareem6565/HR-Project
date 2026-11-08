@@ -253,13 +253,9 @@ def test_quality_review_persists_only_exact_source_quotes(db_session: Session) -
                     },
                     {
                         "finding_type": "not_measurable",
-
-                        "source_quote": "At least 3 years of backend experience.",
-                        "concern": (
-                            "The required experience does not specify what experience is relevant."
-                        ),
-                        "question_for_hr": "Which backend experience should qualify?",
-
+                        "source_quote": "Build reliable services.",
+                        "concern": "The expected level of reliability is not measurable.",
+                        "question_for_hr": "What reliability target should the role meet?",
                     },
                     {
                         "finding_type": "unclear_requirement",

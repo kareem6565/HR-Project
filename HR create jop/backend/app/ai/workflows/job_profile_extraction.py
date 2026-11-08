@@ -176,7 +176,7 @@ class JobProfileExtractionWorkflow:
         """Execute the extraction run, raising on any failure."""
         job = self._get_job(db, job_id=job_id, organization_id=organization_id)
         original_listing_text = self._source_listing_text(db, job)
-        raw_description = original_listing_text or self._require_raw_description(job)
+        raw_description = original_listing_text or job.raw_description or ""
         if request_key:
             existing = db.scalar(
                 select(JobProfile).where(
@@ -195,9 +195,7 @@ class JobProfileExtractionWorkflow:
                 )
         source_texts = {
             "manual_description": (
-                job.description_text
-                if job.description_text is not None
-                else raw_description
+                job.description_text if job.description_text is not None else raw_description
             ),
             "uploaded_file": job.source_file_text or "",
         }
@@ -428,13 +426,6 @@ class JobProfileExtractionWorkflow:
         if job.organization_id != organization_id:
             raise ValidationError("Job belongs to a different organization.")
         return job
-
-    @staticmethod
-    def _require_raw_description(job: Job) -> str:
-        """Kept for compatibility with consumers that validate description inputs."""
-        if not job.raw_description:
-            raise ValidationError("Job has no raw description to extract from.")
-        return job.raw_description
 
     def _source_listing_text(self, db: Session, job: Job) -> str | None:
         profile = self._profile_service.get_current_or_latest(db, job_id=job.id)

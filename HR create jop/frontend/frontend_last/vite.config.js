@@ -19,5 +19,8 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: "./src/test/setup.js",
+    // The full suite runs many jsdom + userEvent tests in parallel; the default
+    // 5s timeout produces intermittent failures on slower machines.
+    testTimeout: 15000,
   },
 });

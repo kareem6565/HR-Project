@@ -70,7 +70,17 @@ function displayDescription(job) {
   return raw.endsWith(suffix) ? raw.slice(0, -suffix.length) : raw;
 }
 
-function JobProfileCard({ profile, profileBusy, onApprove }) {
+function JobProfileCard({
+  profile,
+  profileBusy,
+  onApprove,
+  onBeginEdit,
+  editing,
+  editedRequirements,
+  setEditedRequirements,
+  onSaveEdits,
+  onCancelEdit,
+}) {
   const data = profile.profile_data || {};
   const requirements = Array.isArray(data.requirements) ? data.requirements : [];
   const summary = data.summary || "";
@@ -109,13 +119,24 @@ function JobProfileCard({ profile, profileBusy, onApprove }) {
         <div className="profile-card-actions">
           <Badge status={profile.status} />
           {profile.status === "draft" && (
-            <button
-              className="primary"
-              disabled={profileBusy}
-              onClick={() => onApprove(profile.id)}
-            >
-              <FileCheck2 size={16} /> Approve
-            </button>
+            <>
+              {!editing && (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => onBeginEdit(profile)}
+                >
+                  Review / edit
+                </button>
+              )}
+              <button
+                className="primary"
+                disabled={profileBusy || editing}
+                onClick={() => onApprove(profile.id)}
+              >
+                <FileCheck2 size={16} /> Approve
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -130,6 +151,72 @@ function JobProfileCard({ profile, profileBusy, onApprove }) {
             </details>
           )}
         </div>
+      )}
+
+      {data.coverage && (
+        <section aria-label="Requirement category coverage">
+          <h4>Coverage</h4>
+          <ul>
+            {Object.entries(data.coverage).map(([dimension, coverage]) => (
+              <li key={dimension}>{dimension.replaceAll("_", " ")}: {coverage}</li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {data.conflicts?.length > 0 && (
+        <section className="job-quality-review" aria-label="Conflicting source details">
+          <h4>Conflicting source details · review required</h4>
+          <ul>
+            {data.conflicts.map((conflict, index) => (
+              <li key={`${conflict.field}-${index}`}>
+                <strong>{conflict.field.replaceAll("_", " ")}</strong>
+                <ul>{conflict.values.map((value, valueIndex) => (
+                  <li key={`${value.source}-${valueIndex}`}>{value.value} · {value.source}</li>
+                ))}</ul>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {editing && (
+        <section className="profile-requirement-editor" aria-label="Edit proposed requirements">
+          <h4>Review proposed requirements</h4>
+          {editedRequirements.map((requirement, index) => (
+            <div className="profile-requirement-row" key={`${requirement.key || "new"}-${index}`}>
+              <input
+                aria-label={`Requirement ${index + 1}`}
+                value={requirement.text || ""}
+                onChange={(event) => setEditedRequirements((current) => current.map((item, row) => row === index ? { ...item, text: event.target.value } : item))}
+              />
+              <select
+                aria-label={`Requirement ${index + 1} category`}
+                value={requirement.category || "must_have"}
+                onChange={(event) => setEditedRequirements((current) => current.map((item, row) => row === index ? { ...item, category: event.target.value } : item))}
+              >
+                <option value="must_have">Required</option>
+                <option value="important">Important</option>
+                <option value="nice_to_have">Preferred</option>
+              </select>
+              <select
+                aria-label={`Requirement ${index + 1} type`}
+                value={requirement.dimension || "skill"}
+                onChange={(event) => setEditedRequirements((current) => current.map((item, row) => row === index ? { ...item, dimension: event.target.value } : item))}
+              >
+                {["skill", "experience", "education", "certification", "responsibility"].map((dimension) => (
+                  <option key={dimension} value={dimension}>{dimension}</option>
+                ))}
+              </select>
+              <button type="button" className="btn btn-secondary" onClick={() => setEditedRequirements((current) => current.filter((_, row) => row !== index))}>Remove</button>
+            </div>
+          ))}
+          <div className="profile-card-actions">
+            <button type="button" className="btn btn-secondary" onClick={() => setEditedRequirements((current) => [...current, { text: "", category: "must_have", dimension: "skill" }])}>Add requirement</button>
+            <button type="button" className="primary" disabled={profileBusy} onClick={() => onSaveEdits(profile)}>Save review</button>
+            <button type="button" className="btn btn-secondary" onClick={onCancelEdit}>Cancel</button>
+          </div>
+        </section>
       )}
 
       {source && (
@@ -171,9 +258,11 @@ function JobProfileCard({ profile, profileBusy, onApprove }) {
               <span
                 className={REQUIREMENT_TONE[requirement.category] || "chip"}
                 key={requirement.key || requirement.text}
+                title={requirement.source_quote ? `Source: ${requirement.source} — ${requirement.source_quote}` : "Source not verified; recruiter review required"}
               >
                 {requirement.text}
                 {requirement.category ? ` · ${requirement.category.replaceAll("_", " ")}` : ""}
+                {requirement.evidence_status === "uncertain" ? " · source uncertain" : ""}
               </span>
             ))}
           </div>
@@ -185,9 +274,11 @@ function JobProfileCard({ profile, profileBusy, onApprove }) {
                   <span
                     className={REQUIREMENT_TONE[requirement.category] || "chip"}
                     key={requirement.key || requirement.text}
+                    title={requirement.source_quote ? `Source: ${requirement.source} — ${requirement.source_quote}` : "Source not verified; recruiter review required"}
                   >
                     {requirement.text}
                     {requirement.category ? ` · ${requirement.category.replaceAll("_", " ")}` : ""}
+                    {requirement.evidence_status === "uncertain" ? " · source uncertain" : ""}
                   </span>
                 ))}
               </div>
@@ -380,7 +471,11 @@ export default function JobDetails() {
     }
   };
 
-  const currentProfile = profiles.find((p) => p.is_current);
+  const currentProfile = profiles.find((p) => p.is_current) || profiles[profiles.length - 1];
+  const previousProfiles = profiles
+    .filter((profile) => profile !== currentProfile)
+    .slice()
+    .reverse();
   const approvedProfile = profiles.find((p) => p.status === "approved");
   const draftProfile = profiles.find((p) => p.status === "draft");
 
@@ -634,177 +729,41 @@ export default function JobDetails() {
             </div>
           </div>
         ) : (
-
-          profiles
-            .slice()
-            .reverse()
-            .map((profile) => {
-              const data = profile.profile_data || {};
-              const requirements = Array.isArray(data.requirements) ? data.requirements : [];
-              return (
-                <div className="profile-card" key={profile.id}>
-                  <div className="profile-card-head">
-                    <div>
-                      <strong>{data.title || "Extracted Job Profile"}</strong>
-                      <span className="muted-note">
-                        v{profile.version_number} · {sourceLabel(profile.source)}
-                        {profile.is_current ? " · current" : ""}
-                      </span>
-                    </div>
-                    <div className="profile-card-actions">
-                      <Badge status={profile.status} />
-                      {profile.status === "draft" && (
-                        <>
-                          {editingProfileId !== profile.id && (
-                            <button type="button" className="btn btn-secondary" onClick={() => beginProfileEdit(profile)}>Review / edit</button>
-                          )}
-                          <button
-                            className="primary"
-                            disabled={profileBusy || editingProfileId === profile.id}
-                            onClick={() => onApprove(profile.id)}
-                          >
-                            <FileCheck2 size={16} /> Approve
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  {data.summary && <p className="muted-note">{data.summary}</p>}
-
-                  {data.coverage && (
-                    <section aria-label="Requirement category coverage">
-                      <h4>Coverage</h4>
-                      <ul>
-                        {Object.entries(data.coverage).map(([dimension, coverage]) => (
-                          <li key={dimension}>{dimension.replaceAll("_", " ")}: {coverage}</li>
-                        ))}
-                      </ul>
-                    </section>
-                  )}
-
-                  {data.conflicts?.length > 0 && (
-                    <section className="job-quality-review" aria-label="Conflicting source details">
-                      <h4>Conflicting source details · review required</h4>
-                      <ul>
-                        {data.conflicts.map((conflict, index) => (
-                          <li key={`${conflict.field}-${index}`}>
-                            <strong>{conflict.field.replaceAll("_", " ")}</strong>
-                            <ul>{conflict.values.map((value, valueIndex) => (
-                              <li key={`${value.source}-${valueIndex}`}>{value.value} · {value.source}</li>
-                            ))}</ul>
-                          </li>
-                        ))}
-                      </ul>
-                    </section>
-                  )}
-
-                  {profile.status === "draft" && editingProfileId === profile.id && (
-                    <section className="profile-requirement-editor" aria-label="Edit proposed requirements">
-                      <h4>Review proposed requirements</h4>
-                      {editedRequirements.map((requirement, index) => (
-                        <div className="profile-requirement-row" key={`${requirement.key || "new"}-${index}`}>
-                          <input
-                            aria-label={`Requirement ${index + 1}`}
-                            value={requirement.text || ""}
-                            onChange={(event) => setEditedRequirements((current) => current.map((item, row) => row === index ? { ...item, text: event.target.value } : item))}
-                          />
-                          <select
-                            aria-label={`Requirement ${index + 1} category`}
-                            value={requirement.category || "must_have"}
-                            onChange={(event) => setEditedRequirements((current) => current.map((item, row) => row === index ? { ...item, category: event.target.value } : item))}
-                          >
-                            <option value="must_have">Required</option>
-                            <option value="important">Important</option>
-                            <option value="nice_to_have">Preferred</option>
-                          </select>
-                          <select
-                            aria-label={`Requirement ${index + 1} type`}
-                            value={requirement.dimension || "skill"}
-                            onChange={(event) => setEditedRequirements((current) => current.map((item, row) => row === index ? { ...item, dimension: event.target.value } : item))}
-                          >
-                            {["skill", "experience", "education", "certification", "responsibility"].map((dimension) => (
-                              <option key={dimension} value={dimension}>{dimension}</option>
-                            ))}
-                          </select>
-                          <button type="button" className="btn btn-secondary" onClick={() => setEditedRequirements((current) => current.filter((_, row) => row !== index))}>Remove</button>
-                        </div>
-                      ))}
-                      <div className="profile-card-actions">
-                        <button type="button" className="btn btn-secondary" onClick={() => setEditedRequirements((current) => [...current, { text: "", category: "must_have", dimension: "skill" }])}>Add requirement</button>
-                        <button type="button" className="primary" disabled={profileBusy} onClick={() => saveProfileEdits(profile)}>Save review</button>
-                        <button type="button" className="btn btn-secondary" onClick={() => setEditingProfileId(null)}>Cancel</button>
-                      </div>
-                    </section>
-                  )}
-
-                  {requirements.length > 0 && (
-                    <>
-                      <h4>Requirements</h4>
-                      <div className="chips">
-                        {requirements.map((req) => (
-                          <span className={REQUIREMENT_TONE[req.category] || "chip"} key={req.key || req.text} title={req.source_quote ? `Source: ${req.source} — ${req.source_quote}` : "Source not verified; recruiter review required"}>
-                            {req.text}
-                            {req.category ? ` · ${req.category.replaceAll("_", " ")}` : ""}
-                            {req.evidence_status === "uncertain" ? " · source uncertain" : ""}
-                          </span>
-                        ))}
-                      </div>
-                    </>
-                  )}
-
-                  <section
-                    className="job-quality-review"
-                    aria-label="Job description quality review"
-                  >
-                    <h4>Job description quality check</h4>
-                    {!data.quality_review || data.quality_review.status === "unavailable" ? (
-                      <p>
-                        A quality review was not returned. Review the original description before
-                        approving this profile.
-                      </p>
-                    ) : (
-                      <>
-                        {data.quality_review.status === "partially_verified" && (
-                          <p role="status">
-                            Some findings were omitted because their quotes could not be verified
-                            against the source description.
-                          </p>
-                        )}
-                        {data.quality_review.findings?.length ? (
-                          <ul>
-                            {data.quality_review.findings.map((finding, index) => (
-                              <li key={`${finding.finding_type}-${index}`}>
-                                <strong>
-                                  {QUALITY_FINDING_LABEL[finding.finding_type] || "Review"}
-                                </strong>
-                                <blockquote dir="auto">{finding.source_quote}</blockquote>
-                                <p>{finding.concern}</p>
-                                <p className="job-quality-question">
-                                  <span>Question for HR: </span>{finding.question_for_hr}
-                                </p>
-                              </li>
-                            ))}
-                          </ul>
-                        ) : data.quality_review.status === "partially_verified" ? (
-                          <p>
-                            No verified findings remain. Review the source description before
-                            approving this profile.
-                          </p>
-                        ) : (
-                          <p>
-                            HERA did not flag an obvious issue. Please review the source description
-                            yourself; this check does not guarantee completeness.
-                          </p>
-                        )}
-                      </>
-                    )}
-                  </section>
-
-                </div>
+          <div className="job-profile-versions">
+            {currentProfile && (
+              <JobProfileCard
+                key={currentProfile.id}
+                profile={currentProfile}
+                profileBusy={profileBusy}
+                onApprove={onApprove}
+                onBeginEdit={beginProfileEdit}
+                editing={editingProfileId === currentProfile.id}
+                editedRequirements={editedRequirements}
+                setEditedRequirements={setEditedRequirements}
+                onSaveEdits={saveProfileEdits}
+                onCancelEdit={() => setEditingProfileId(null)}
+              />
+            )}
+            {previousProfiles.length > 0 && (
+              <details className="job-profile-previous">
+                <summary>Previous versions ({previousProfiles.length})</summary>
+                {previousProfiles.map((profile) => (
+                  <JobProfileCard
+                    key={profile.id}
+                    profile={profile}
+                    profileBusy={profileBusy}
+                    onApprove={onApprove}
+                    onBeginEdit={beginProfileEdit}
+                    editing={editingProfileId === profile.id}
+                    editedRequirements={editedRequirements}
+                    setEditedRequirements={setEditedRequirements}
+                    onSaveEdits={saveProfileEdits}
+                    onCancelEdit={() => setEditingProfileId(null)}
+                  />
+                ))}
               </details>
             )}
-          </>
+          </div>
         )}
 
 
