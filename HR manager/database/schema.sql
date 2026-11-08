@@ -42,6 +42,7 @@ DROP TABLE IF EXISTS `users`;
 CREATE TABLE `users` (
   `id`                    INT UNSIGNED     NOT NULL AUTO_INCREMENT,
   `emp_code`              VARCHAR(20)      NOT NULL UNIQUE,
+  `email`                 VARCHAR(255)     NULL DEFAULT NULL,
   `name`                  VARCHAR(100)     NOT NULL,
   `password_hash`         VARCHAR(255)     NOT NULL,
   `role`                  ENUM('admin','hr','employee') NOT NULL DEFAULT 'employee',
@@ -51,6 +52,7 @@ CREATE TABLE `users` (
   `created_at`            TIMESTAMP        NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   INDEX `idx_emp_code` (`emp_code`),
+  UNIQUE KEY `uq_users_email` (`email`),
   CONSTRAINT `fk_users_category`
     FOREIGN KEY (`category_id`) REFERENCES `categories` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -125,9 +127,10 @@ INSERT INTO `categories` (`name`, `work_start_time`, `work_end_time`, `break_sta
 VALUES ('الشفت الصباحي (الافتراضي)', '09:00:00', '18:00:00', '13:00:00', 60, 60, 24.7136000, 46.6753000, 300);
 
 -- Default admin account (password: admin123)
-INSERT INTO `users` (`emp_code`, `name`, `password_hash`, `role`, `category_id`, `basic_salary`, `yearly_vacation_days`)
+INSERT INTO `users` (`emp_code`, `email`, `name`, `password_hash`, `role`, `category_id`, `basic_salary`, `yearly_vacation_days`)
 VALUES (
   'ADM001',
+  'admin@example.test',
   'System Administrator',
   '$2y$12$c6E.okZQSkylX0pqI7UROeJTm6kOYm72TWxpeJ8xG9FQSfeXNlBX6',
   'admin',
@@ -137,8 +140,8 @@ VALUES (
 );
 
 -- Sample employees (password: emp123)
-INSERT INTO `users` (`emp_code`, `name`, `password_hash`, `role`, `category_id`, `basic_salary`, `yearly_vacation_days`) VALUES
-('EMP001', 'Ahmed Al-Rashidi',    '$2y$12$g.Nshp5Zwoyy/wLLfgagIelvj9gHuAo8U8MYt3G0ey0ULa9t7TcXy', 'employee', 1, 8500.00, 21),
-('EMP002', 'Fatima Al-Zahraa',   '$2y$12$g.Nshp5Zwoyy/wLLfgagIelvj9gHuAo8U8MYt3G0ey0ULa9t7TcXy', 'employee', 1, 7200.00, 21),
-('EMP003', 'Omar Khalid',         '$2y$12$g.Nshp5Zwoyy/wLLfgagIelvj9gHuAo8U8MYt3G0ey0ULa9t7TcXy', 'employee', 1, 9000.00, 25),
-('EMP004', 'Sara Al-Mutairi',    '$2y$12$g.Nshp5Zwoyy/wLLfgagIelvj9gHuAo8U8MYt3G0ey0ULa9t7TcXy', 'employee', 1, 6800.00, 21);
+INSERT INTO `users` (`emp_code`, `email`, `name`, `password_hash`, `role`, `category_id`, `basic_salary`, `yearly_vacation_days`) VALUES
+('EMP001', 'emp001@example.test', 'Ahmed Al-Rashidi',  '$2y$12$g.Nshp5Zwoyy/wLLfgagIelvj9gHuAo8U8MYt3G0ey0ULa9t7TcXy', 'employee', 1, 8500.00, 21),
+('EMP002', 'emp002@example.test', 'Fatima Al-Zahraa', '$2y$12$g.Nshp5Zwoyy/wLLfgagIelvj9gHuAo8U8MYt3G0ey0ULa9t7TcXy', 'employee', 1, 7200.00, 21),
+('EMP003', 'emp003@example.test', 'Omar Khalid',      '$2y$12$g.Nshp5Zwoyy/wLLfgagIelvj9gHuAo8U8MYt3G0ey0ULa9t7TcXy', 'employee', 1, 9000.00, 25),
+('EMP004', 'emp004@example.test', 'Sara Al-Mutairi',  '$2y$12$g.Nshp5Zwoyy/wLLfgagIelvj9gHuAo8U8MYt3G0ey0ULa9t7TcXy', 'employee', 1, 6800.00, 21);

@@ -53,6 +53,14 @@ export function AuthProvider({ children }) {
     });
 
     checkAuth();
+
+    const handlePageShow = (event) => {
+      if (!event.persisted) return;
+      setStatus("initializing");
+      checkAuth();
+    };
+    window.addEventListener("pageshow", handlePageShow);
+    return () => window.removeEventListener("pageshow", handlePageShow);
   }, [checkAuth]);
 
   const login = useCallback(
@@ -82,17 +90,21 @@ export function AuthProvider({ children }) {
     return profile;
   }, []);
 
-  const logout = useCallback(async () => {
+  const logout = useCallback(async (afterLogout) => {
     try {
       await authService.logout();
     } catch {
       // Regardless of backend response, local session is cleared
-    } finally {
-      clearToken();
-      setUser(null);
-      setStatus("unauthenticated");
-      setError(null);
     }
+
+    clearToken();
+    if (typeof afterLogout === "function") {
+      afterLogout();
+      return;
+    }
+    setUser(null);
+    setStatus("unauthenticated");
+    setError(null);
   }, []);
 
   const value = {

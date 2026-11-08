@@ -529,6 +529,7 @@ $cntAbsentCalc   = $totalEmp - $cntPresentToday;
               <tr class="text-xs text-slate-400 border-b border-white/05">
                 <th class="px-5 py-3 text-right font-medium">الكود</th>
                 <th class="px-5 py-3 text-right font-medium">الاسم</th>
+                <th class="px-5 py-3 text-right font-medium">البريد الإلكتروني</th>
                 <th class="px-5 py-3 text-right font-medium">الفئة / الشفت</th>
                 <th class="px-5 py-3 text-right font-medium">الدور</th>
                 <th class="px-5 py-3 text-right font-medium">الراتب الأساسي</th>
@@ -537,7 +538,7 @@ $cntAbsentCalc   = $totalEmp - $cntPresentToday;
               </tr>
             </thead>
             <tbody id="empTableBody" class="divide-y divide-white/04 text-slate-300">
-              <tr><td colspan="7" class="text-center py-8 text-slate-500">جارٍ التحميل...</td></tr>
+              <tr><td colspan="8" class="text-center py-8 text-slate-500">جارٍ التحميل...</td></tr>
             </tbody>
           </table>
         </div>
@@ -733,6 +734,11 @@ $cntAbsentCalc   = $totalEmp - $cntPresentToday;
           <label class="block text-xs font-medium text-slate-400 mb-1.5">الاسم الكامل *</label>
           <input type="text" id="f_name" class="form-input" placeholder="محمد أحمد" required />
         </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-medium text-slate-400 mb-1.5" for="f_email">البريد الإلكتروني *</label>
+        <input type="email" id="f_email" class="form-input" placeholder="name@company.com" autocomplete="email" required />
       </div>
 
       <div>
@@ -1138,10 +1144,15 @@ function loadEmployees() {
     .then(data => {
       const tbody = document.getElementById('empTableBody');
       if (!data.success || !data.employees.length) {
-        tbody.innerHTML = `<tr><td colspan="7" class="text-center py-8 text-slate-500">لا يوجد موظفون.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" class="text-center py-8 text-slate-500">لا يوجد موظفون.</td></tr>`;
         return;
       }
       tbody.innerHTML = data.employees.map(e => {
+        const emailDisplay = document.createElement('span');
+        emailDisplay.textContent = e.email || '';
+        const emailCell = e.email
+          ? emailDisplay.innerHTML
+          : '<span class="text-amber-300">أضف البريد لتفعيل الدخول</span>';
         let roleBadge = `<span class="text-xs font-medium px-2.5 py-1 rounded-full badge-emp">موظف</span>`;
         if (e.role === 'admin') {
           roleBadge = `<span class="text-xs font-medium px-2.5 py-1 rounded-full badge-admin">مدير</span>`;
@@ -1153,6 +1164,7 @@ function loadEmployees() {
         return `<tr>
           <td class="px-5 py-3 font-mono text-xs text-slate-400">${e.emp_code}</td>
           <td class="px-5 py-3 font-medium text-white">${e.name}</td>
+          <td class="px-5 py-3 text-slate-400">${emailCell}</td>
           <td class="px-5 py-3"><span class="badge-cat text-xs px-2.5 py-1 rounded-full">${e.category_name || 'غير محدد'}</span></td>
           <td class="px-5 py-3">${roleBadge}</td>
           <td class="px-5 py-3 text-emerald-400 font-semibold">${parseFloat(e.basic_salary).toLocaleString('ar')} ر.س</td>
@@ -1182,6 +1194,7 @@ function openEmpModal() {
   document.getElementById('empSubmitLabel').textContent = 'إضافة الموظف';
   document.getElementById('emp_id').value    = '';
   document.getElementById('f_emp_code').value= '';
+  document.getElementById('f_email').value   = '';
   document.getElementById('f_name').value    = '';
   document.getElementById('f_category_id').value = '';
   document.getElementById('f_password').value= '';
@@ -1200,6 +1213,7 @@ function editEmployee(e) {
   document.getElementById('empSubmitLabel').textContent= 'حفظ التعديلات';
   document.getElementById('emp_id').value    = e.id;
   document.getElementById('f_emp_code').value= e.emp_code;
+  document.getElementById('f_email').value   = e.email || '';
   document.getElementById('f_name').value    = e.name;
   setTimeout(() => { document.getElementById('f_category_id').value = e.category_id || ''; }, 100);
   document.getElementById('f_password').value= '';
@@ -1224,6 +1238,7 @@ function submitEmployee(e) {
   const payload = {
     action:               isEdit ? 'update' : 'create',
     emp_code:             document.getElementById('f_emp_code').value,
+    email:                document.getElementById('f_email').value,
     name:                 document.getElementById('f_name').value,
     category_id:          document.getElementById('f_category_id').value,
     password:             document.getElementById('f_password').value,

@@ -27,10 +27,17 @@ npm run preview   # preview the production build
   production FastAPI endpoint). For local work against the FastAPI backend set
   it to `http://localhost:8000/api/v1` (as an environment variable it overrides
   the `.env` value).
-- `VITE_ORG_ID`, `VITE_USER_ID` — development identity defaults. The backend
-  uses header-based identity (`X-Organization-Id` / `X-User-Id`); there is no
-  login/JWT. The Development Identity page (`/identity`) persists overrides in
-  localStorage; the `apiClient` sends the two identity headers on every request.
+- `VITE_HR_MANAGER_URL` — HR Manager workspace URL, default
+  `http://localhost/BIC2_Mvp/workspace.php`. The recruitment `/login` route
+  redirects here; HR Manager handles sign-in and returns HR users through the
+  existing SSO callback. Set this to the deployed HR Manager URL for production.
+- `VITE_HR_MANAGER_LOGOUT_URL` — HR Manager logout URL. After HERA revokes the
+  recruitment token, this endpoint also ends the PHP session and returns the
+  user to the HR Manager login page.
+- `VITE_ORG_ID`, `VITE_USER_ID` — legacy development defaults; these values are
+  not sent as authentication headers. Recruitment API requests use the JWT
+  issued after HR Manager SSO and kept in `sessionStorage` for the browser tab.
+  The `/identity` route is retired and redirects into the protected app.
 
 ## AI provider (backend)
 Screening/evidence/explanation generation runs through the backend's AI

@@ -36,7 +36,7 @@ export async function getCurrentUser() {
 
 export async function logout() {
   try {
-    await apiClient.post("/auth/logout");
+    await apiClient.post("/auth/logout", null, { timeout: 5000 });
   } finally {
     clearToken();
   }

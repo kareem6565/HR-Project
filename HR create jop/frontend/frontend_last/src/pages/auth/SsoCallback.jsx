@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import useAuth from "../../hooks/useAuth";
 import BrandIcon from "../../components/common/BrandIcon";
@@ -8,26 +8,33 @@ export default function SsoCallback() {
   const [state, setState] = useState("loading");
   const [errorMessage, setErrorMessage] = useState("");
   const hrManagerUrl = import.meta.env.VITE_HR_MANAGER_URL;
+  const exchangeStarted = useRef(false);
+  const isMounted = useRef(false);
 
   useEffect(() => {
+    isMounted.current = true;
+    if (exchangeStarted.current) return () => { isMounted.current = false; };
+    exchangeStarted.current = true;
+
     const params = new URLSearchParams(window.location.hash.slice(1));
     const assertion = params.get("assertion");
     window.history.replaceState(null, "", window.location.pathname + window.location.search);
     if (!assertion) {
       setState("error");
       setErrorMessage("The HR sign-in link is missing. Return to the HR workspace and try again.");
-      return;
+      return () => { isMounted.current = false; };
     }
 
-    let active = true;
     loginWithHRAssertion(assertion)
-      .then(() => active && setState("done"))
+      .then(() => isMounted.current && setState("done"))
       .catch((error) => {
-        if (!active) return;
+        if (!isMounted.current) return;
         const status = error?.response?.status;
         const detail = error?.response?.data?.detail;
         if (status === 401) {
           setErrorMessage("The HR sign-in link has expired or is invalid. Return to the HR workspace and try again.");
+        } else if (status === 403 && /organization/i.test(detail || "")) {
+          setErrorMessage("The HERA organization is inactive. Ask your administrator to check the organization setup.");
         } else if (status === 403) {
           setErrorMessage("This HR account is not active for Recruitment access. Ask your HR administrator to review your account.");
         } else if (status === 503 && /organization/i.test(detail || "")) {
@@ -39,9 +46,7 @@ export default function SsoCallback() {
         }
         setState("error");
       });
-    return () => {
-      active = false;
-    };
+    return () => { isMounted.current = false; };
   }, [loginWithHRAssertion]);
 
   if (state === "done") return <Navigate to="/dashboard" replace />;

@@ -10,7 +10,7 @@ define('DB_USER', 'root');
 define('DB_PASS', '');          // Default XAMPP: empty string
 define('DB_CHARSET', 'utf8mb4');
 
-function getPDO(): PDO
+function getPDO(bool $throwOnFailure = false): PDO
 {
     static $pdo = null;
 
@@ -31,6 +31,10 @@ function getPDO(): PDO
         try {
             $pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
         } catch (PDOException $e) {
+            error_log('HR Manager database connection failed: ' . $e->getMessage());
+            if ($throwOnFailure) {
+                throw new RuntimeException('Database connection failed.', 0, $e);
+            }
             // Never expose raw errors in production
             http_response_code(500);
             die(json_encode(['success' => false, 'message' => 'Database connection failed.']));

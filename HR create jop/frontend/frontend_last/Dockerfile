@@ -15,6 +15,10 @@ COPY . .
 # Build argument for API base URL (defaults to /api/v1 for reverse proxy)
 ARG VITE_API_BASE_URL=/api/v1
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+ARG VITE_HR_MANAGER_URL=http://localhost/BIC2_Mvp/workspace.php
+ENV VITE_HR_MANAGER_URL=$VITE_HR_MANAGER_URL
+ARG VITE_HR_MANAGER_LOGOUT_URL=http://localhost/BIC2_Mvp/logout.php
+ENV VITE_HR_MANAGER_LOGOUT_URL=$VITE_HR_MANAGER_LOGOUT_URL
 
 # Build production bundle
 RUN npm run build

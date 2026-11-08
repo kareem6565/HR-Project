@@ -80,10 +80,10 @@ def exchange_hr_assertion(
         )
 
     organization = db.get(Organization, organization_id)
-    if organization is None:
+    if organization is None or organization.status != "active":
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="The configured HERA organization does not exist.",
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="The configured HERA organization is not active.",
         )
 
     # The verified HR session maps to a single shadow identity with grants in
@@ -182,6 +182,19 @@ def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
 
         AuditService().log_auth_failure(
             db, category="invalid_credentials", organization_id=user.organization_id
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    organization = db.get(Organization, user.organization_id)
+    if organization is None or organization.status != "active":
+        from app.services.audit_service import AuditService
+
+        AuditService().log_auth_failure(
+            db, category="organization_inactive", organization_id=user.organization_id
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

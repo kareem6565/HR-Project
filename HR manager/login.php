@@ -7,31 +7,60 @@ require_once __DIR__ . '/includes/auth.php';
 
 // Already logged in?
 if (!empty($_SESSION['user_id'])) {
-    redirect(roleHome($_SESSION['role'] ?? 'employee'));
+    requireLogin();
+    redirect(roleHome((string)($_SESSION['role'] ?? '')));
 }
 
 $error = '';
+$isServiceError = false;
+$successMessage = isset($_GET['logged_out']) ? 'تم تسجيل الخروج بنجاح.' : '';
+$email = '';
+$empCode = '';
+$loginMode = 'email';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $emp_code = trim($_POST['emp_code'] ?? '');
+    $loginMode = ($_POST['login_mode'] ?? '') === 'legacy' ? 'legacy' : 'email';
+    $email = strtolower(trim($_POST['email'] ?? ''));
+    $empCode = strtoupper(trim($_POST['emp_code'] ?? ''));
     $password = $_POST['password'] ?? '';
+    $postedNonce = (string)($_POST['login_nonce'] ?? '');
+    $storedNonce = (string)($_SESSION['login_nonce'] ?? '');
+    unset($_SESSION['login_nonce']);
 
-    if ($emp_code === '' || $password === '') {
-        $error = 'يرجى إدخال كود الموظف وكلمة المرور.';
+    if ($postedNonce === '' || $storedNonce === '' || !hash_equals($storedNonce, $postedNonce)) {
+        $error = 'انتهت صلاحية نموذج الدخول. أعد المحاولة.';
+    } elseif (($loginMode === 'email' && $email === '') || ($loginMode === 'legacy' && $empCode === '') || $password === '') {
+        $error = 'يرجى إدخال بيانات الدخول وكلمة المرور.';
     } else {
-        $pdo  = getPDO();
-        $stmt = $pdo->prepare("SELECT * FROM users WHERE emp_code = ? LIMIT 1");
-        $stmt->execute([$emp_code]);
-        $user = $stmt->fetch();
+        try {
+            $pdo  = getPDO(true);
+            if ($loginMode === 'legacy') {
+                $emailColumn = $pdo->query("SHOW COLUMNS FROM users LIKE 'email'")->fetch();
+                $legacyEmailCondition = $emailColumn ? " AND (email IS NULL OR email = '')" : '';
+                $stmt = $pdo->prepare('SELECT * FROM users WHERE emp_code = ?' . $legacyEmailCondition . ' LIMIT 1');
+                $stmt->execute([$empCode]);
+            } else {
+                $stmt = $pdo->prepare('SELECT * FROM users WHERE email = ? LIMIT 1');
+                $stmt->execute([$email]);
+            }
+            $user = $stmt->fetch();
 
-        if ($user && password_verify($password, $user['password_hash'])) {
-            loginUser($user);
-            redirect(roleHome($user['role']));
-        } else {
-            $error = 'كود الموظف أو كلمة المرور غير صحيحة.';
+            if ($user && password_verify($password, $user['password_hash'])) {
+                loginUser($user);
+                redirect(roleHome($user['role']));
+            }
+            $error = $loginMode === 'legacy'
+                ? 'كود الموظف أو كلمة المرور غير صحيحة.'
+                : 'البريد الإلكتروني أو كلمة المرور غير صحيحة.';
+        } catch (Throwable $exception) {
+            error_log('HR Manager authentication service unavailable: ' . $exception->getMessage());
+            $error = 'خدمة تسجيل الدخول غير متاحة حالياً. حاول مرة أخرى لاحقاً.';
+            $isServiceError = true;
         }
     }
 }
+
+$_SESSION['login_nonce'] = bin2hex(random_bytes(32));
 ?>
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -110,28 +139,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       
       <div class="mb-6">
         <h1 class="text-xl font-bold text-white mb-1">تسجيل الدخول للنظام</h1>
-        <p class="text-xs text-slate-400">أدخل كود الموظف وكلمة المرور الخاصة بك</p>
+          <p class="text-xs text-slate-400">أدخل بريدك الإلكتروني وكلمة المرور الخاصة بك</p>
       </div>
 
+      <?php if ($successMessage): ?>
+        <div role="status" class="mb-6 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-800 text-sm font-semibold">
+          <?= htmlspecialchars($successMessage, ENT_QUOTES, 'UTF-8') ?>
+        </div>
+      <?php endif; ?>
+
       <?php if ($error): ?>
-        <div class="mb-6 p-4 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 text-xs font-semibold flex items-center gap-2">
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 flex-shrink-0 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <div role="alert" class="mb-6 p-4 rounded-xl <?= $isServiceError ? 'bg-amber-500/10 border-amber-500/25 text-amber-900' : 'bg-red-500/10 border-red-500/25 text-red-800' ?> border text-sm font-semibold flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
           <span><?= htmlspecialchars($error) ?></span>
         </div>
       <?php endif; ?>
 
       <form id="loginForm" method="POST" action="/BIC2_Mvp/login.php" class="space-y-4">
-        <div>
-          <label for="emp_code" class="block text-xs font-bold text-slate-300 mb-1.5">كود الموظف / اسم المستخدم</label>
+        <input type="hidden" name="login_nonce" value="<?= htmlspecialchars($_SESSION['login_nonce'], ENT_QUOTES, 'UTF-8') ?>" />
+        <input type="hidden" name="login_mode" id="loginMode" value="<?= $loginMode ?>" />
+        <div id="emailLoginField" <?= $loginMode === 'legacy' ? 'hidden' : '' ?>>
+          <label for="email" class="block text-xs font-bold text-slate-300 mb-1.5">البريد الإلكتروني</label>
           <input
-            type="text"
-            id="emp_code"
-            name="emp_code"
-            value="<?= htmlspecialchars($_POST['emp_code'] ?? '') ?>"
-            placeholder="مثال: ADM001 أو EMP001"
-            required
-            class="w-full px-4 py-3 bg-slate-900/90 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-mono"
+            type="email"
+            id="email"
+            name="email"
+            value="<?= htmlspecialchars($email, ENT_QUOTES, 'UTF-8') ?>"
+            placeholder="name@company.com"
+            autocomplete="username"
+            <?= $loginMode === 'legacy' ? 'disabled' : 'required autofocus' ?>
+            class="w-full px-4 py-3 bg-slate-900/90 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
           />
+        </div>
+
+        <div id="legacyLoginField" <?= $loginMode !== 'legacy' ? 'hidden' : '' ?>>
+          <label for="emp_code" class="block text-xs font-bold text-slate-300 mb-1.5">كود الموظف للحسابات القديمة</label>
+          <input type="text" id="emp_code" name="emp_code" value="<?= htmlspecialchars($empCode, ENT_QUOTES, 'UTF-8') ?>" autocomplete="username" <?= $loginMode === 'legacy' ? 'required autofocus' : 'disabled' ?> class="w-full px-4 py-3 bg-slate-900/90 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-mono" />
         </div>
 
         <div>
@@ -141,6 +184,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             id="password"
             name="password"
             placeholder="••••••••"
+            autocomplete="current-password"
             required
             class="w-full px-4 py-3 bg-slate-900/90 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
           />
@@ -154,21 +198,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </button>
       </form>
 
-      <!-- Demo credentials -->
-      <div class="mt-6 pt-5 border-t border-white/10">
-        <p class="text-xs text-center text-indigo-300/80 mb-3 font-semibold">حسابات للتجربة المباشرة</p>
-        <div class="grid grid-cols-3 gap-2">
-          <button onclick="fillLogin('ADM001','admin123')" class="text-xs bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl py-2.5 px-2 text-indigo-300 transition-all text-center">
-            🔑 مدير النظام<br/><span class="text-white/50 text-[10px] font-mono">ADM001</span>
-          </button>
-          <button onclick="fillLogin('HR001','hr123')" class="text-xs bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl py-2.5 px-2 text-purple-300 transition-all text-center">
-            💼 HR مسؤول<br/><span class="text-white/50 text-[10px] font-mono">HR001</span>
-          </button>
-          <button onclick="fillLogin('EMP001','emp123')" class="text-xs bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl py-2.5 px-2 text-emerald-300 transition-all text-center">
-            👤 موظف<br/><span class="text-white/50 text-[10px] font-mono">EMP001</span>
-          </button>
-        </div>
-      </div>
+      <button type="button" id="legacyLoginToggle" class="mt-4 w-full text-center text-xs text-slate-500 hover:text-teal-700 underline underline-offset-4">
+        <?= $loginMode === 'legacy' ? 'الدخول بالبريد الإلكتروني' : 'حساب قديم بدون بريد؟ ادخل بكود الموظف مؤقتاً' ?>
+      </button>
 
       <div class="mt-5 text-center">
         <a href="/BIC2_Mvp/index.php" class="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors">
@@ -182,12 +214,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   </div>
 
   <script>
-    function fillLogin(code, pass) {
-      document.getElementById('emp_code').value = code;
-      document.getElementById('password').value = pass;
-    }
-
-    document.getElementById('loginForm').addEventListener('submit', function () {
+    let loginSubmitting = false;
+    document.getElementById('legacyLoginToggle').addEventListener('click', function () {
+      const useLegacy = document.getElementById('loginMode').value !== 'legacy';
+      document.getElementById('loginMode').value = useLegacy ? 'legacy' : 'email';
+      document.getElementById('emailLoginField').hidden = useLegacy;
+      document.getElementById('legacyLoginField').hidden = !useLegacy;
+      document.getElementById('email').disabled = useLegacy;
+      document.getElementById('email').required = !useLegacy;
+      document.getElementById('emp_code').disabled = !useLegacy;
+      document.getElementById('emp_code').required = useLegacy;
+      document.getElementById('legacyLoginToggle').textContent = useLegacy
+        ? 'الدخول بالبريد الإلكتروني'
+        : 'حساب قديم بدون بريد؟ ادخل بكود الموظف مؤقتاً';
+    });
+    document.getElementById('loginForm').addEventListener('submit', function (event) {
+      if (loginSubmitting) {
+        event.preventDefault();
+        return;
+      }
+      loginSubmitting = true;
       const btn = document.getElementById('loginBtn');
       btn.innerHTML = `<span class="btn-content flex items-center gap-2"><svg class="animate-spin w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path></svg> جارٍ التحقق...</span>`;
       btn.disabled = true;
