@@ -20,9 +20,14 @@ $currentUser = getCurrentUser();
 // Determine target user ID (Employee can view their own profile, Admin/HR can view any)
 $requestedId = isset($_GET['user_id']) ? (int)$_GET['user_id'] : $currentUser['id'];
 
-if ($currentUser['role'] === 'employee' && $requestedId !== (int)$currentUser['id']) {
+
+if (
+    !in_array($currentUser['role'], ['admin', 'hr'], true)
+    && $requestedId !== (int)$currentUser['id']
+) {
     jsonResponse(false, 'غير مصرح لك بعرض بيانات موظف آخر.');
 }
+
 
 // Fetch user + category details
 $stmt = $pdo->prepare(

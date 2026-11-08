@@ -6,10 +6,38 @@ require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/helpers.php';
 
+
 requireLogin();
 
+$pdo = getPDO();
 $user = getCurrentUser();
-$pdo  = getPDO();
+
+// Confirm that the authenticated account still exists in the database.
+$stmtCurrentUser = $pdo->prepare(
+    'SELECT id, emp_code, name, role FROM users WHERE id = ? LIMIT 1'
+);
+$stmtCurrentUser->execute([(int) $user['id']]);
+$databaseUser = $stmtCurrentUser->fetch();
+
+if (!$databaseUser) {
+    $_SESSION = [];
+    session_destroy();
+    redirect('/BIC2_Mvp/login.php');
+}
+
+// Use the current database record rather than potentially stale session details.
+$user = [
+    'id'       => (int) $databaseUser['id'],
+    'emp_code' => $databaseUser['emp_code'],
+    'name'     => $databaseUser['name'],
+    'role'     => $databaseUser['role'],
+];
+
+
+if ($user['role'] !== 'employee') {
+    redirect(roleHome($user['role']));
+}
+
 
 // Load today's record, or an open record from yesterday for a cross-midnight shift.
 $today    = date('Y-m-d');
