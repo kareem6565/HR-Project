@@ -67,7 +67,26 @@ Inside Docker, Compose sets `DB_HOST=postgres` and the PHP connection uses the
 `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASS`, and `DB_SCHEMA`, or with
 an optional `HR manager/includes/db.local.php`.
 
-## First-time backend and frontend setup
+## First-time setup on a new machine
+
+```powershell
+Set-Location "HR create jop"
+tools\setup_local.ps1
+```
+
+That single command creates the local `.env` files with generated secrets,
+installs the backend and frontend dependencies, applies the database
+migrations, creates the SSO organization, seeds the sign-in data, and starts
+the whole stack (PostgreSQL, Nginx + PHP-FPM, backend, frontend).
+
+Afterwards:
+
+- HR Manager: `http://localhost/BIC2_Mvp/login.php` — employee code `HR001`,
+  password `hr123` (change it from the employee management screen).
+- Recruitment: `http://127.0.0.1:5174` — reached from the workspace selector
+  without a second login.
+
+Run the steps manually instead:
 
 ```powershell
 Set-Location "HR create jop\backend"
@@ -75,6 +94,8 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -e ".[dev]"
 alembic upgrade head
+..\.venv\Scripts\python.exe ..\tools\bootstrap_hera_org.py
+..\.venv\Scripts\python.exe ..\tools\seed_hr_manager.py
 
 Set-Location "..\frontend\frontend_last"
 Copy-Item .env.example .env
@@ -82,20 +103,15 @@ npm install
 ```
 
 `alembic upgrade head` creates/updates both the recruitment tables and the
-`hr_ops` schema used by the PHP application. The one-off MySQL migration tool
-already ran; it is only needed if restoring from the dump.
+`hr_ops` schema used by the PHP application. `bootstrap_hera_org.py` creates
+the organization that `HR_SSO_ORGANIZATION_ID` points to, and
+`seed_hr_manager.py` inserts the sign-in data (default category, company
+settings, leave types, and the accounts). The seed script is idempotent, so
+running it on an existing database is safe. The one-off MySQL migration tool
+is only needed if restoring from the old dump.
 
-Seed the sign-in data (default category, company settings, leave types, and the
-accounts). It is idempotent, so running it on an existing database is safe:
-
-```powershell
-Set-Location "HR create jop\backend"
-.\.venv\Scripts\python.exe ..\tools\seed_hr_manager.py
-```
-
-The seeded accounts use employee code `HR001` (HR) and `ADM001`
-(system admin) with the password from `HR_SEED_PASSWORD` (default `hr123`).
-Change it from the employee management screen before real use.
+Seeded accounts use employee code `HR001` (HR) and `ADM001` (system admin)
+with the password from `HR_SEED_PASSWORD` (default `hr123`).
 
 ## Start the services
 
