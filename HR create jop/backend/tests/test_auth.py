@@ -170,8 +170,26 @@ def test_decode_malformed_token_raises() -> None:
 # 3. Authentication Endpoints: POST /auth/login
 # ==============================================================================
 
+# Production behaviour: password login is disabled; HR Manager SSO is the only
+# entry point. These tests exercise the endpoint itself, so they opt in.
 
-def test_login_success(client, seeded_recruiter) -> None:
+
+@pytest.fixture()
+def local_login_enabled(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "allow_local_login", True)
+
+
+def test_login_is_disabled_by_default(client) -> None:
+    resp = client.post(
+        "/api/v1/auth/login",
+        json={"email": "recruiter@heratest.com", "password": "ValidRecruiterPassword123!"},
+    )
+    assert resp.status_code == 403
+    assert "HR Manager" in resp.json()["detail"]
+    assert "access_token" not in resp.json()
+
+
+def test_login_success(client, seeded_recruiter, local_login_enabled) -> None:
     resp = client.post(
         "/api/v1/auth/login",
         json={"email": "recruiter@heratest.com", "password": "ValidRecruiterPassword123!"},
@@ -188,7 +206,7 @@ def test_login_success(client, seeded_recruiter) -> None:
     assert "jwt_secret_key" not in str(data)
 
 
-def test_login_case_insensitive_email(client, seeded_recruiter) -> None:
+def test_login_case_insensitive_email(client, seeded_recruiter, local_login_enabled) -> None:
     resp = client.post(
         "/api/v1/auth/login",
         json={"email": "RECRUITER@HERATEST.COM", "password": "ValidRecruiterPassword123!"},
@@ -197,7 +215,7 @@ def test_login_case_insensitive_email(client, seeded_recruiter) -> None:
     assert "access_token" in resp.json()
 
 
-def test_login_incorrect_password(client, seeded_recruiter) -> None:
+def test_login_incorrect_password(client, seeded_recruiter, local_login_enabled) -> None:
     resp = client.post(
         "/api/v1/auth/login",
         json={"email": "recruiter@heratest.com", "password": "WrongPassword!"},
@@ -206,7 +224,7 @@ def test_login_incorrect_password(client, seeded_recruiter) -> None:
     assert resp.json()["detail"] == "Invalid email or password."
 
 
-def test_login_unknown_account(client) -> None:
+def test_login_unknown_account(client, local_login_enabled) -> None:
     resp = client.post(
         "/api/v1/auth/login",
         json={"email": "nonexistent@unknown.com", "password": "AnyPassword123!"},
@@ -216,7 +234,7 @@ def test_login_unknown_account(client) -> None:
     assert resp.json()["detail"] == "Invalid email or password."
 
 
-def test_login_inactive_account(client, db_session, seeded_recruiter) -> None:
+def test_login_inactive_account(client, db_session, seeded_recruiter, local_login_enabled) -> None:
     seeded_recruiter.is_active = False
     db_session.commit()
 
@@ -228,7 +246,9 @@ def test_login_inactive_account(client, db_session, seeded_recruiter) -> None:
     assert resp.json()["detail"] == "Invalid email or password."
 
 
-def test_login_legacy_user_without_password_hash(client, db_session, seeded_org) -> None:
+def test_login_legacy_user_without_password_hash(
+    client, db_session, seeded_org, local_login_enabled
+) -> None:
     legacy_user = User(
         organization_id=seeded_org.id,
         email="legacy@heratest.com",

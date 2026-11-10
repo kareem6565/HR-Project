@@ -1,21 +1,16 @@
 <?php
 /**
- * update_db_shifttype.php — Migration to add shift_type column to categories.
+ * update_db_shifttype.php — retired.
+ *
+ * The HR Manager schema is managed by Alembic (revision 020_hr_ops_schema)
+ * inside the single HERA PostgreSQL database. This script no longer runs any
+ * DDL and exists only to explain where the schema comes from now.
  */
-require_once __DIR__ . '/includes/db.php';
 
-try {
-    $pdo = getPDO();
-
-    $cols = $pdo->query("SHOW COLUMNS FROM `categories` LIKE 'shift_type'")->fetch();
-    if (!$cols) {
-        $pdo->exec("ALTER TABLE `categories` ADD COLUMN `shift_type` ENUM('day', 'night') NOT NULL DEFAULT 'day' AFTER `name`");
-    }
-
-    // Auto-set existing night shifts
-    $pdo->exec("UPDATE `categories` SET `shift_type` = 'night' WHERE `work_end_time` < `work_start_time` OR `work_start_time` >= '16:00:00' OR `work_start_time` = '00:00:00'");
-
-    echo "Shift type migration completed successfully!\n";
-} catch (Exception $e) {
-    echo "Migration error: " . $e->getMessage() . "\n";
-}
+http_response_code(410);
+header('Content-Type: text/plain; charset=utf-8');
+echo "This migration script has been retired.\n\n";
+echo "The HR Manager tables now live in the hr_ops schema of the HERA PostgreSQL database.\n";
+echo "Apply schema changes with Alembic:\n";
+echo "  cd \"HR create jop/backend\"\n";
+echo "  .venv\\Scripts\\python.exe -m alembic upgrade head\n";

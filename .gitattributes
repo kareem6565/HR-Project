@@ -1,0 +1,14 @@
+# Normalize line endings: keep LF in the repository, CRLF on Windows checkouts.
+* text=auto eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.docx binary
+*.xlsx binary
+*.zip binary
+*.dump binary

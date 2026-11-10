@@ -23,7 +23,9 @@ hera-admin = "app.cli.bootstrap:main"
 
 [project.optional-dependencies]
 dev = [
+    "bcrypt>=4.1.0",  # seed script generates PHP-compatible password hashes
     "httpx>=0.27.0",
+    "pymysql>=1.1.0",  # one-off MySQL -> PostgreSQL migration tool
     "pytest>=8.0.0",
     "ruff>=0.6.0",
 ]

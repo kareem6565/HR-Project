@@ -272,8 +272,8 @@ def build_document():
         ["البند", "القيمة"],
         [
             ("نوع المستند", "مرجع معماري ووظيفي للنظام الحالي"),
-            ("بيئة التشغيل", "XAMPP محليًا: Apache + PHP + MySQL"),
-            ("قاعدة البيانات", "attendance_db عبر PDO وMySQL"),
+            ("بيئة التشغيل", "Docker محليًا: Nginx + PHP-FPM + PostgreSQL"),
+            ("قاعدة البيانات", "hr_ai_assistant / schema hr_ops عبر PDO PostgreSQL"),
             ("واجهة الاستخدام", "Arabic RTL - HTML/CSS/Tailwind + JavaScript"),
             ("تاريخ التوثيق", "03 سبتمبر 2026"),
         ],
@@ -289,7 +289,7 @@ def build_document():
     )
 
     add_heading(doc, "1. نطاق النظام الحالي", 1)
-    add_body(doc, "يوحّد النظام إدارة الحضور اليومي والخدمات الذاتية للموظف وعمليات الموارد البشرية في تطبيق ويب واحد يعمل محليًا عبر XAMPP.")
+    add_body(doc, "يوحّد النظام إدارة الحضور اليومي والخدمات الذاتية للموظف وعمليات الموارد البشرية في تطبيق ويب واحد يعمل محليًا عبر Nginx وPHP-FPM داخل Docker.")
     add_table(
         doc,
         ["المجال", "الوظائف المتاحة الآن"],
@@ -305,7 +305,7 @@ def build_document():
     )
 
     add_heading(doc, "2. المعمارية التقنية", 1)
-    add_body(doc, "يعتمد النظام على معمارية طبقات بسيطة. تتعامل صفحات الواجهة مع واجهات API بصيغة JSON، وتتولى طبقة PHP التحقق من الجلسة والصلاحية ومنطق العمل، ثم تحفظ البيانات في MySQL.")
+    add_body(doc, "يعتمد النظام على معمارية طبقات بسيطة. تتعامل صفحات الواجهة مع واجهات API بصيغة JSON، وتتولى طبقة PHP التحقق من الجلسة والصلاحية ومنطق العمل، ثم تحفظ البيانات في PostgreSQL.")
     add_table(
         doc,
         ["الطبقة", "المكونات والمسؤولية"],
@@ -313,12 +313,12 @@ def build_document():
             ("واجهة المستخدم", "login.php، employee.php، admin.php، hr_suite.php، profile.php، work.php. واجهات عربية RTL وتفاعلات JavaScript."),
             ("واجهة الخدمات", "api/attendance.php، api/employees.php، api/categories.php، api/settings.php، api/hr.php، api/work.php."),
             ("منطق الأعمال", "includes/auth.php للجلسات والأدوار، includes/helpers.php للوقت والموقع، includes/hr_platform.php للإشعارات وسير عمل HR."),
-            ("البيانات", "MySQL: users وattendance وcategories وcompany_settings ووحدات HR وسجل geofence_events."),
+            ("البيانات", "PostgreSQL (schema hr_ops): users وattendance وcategories وcompany_settings ووحدات HR وسجل geofence_events."),
             ("التخزين", "مجلد uploads/hr_documents لحفظ الوثائق والمرفقات المصرح بها."),
         ],
         [2700, 6660],
     )
-    add_callout(doc, "مسار البيانات", "المستخدم > صفحة الواجهة > API بصيغة JSON > فحص الجلسة والصلاحية > منطق الأعمال > MySQL > استجابة الواجهة.")
+    add_callout(doc, "مسار البيانات", "المستخدم > صفحة الواجهة > API بصيغة JSON > فحص الجلسة والصلاحية > منطق الأعمال > PostgreSQL (hr_ops) > استجابة الواجهة.")
 
     add_heading(doc, "3. الأدوار والصلاحيات", 1)
     add_table(
@@ -399,9 +399,9 @@ def build_document():
         doc,
         ["الخطوة", "الإجراء"],
         [
-            ("1", "تشغيل Apache وMySQL من XAMPP."),
+            ("1", "تشغيل خدمات postgres وhr_php وhr_web عبر Docker Compose."),
             ("2", "فتح http://localhost/BIC2_Mvp/login.php."),
-            ("3", "التأكد من قاعدة attendance_db وإعدادات الاتصال في includes/db.php دون وضع كلمة مرور في المستودع."),
+            ("3", "التأكد من schema hr_ops داخل قاعدة hr_ai_assistant وإعدادات الاتصال في includes/db.php دون وضع كلمة مرور في المستودع."),
             ("4", "تسجيل الدخول بالدور المطلوب. حسابات الاختبار يجب تغيير كلمات مرورها قبل التسليم الفعلي."),
             ("5", "قبل تجربة الحضور، ضبط موقع الشركة/الفئة ليطابق الموقع الفعلي ومنح المتصفح صلاحية الموقع."),
         ],

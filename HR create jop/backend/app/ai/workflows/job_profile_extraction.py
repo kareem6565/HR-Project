@@ -176,7 +176,7 @@ class JobProfileExtractionWorkflow:
         """Execute the extraction run, raising on any failure."""
         job = self._get_job(db, job_id=job_id, organization_id=organization_id)
         original_listing_text = self._source_listing_text(db, job)
-        raw_description = original_listing_text or self._require_raw_description(job)
+        raw_description = original_listing_text or job.raw_description or ""
         if request_key:
             existing = db.scalar(
                 select(JobProfile).where(

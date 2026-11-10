@@ -1,14 +1,37 @@
 <?php
 /**
- * Database connection — PDO singleton.
- * Edit the constants below to match your XAMPP / MySQL config.
+ * Database connection — PDO singleton backed by PostgreSQL.
+ *
+ * The HR Manager tables live in the `hr_ops` schema of the single HERA
+ * PostgreSQL database. Every value can be overridden with an environment
+ * variable (DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASS, DB_SCHEMA) or with
+ * an optional includes/db.local.php that defines the same constants.
  */
 
-define('DB_HOST', 'localhost');
-define('DB_NAME', 'attendance_db');
-define('DB_USER', 'root');
-define('DB_PASS', '');          // Default XAMPP: empty string
-define('DB_CHARSET', 'utf8mb4');
+function hrDbEnv(string $key, string $default): string
+{
+    $value = getenv($key);
+    if ($value === false || $value === '') {
+        $value = $_SERVER[$key] ?? $_ENV[$key] ?? '';
+    }
+    return ($value === false || $value === '') ? $default : (string)$value;
+}
+
+if (file_exists(__DIR__ . '/db.local.php')) {
+    require_once __DIR__ . '/db.local.php';
+}
+
+defined('DB_HOST')   || define('DB_HOST', hrDbEnv('DB_HOST', '127.0.0.1'));
+defined('DB_PORT')   || define('DB_PORT', hrDbEnv('DB_PORT', '5432'));
+defined('DB_NAME')   || define('DB_NAME', hrDbEnv('DB_NAME', 'hr_ai_assistant'));
+defined('DB_USER')   || define('DB_USER', hrDbEnv('DB_USER', 'hr_ai_assistant'));
+defined('DB_PASS')   || define('DB_PASS', hrDbEnv('DB_PASS', 'hr_ai_assistant'));
+defined('DB_SCHEMA') || define('DB_SCHEMA', hrDbEnv('DB_SCHEMA', 'hr_ops'));
+
+function hrDbQuotedSchema(): string
+{
+    return '"' . str_replace('"', '""', DB_SCHEMA) . '"';
+}
 
 function getPDO(bool $throwOnFailure = false): PDO
 {
@@ -16,10 +39,10 @@ function getPDO(bool $throwOnFailure = false): PDO
 
     if ($pdo === null) {
         $dsn = sprintf(
-            'mysql:host=%s;dbname=%s;charset=%s',
+            'pgsql:host=%s;port=%s;dbname=%s',
             DB_HOST,
-            DB_NAME,
-            DB_CHARSET
+            DB_PORT,
+            DB_NAME
         );
 
         $options = [
@@ -29,7 +52,9 @@ function getPDO(bool $throwOnFailure = false): PDO
         ];
 
         try {
-            $pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
+            $connection = new PDO($dsn, DB_USER, DB_PASS, $options);
+            $connection->exec('SET search_path TO ' . hrDbQuotedSchema() . ', public');
+            $pdo = $connection;
         } catch (PDOException $e) {
             error_log('HR Manager database connection failed: ' . $e->getMessage());
             if ($throwOnFailure) {

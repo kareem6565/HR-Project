@@ -37,6 +37,7 @@ from sqlalchemy.exc import DBAPIError, IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 from starlette.testclient import TestClient
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import create_access_token
 from app.main import create_app
@@ -475,10 +476,12 @@ def test_user_creation_role_change_and_deactivation_are_audited(
 
 
 def test_failed_login_records_safe_category_without_credentials(
-    client: TestClient, db_session: Session, setup_org_and_users
+    client: TestClient, db_session: Session, setup_org_and_users, monkeypatch
 ):
     """Authentication failures log safe categories without exposing submitted passwords or emails."""
     org, admin, _, _, _ = setup_org_and_users
+    # Password login is disabled in production; this test exercises its audit trail.
+    monkeypatch.setattr(settings, "allow_local_login", True)
 
     # Non-existent user
     resp = client.post(

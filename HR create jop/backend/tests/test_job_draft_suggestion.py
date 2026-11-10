@@ -315,7 +315,14 @@ class TestApproveJobProfileTransition:
     ) -> None:
         organization, user = seed_org_user(db_session)
         headers = auth_headers(str(organization.id), str(user.id))
-        job = create_job(client, headers)
+        job = create_job(
+            client,
+            headers,
+            job_type="Full-time",
+            experience="5+ years",
+            requirements=["Python"],
+            required_skills=["Python", "FastAPI"],
+        )
 
         extraction = client.post(f"/api/v1/jobs/{job['id']}/extract-profile", headers=headers)
         assert extraction.status_code == 201

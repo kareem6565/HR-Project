@@ -58,8 +58,17 @@ npm run build          # production build
 
 - Start Postgres first: `docker compose up -d postgres` from repo root (image
   `postgres:16-alpine`, creds `hr_ai_assistant`/`hr_ai_assistant`, port 5432).
-  That compose file is the local dev DB only — it is not the app's Docker
-  deployment.
+  The compose file also runs HR Manager through Nginx + PHP-FPM; these are
+  local development services, not a production deployment.
+- Recruitment tables use the `public` schema. The PHP HR Manager in
+  `../HR manager` uses the `hr_ops` schema in the same database via PDO
+  PostgreSQL (`pdo_pgsql`) inside `hr_php`; Nginx (`hr_web`) serves it on
+  `http://localhost/BIC2_Mvp`. No XAMPP, Apache, MySQL, or local PHP runtime is
+  used. Its `setup.php`/`update_db*.php` installers are retired.
+- `POST /auth/login` is disabled by default (`ALLOW_LOCAL_LOGIN=false`).
+  Interactive sign-in is `HR manager/login.php`; recruitment uses
+  `POST /auth/sso/exchange`. Enable local password login only for development
+  or tests.
 - Config is loaded from `backend/.env` via `app/core/config.py`
   (pydantic-settings). Copy `backend/.env.example` to `backend/.env` if absent.
   Defaults already match the compose DB, so it usually runs with no env file.
@@ -74,7 +83,7 @@ npm run build          # production build
 - Alembic `env.py` pulls connection from `settings.database_url` and
   autogenerates against `Base.metadata`. **Revision IDs must stay under 32
   chars** (the `alembic_version.version_num` column width). Current head:
-  `011_chat`.
+  `020_hr_ops_schema`.
 
 ## Operational runbook (Windows / this machine)
 
@@ -82,6 +91,8 @@ On this machine `python` is not on PATH and npm needs a ComSpec fix, so prefer
 the helper scripts in `tools/` over raw commands:
 
 ```powershell
+tools\start_hera.ps1                             # PostgreSQL + Nginx/PHP + backend + frontend
+tools\start_hera.ps1 -InfraOnly                  # HR Manager on :80 + PostgreSQL only
 tools\start_backend.ps1                          # postgres not included; backend on :8000
 tools\start_frontend.ps1                         # frontend_last Vite on :5174
 tools\start_frontend.ps1 5174 http://localhost:8000/api/v1   # dev against local backend
@@ -97,9 +108,10 @@ backend\.venv\Scripts\python.exe tools\e2e_screening_flow.py   # live E2E (needs
   (soal.help rejects it with a 401).
 - Backend logs: `%TEMP%\opencode\backend.log` / `backend.err.log`; frontend:
   `%TEMP%\opencode\frontend_last.log`.
-- Ports: FastAPI `:8000`; frontend_last dev `:5174`; Postgres `:5432` via
-  `docker compose up -d postgres` (tests need it; the test DB is created fresh
-  per run). CORS already allows 5173/5174/5175 + localhost:8000 (`backend/.env`).
+- Ports: HR Manager Nginx `:80`; FastAPI `:8000`; frontend_last dev `:5174`;
+  Postgres `:5432` via `docker compose up -d postgres` (tests need it; the test
+  DB is created fresh per run). CORS already allows 5173/5174/5175 +
+  localhost:8000 (`backend/.env`).
 - Frontend API base defaults to `https://soal.help/api/v1`; override with
   `VITE_API_BASE_URL` (e.g. `http://localhost:8000/api/v1`) for local work.
 - E2E scores vary run to run with the live LLM; the harness only asserts
@@ -116,6 +128,8 @@ backend\.venv\Scripts\python.exe tools\e2e_screening_flow.py   # live E2E (needs
   business logic; `backend/app/repositories/` is an empty placeholder to be
   removed later.
 - `backend/alembic/versions/` — numbered migrations (`00x_*.py`).
+- `docker/hr-manager/` — PHP-FPM Dockerfile, PHP settings, and Nginx config for
+  the sibling `HR manager/` application; Compose services are `hr_php`/`hr_web`.
 - `frontend/frontend_last/` — canonical React/Vite frontend (pages, services,
   components). Zero mock data; every page calls the live backend or shows an
   honest empty/error state.

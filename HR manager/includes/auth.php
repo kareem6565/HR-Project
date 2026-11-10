@@ -80,7 +80,7 @@ function requireLogin(): void
         redirect('/BIC2_Mvp/login.php');
     }
 
-    // Resolve role, organization membership, and account identity from MySQL
+    // Resolve role, organization membership, and account identity from PostgreSQL
     // on every protected request so changed/deleted accounts take effect now.
     try {
         $stmt = getPDO(true)->prepare(

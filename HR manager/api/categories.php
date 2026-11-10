@@ -91,7 +91,8 @@ if ($method === 'POST') {
             "INSERT INTO categories (
                 name, shift_type, work_start_time, work_end_time, break_start_time, break_duration_minutes,
                 cutoff_minutes, center_latitude, center_longitude, allowed_radius_meters
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            RETURNING id"
         );
         $stmt->execute([
             trim($body['name']),
@@ -106,7 +107,7 @@ if ($method === 'POST') {
             $radius,
         ]);
 
-        jsonResponse(true, 'تم إضافة فئة العمل بنجاح.', ['id' => $pdo->lastInsertId()]);
+        jsonResponse(true, 'تم إضافة فئة العمل بنجاح.', ['id' => (int)$stmt->fetchColumn()]);
     }
 
     // ── UPDATE ─────────────────────────────────────────────────────────────────

@@ -1,5 +1,8 @@
 -- ============================================================
 --  Employee Attendance & Simple Payroll System — Schema
+--  HISTORICAL ONLY: the live schema now lives in the PostgreSQL
+--  `hr_ops` schema (Alembic revision 020_hr_ops_schema).
+--  This MySQL file is kept for reference and is not executed.
 --  Compatible with MySQL 5.7+ / MariaDB 10.3+
 -- ============================================================
 
