@@ -35,9 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $pdo  = getPDO(true);
             if ($loginMode === 'legacy') {
-                $emailColumn = $pdo->query("SHOW COLUMNS FROM users LIKE 'email'")->fetch();
-                $legacyEmailCondition = $emailColumn ? " AND (email IS NULL OR email = '')" : '';
-                $stmt = $pdo->prepare('SELECT * FROM users WHERE emp_code = ?' . $legacyEmailCondition . ' LIMIT 1');
+                $stmt = $pdo->prepare("SELECT * FROM users WHERE emp_code = ? AND (email IS NULL OR email = '') LIMIT 1");
                 $stmt->execute([$empCode]);
             } else {
                 $stmt = $pdo->prepare('SELECT * FROM users WHERE email = ? LIMIT 1');

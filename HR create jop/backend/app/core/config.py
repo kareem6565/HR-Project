@@ -59,6 +59,7 @@ class Settings(BaseSettings):
     hr_sso_shared_secret: str = Field(default="", validation_alias="HR_SSO_SHARED_SECRET")
     hr_sso_organization_id: str = Field(default="", validation_alias="HR_SSO_ORGANIZATION_ID")
     hr_sso_issuer: str = Field(default="hr-manager", validation_alias="HR_SSO_ISSUER")
+    allow_local_login: bool = Field(default=False, validation_alias="ALLOW_LOCAL_LOGIN")
     enable_screening_worker: bool = Field(default=True, validation_alias="ENABLE_SCREENING_WORKER")
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")

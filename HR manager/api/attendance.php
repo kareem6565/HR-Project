@@ -424,10 +424,12 @@ if ($method === 'POST') {
 
         $ins = $pdo->prepare(
             "INSERT INTO attendance (user_id, date, check_in_time, lat_in, lng_in, distance_in_meters, last_lat, last_lng, last_location_at, geofence_status, status)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'inside', ?)"
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'inside', ?)
+             RETURNING id"
         );
         $ins->execute([$user['id'], $shiftDate, $now, $lat, $lng, $distance, $lat, $lng, $status]);
-        addGeofenceEvent($pdo, (int)$user['id'], (int)$pdo->lastInsertId(), 'checkin_inside', $lat, $lng, $distance);
+        $attendanceId = (int)$ins->fetchColumn();
+        addGeofenceEvent($pdo, (int)$user['id'], $attendanceId, 'checkin_inside', $lat, $lng, $distance);
         jsonResponse(true, 'تم تسجيل الحضور بنجاح ✅', ['type' => 'checkin', 'time' => $now, 'distance' => $distance, 'status' => $status]);
     }
 

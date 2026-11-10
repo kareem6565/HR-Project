@@ -23,6 +23,7 @@ describe("dashboard KPI definitions", () => {
     await expect(getDashboardStats()).resolves.toEqual({
       candidatesWithApplications: 2,
       activeJobs: 2,
+      totalJobs: 3,
       applications: 4,
       shortlisted: 3,
       advancedApplications: 2,

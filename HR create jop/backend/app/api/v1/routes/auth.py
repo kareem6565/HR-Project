@@ -80,14 +80,23 @@ def exchange_hr_assertion(
         )
 
     organization = db.get(Organization, organization_id)
-    if organization is None or organization.status != "active":
+    if organization is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "The configured HERA organization was not found. "
+                "Ask an administrator to verify the organization setup."
+            ),
+        )
+    if organization.status != "active":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="The configured HERA organization is not active.",
         )
 
     # The verified HR session maps to a single shadow identity with grants in
-    # both workspaces. MySQL remains authoritative for HR Operations access.
+    # both workspaces. The HR Manager database (PostgreSQL `hr_ops` schema) stays
+    # authoritative for HR Operations access.
     email = f"hrm.{employee_code.lower()}@sso.hera.local"
     assigned_roles = ["recruiter", "hr_operations"]
     user = db.scalar(
@@ -142,9 +151,23 @@ def exchange_hr_assertion(
 def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
     """Authenticate with email and password, returning a signed JWT access token.
 
+    Local password login is disabled by default: the HR Manager (`login.php`) is
+    the single entry point and the recruitment workspace is reached through
+    `/auth/sso/exchange`. Set ``ALLOW_LOCAL_LOGIN=true`` only for development
+    or automated tests.
+
     Uses a generic authentication failure message that does not disclose whether
     the account exists or its active status.
     """
+    if not settings.allow_local_login:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Local password login is disabled. "
+                "Sign in through the HR Manager to open the recruitment workspace."
+            ),
+        )
+
     email_clean = body.email.strip().lower()
     stmt = select(User).where(func.lower(User.email) == email_clean)
     if body.organization_id is not None:

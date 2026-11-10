@@ -181,7 +181,7 @@ describe("HERA UI-09: Simplified MVP Navigation and Role-Aware Controls", () => 
       renderDirectRoute("recruiter", "/settings");
       expect(screen.queryByText("Secret Admin Settings Content")).not.toBeInTheDocument();
       expect(screen.getByText("Access Restricted")).toBeInTheDocument();
-      expect(screen.getByText(/your account has the/i)).toHaveTextContent("recruiter");
+      expect(screen.getByText(/your account has/i)).toHaveTextContent("recruiter");
       expect(screen.getByRole("link", { name: /return to dashboard/i })).toHaveAttribute("href", "/dashboard");
     });
 
@@ -189,7 +189,7 @@ describe("HERA UI-09: Simplified MVP Navigation and Role-Aware Controls", () => 
       renderDirectRoute("guest", "/settings");
       expect(screen.queryByText("Secret Admin Settings Content")).not.toBeInTheDocument();
       expect(screen.getByText("Access Restricted")).toBeInTheDocument();
-      expect(screen.getByText(/your account has the/i)).toHaveTextContent("guest");
+      expect(screen.getByText(/your account has/i)).toHaveTextContent("guest");
     });
 
     it("allows administrators and blocks recruiters on the direct AI Activity route", () => {

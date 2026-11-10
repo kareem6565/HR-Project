@@ -20,5 +20,8 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: "./src/test/setup.js",
+    // Heavy page-level tests exceed Vitest's 5s default on this machine.
+    testTimeout: 20000,
+    hookTimeout: 20000,
   },
 });

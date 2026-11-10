@@ -65,8 +65,9 @@ function ensureLeaveBalances(PDO $pdo, int $userId, int $year): void
 
     $types = $pdo->query('SELECT id, code, default_days FROM leave_types WHERE is_active = 1')->fetchAll();
     $insert = $pdo->prepare(
-        'INSERT IGNORE INTO leave_balances (user_id, leave_type_id, balance_year, entitled_days, used_days)
-         VALUES (?, ?, ?, ?, 0)'
+        'INSERT INTO leave_balances (user_id, leave_type_id, balance_year, entitled_days, used_days)
+         VALUES (?, ?, ?, ?, 0)
+         ON CONFLICT (user_id, leave_type_id, balance_year) DO NOTHING'
     );
 
     foreach ($types as $type) {

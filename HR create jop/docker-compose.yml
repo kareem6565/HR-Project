@@ -60,6 +60,53 @@ services:
     networks:
       - hera
 
+  hr_php:
+    build:
+      context: ./docker/hr-manager
+    container_name: hr_ai_assistant_hr_php
+    env_file:
+      - ../HR manager/.env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: ${POSTGRES_DB:-hr_ai_assistant}
+      DB_USER: ${POSTGRES_USER:-hr_ai_assistant}
+      DB_PASS: ${POSTGRES_PASSWORD:-hr_ai_assistant}
+      DB_SCHEMA: hr_ops
+    volumes:
+      - ../HR manager:/var/www/html/BIC2_Mvp
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(in_array('pgsql', PDO::getAvailableDrivers(), true) ? 0 : 1);"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    networks:
+      - hera
+
+  hr_web:
+    image: nginx:1.27-alpine
+    container_name: hr_ai_assistant_hr_web
+    ports:
+      - "${HR_WEB_PORT:-80}:80"
+    volumes:
+      - ../HR manager:/var/www/html/BIC2_Mvp:ro
+      - ./docker/hr-manager/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      hr_php:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1/BIC2_Mvp/login.php || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    networks:
+      - hera
+
 networks:
   hera:
 

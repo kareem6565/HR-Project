@@ -91,7 +91,8 @@ if ($method === 'POST') {
 
         $stmt = $pdo->prepare(
             "INSERT INTO users (emp_code, email, name, password_hash, role, category_id, basic_salary, yearly_vacation_days)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+             RETURNING id"
         );
         $stmt->execute([
             trim($body['emp_code']),
@@ -104,7 +105,7 @@ if ($method === 'POST') {
             (int)($body['yearly_vacation_days'] ?? 21),
         ]);
 
-        jsonResponse(true, 'تم إضافة الموظف بنجاح.', ['id' => $pdo->lastInsertId()]);
+        jsonResponse(true, 'تم إضافة الموظف بنجاح.', ['id' => (int)$stmt->fetchColumn()]);
     }
 
     // ── UPDATE ─────────────────────────────────────────────────────────────────

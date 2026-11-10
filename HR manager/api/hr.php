@@ -85,7 +85,15 @@ function leaveRows(PDO $pdo, array $actor, string $scope): array
          LEFT JOIN users m ON m.id = lr.manager_id
          LEFT JOIN users h ON h.id = lr.hr_id
          {$where}
-         ORDER BY FIELD(lr.status, 'pending_manager', 'pending_hr', 'approved', 'rejected', 'cancelled'), lr.created_at DESC"
+         ORDER BY CASE lr.status
+                      WHEN 'pending_manager' THEN 1
+                      WHEN 'pending_hr' THEN 2
+                      WHEN 'approved' THEN 3
+                      WHEN 'rejected' THEN 4
+                      WHEN 'cancelled' THEN 5
+                      ELSE 6
+                  END,
+                  lr.created_at DESC"
     );
     $stmt->execute($params);
     return $stmt->fetchAll();
@@ -186,8 +194,9 @@ function createPayrollRun(PDO $pdo, array $actor, int $year, int $month): int
 
     $pdo->beginTransaction();
     try {
-        $pdo->prepare('INSERT INTO payroll_runs (period_year, period_month, created_by) VALUES (?, ?, ?)')->execute([$year, $month, (int)$actor['id']]);
-        $runId = (int)$pdo->lastInsertId();
+        $insertRun = $pdo->prepare('INSERT INTO payroll_runs (period_year, period_month, created_by) VALUES (?, ?, ?) RETURNING id');
+        $insertRun->execute([$year, $month, (int)$actor['id']]);
+        $runId = (int)$insertRun->fetchColumn();
         $firstDay = sprintf('%04d-%02d-01', $year, $month);
         $lastDay = date('Y-m-t', strtotime($firstDay));
         $employees = $pdo->query("SELECT id, basic_salary FROM users WHERE role IN ('employee','manager','hr') ORDER BY name")->fetchAll();
@@ -195,7 +204,9 @@ function createPayrollRun(PDO $pdo, array $actor, int $year, int $month): int
             'SELECT component_type, COALESCE(SUM(amount),0) AS total FROM payroll_adjustments WHERE user_id=? AND period_year=? AND period_month=? GROUP BY component_type'
         );
         $attendance = $pdo->prepare(
-            "SELECT SUM(status='absent') AS absences, SUM(status='late') AS lates FROM attendance WHERE user_id=? AND date BETWEEN ? AND ?"
+            "SELECT SUM(CASE WHEN status='absent' THEN 1 ELSE 0 END) AS absences,
+                    SUM(CASE WHEN status='late' THEN 1 ELSE 0 END) AS lates
+             FROM attendance WHERE user_id=? AND date BETWEEN ? AND ?"
         );
         $insert = $pdo->prepare(
             'INSERT INTO payroll_items (payroll_run_id,user_id,basic_salary,allowances,bonuses,commissions,overtime_amount,absence_deductions,late_deductions,other_deductions,net_salary)
@@ -261,7 +272,7 @@ if ($method === 'GET') {
         $stmt = $pdo->query(
             "SELECT pr.*, u.name AS created_by_name, COUNT(pi.id) AS employee_count, COALESCE(SUM(pi.net_salary),0) AS total_net
              FROM payroll_runs pr JOIN users u ON u.id=pr.created_by LEFT JOIN payroll_items pi ON pi.payroll_run_id=pr.id
-             GROUP BY pr.id ORDER BY pr.period_year DESC, pr.period_month DESC"
+             GROUP BY pr.id, u.name ORDER BY pr.period_year DESC, pr.period_month DESC"
         );
         jsonResponse(true, 'OK', ['runs' => $stmt->fetchAll()]);
     }
@@ -340,9 +351,9 @@ if ($method === 'POST') {
         $managerStmt->execute([(int)$actor['id']]);
         $managerId = (int)($managerStmt->fetchColumn() ?: 0);
         $status = $managerId && (int)$leaveType['requires_manager_approval'] ? 'pending_manager' : 'pending_hr';
-        $stmt = $pdo->prepare('INSERT INTO leave_requests (user_id,leave_type_id,start_date,end_date,days_count,reason,status,manager_id) VALUES (?,?,?,?,?,?,?,?)');
+        $stmt = $pdo->prepare('INSERT INTO leave_requests (user_id,leave_type_id,start_date,end_date,days_count,reason,status,manager_id) VALUES (?,?,?,?,?,?,?,?) RETURNING id');
         $stmt->execute([(int)$actor['id'], $leaveTypeId, $start, $end, $days, clean($body['reason'] ?? ''), $status, $managerId ?: null]);
-        $requestId = (int)$pdo->lastInsertId();
+        $requestId = (int)$stmt->fetchColumn();
         if ($status === 'pending_manager') addNotification($pdo, $managerId, 'leave', 'طلب إجازة جديد', "يوجد طلب إجازة جديد بانتظار موافقتك.", '/BIC2_Mvp/notifications.php');
         else notifyRoles($pdo, ['admin', 'hr'], 'leave', 'طلب إجازة جديد', 'يوجد طلب إجازة جديد بانتظار مراجعة الموارد البشرية.', '/BIC2_Mvp/notifications.php');
         auditHRAction($pdo, (int)$actor['id'], 'create', 'leave_request', $requestId);

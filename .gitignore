@@ -30,6 +30,11 @@
 **/*.db-shm
 **/*.db-wal
 
+# Local backups of legacy databases and removed toolchains (never commit)
+/backups/
+**/*.dump
+**/*.sql.gz
+
 # Local editor and operating-system files
 **/.idea/
 **/.vscode/
