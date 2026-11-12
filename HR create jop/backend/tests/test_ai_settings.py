@@ -186,6 +186,61 @@ def test_verify_with_provided_key_calls_ollama(client: httpx.Client, monkeypatch
     assert "verified" in body["message"].lower()
 
 
+def test_verify_with_provided_key_calls_openrouter(client: httpx.Client, monkeypatch) -> None:
+    """OpenRouter probe uses its selected model and endpoint without persisting the key."""
+    from app.core.config import settings
+
+    runtime_config.clear_api_key()
+    monkeypatch.setattr(settings, "ai_provider", "openrouter")
+    monkeypatch.setattr(settings, "openrouter_api_key", None)
+    org, user = bootstrap(client)
+    h = auth_headers(org["id"], user["id"])
+    fake_result = mock.Mock()
+    fake_result.text = "OK"
+
+    with mock.patch("app.api.v1.routes.ai_settings.OpenRouterProvider") as mock_provider_cls:
+        provider = mock_provider_cls.return_value
+        provider.generate_text.return_value = fake_result
+
+        resp = client.post(
+            "/api/v1/settings/ai/verify", json={"api_key": "test-openrouter-key"}, headers=h
+        )
+
+    mock_provider_cls.assert_called_once_with(
+        api_key="test-openrouter-key",
+        model=settings.openrouter_model,
+        base_url=settings.openrouter_base_url,
+        max_tokens=settings.openrouter_max_tokens,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["ok"] is True
+    assert "test-openrouter-key" not in resp.text
+
+
+def test_openrouter_settings_report_presence_without_returning_key(
+    client: httpx.Client, monkeypatch
+) -> None:
+    """Provider status exposes only key presence/source, never its value."""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "ai_provider", "openrouter")
+    monkeypatch.setattr(settings, "openrouter_api_key", "private-test-key")
+
+    org, user = bootstrap(client)
+    h = auth_headers(org["id"], user["id"])
+
+    resp = client.get("/api/v1/settings/ai", headers=h)
+
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "provider": "openrouter",
+        "model": settings.openrouter_model,
+        "api_key_source": "environment",
+        "has_api_key": True,
+    }
+    assert "private-test-key" not in resp.text
+
+
 def test_verify_rate_limit_reports_failure(client: httpx.Client, monkeypatch) -> None:
     """Rate limiting surfaces as ok=False with a friendly message."""
     from app.ai.providers.errors import ProviderRateLimitError

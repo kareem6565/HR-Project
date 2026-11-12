@@ -1,12 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import AnalyticsPage from "./AnalyticsPage";
-import { getAnalyticsSnapshot, getCandidateSources } from "../../services/analyticsService";
+import { getAnalyticsSnapshot } from "../../services/analyticsService";
+import { getJobDistributionAnalytics } from "../../services/jobDistributionService";
 
 vi.mock("../../services/analyticsService", () => ({
   getAnalyticsSnapshot: vi.fn(),
-  getCandidateSources: vi.fn(),
 }));
+vi.mock("../../services/jobDistributionService", () => ({ getJobDistributionAnalytics: vi.fn() }));
 
 afterEach(() => {
   cleanup();
@@ -26,9 +27,12 @@ const snapshot = (range = "30d", count = 2) => ({
 });
 
 describe("Analytics page", () => {
-  it("shows HERA identity, period-scoped analysis, and honest source-data limitations", async () => {
+  it("shows campaign and source analytics alongside period-scoped hiring analysis", async () => {
     getAnalyticsSnapshot.mockResolvedValue(snapshot());
-    getCandidateSources.mockResolvedValue(null);
+    getJobDistributionAnalytics.mockResolvedValue({
+      campaigns: [{ distribution_id: "campaign-1", campaign_name: "Designer hiring", job_title: "Product Designer", channel: "linkedin", status: "shared", views: 12, applications: 3, conversion_percent: 25 }],
+      sources: [{ source: "linkedin", medium: "social", applications: 3 }],
+    });
 
     render(<AnalyticsPage />);
 
@@ -37,13 +41,15 @@ describe("Analytics page", () => {
     expect(screen.getByText("Applications created by week")).toBeTruthy();
     expect(screen.getByText("Current application status")).toBeTruthy();
     expect(screen.getByText(/not stage-to-stage conversion rates/i)).toBeTruthy();
-    expect(screen.getByText(/does not currently collect candidate-source data/i)).toBeTruthy();
+    expect(screen.getByText("Designer hiring")).toBeTruthy();
+    expect(screen.getByText("12")).toBeTruthy();
+    expect(screen.getByText("linkedin · social")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Last 30 days" }).getAttribute("aria-pressed")).toBe("true");
   });
 
   it("reloads real analytics for the selected period", async () => {
     getAnalyticsSnapshot.mockImplementation(async (range) => snapshot(range));
-    getCandidateSources.mockResolvedValue(null);
+    getJobDistributionAnalytics.mockResolvedValue({ campaigns: [], sources: [] });
 
     render(<AnalyticsPage />);
     await screen.findByText("Hiring patterns and outcomes");
@@ -51,6 +57,7 @@ describe("Analytics page", () => {
 
     expect(await screen.findByText("Applications · last 90 days")).toBeTruthy();
     expect(getAnalyticsSnapshot).toHaveBeenLastCalledWith("90d");
+    expect(getJobDistributionAnalytics).toHaveBeenLastCalledWith(90);
     expect(screen.getByRole("button", { name: "Last 90 days" }).getAttribute("aria-pressed")).toBe("true");
   });
 
@@ -61,7 +68,7 @@ describe("Analytics page", () => {
       statusBreakdown: [{ stage: "Created", count: 0, percent: 0 }],
       applicationTrend: [],
     });
-    getCandidateSources.mockResolvedValue(null);
+    getJobDistributionAnalytics.mockResolvedValue({ campaigns: [], sources: [] });
 
     render(<AnalyticsPage />);
 

@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.api.v1.schemas.candidate_pool import JobCandidateSummary
 from app.api.v1.schemas.evaluations import CandidateEvaluationResponse
+from app.api.v1.schemas.hr_decisions import HRDecisionResponse
 from app.api.v1.schemas.job_applications import JobApplicationResponse
 from app.api.v1.schemas.jobs import JobResponse
 from app.api.v1.schemas.match_evidence import MatchEvidenceResponse
@@ -41,3 +42,4 @@ class ReviewBundleResponse(BaseModel):
     evaluation: CandidateEvaluationResponse | None
     evidence: list[MatchEvidenceResponse]
     pool_row: JobCandidateSummary | None
+    decision_history: list[HRDecisionResponse] = Field(default_factory=list)

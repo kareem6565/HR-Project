@@ -14,6 +14,7 @@ class JobCreate(BaseModel):
     department: str | None = None
     location: str | None = None
     job_type: str | None = None
+    work_mode: str | None = Field(default=None, pattern="^(onsite|hybrid|remote)$")
     experience: str | None = None
     requirements: list[str] = Field(default_factory=list)
     required_skills: list[str] = Field(default_factory=list)
@@ -35,6 +36,7 @@ class JobUpdate(BaseModel):
     department: str | None = None
     location: str | None = None
     job_type: str | None = None
+    work_mode: str | None = Field(default=None, pattern="^(onsite|hybrid|remote)$")
     experience: str | None = None
     requirements: list[str] | None = None
     required_skills: list[str] | None = None
@@ -63,6 +65,11 @@ class JobResponse(BaseModel):
     department: str | None = None
     location: str | None = None
     job_type: str | None = None
+    work_mode: str | None = None
+    public_id: str | None = None
+    publication_status: str = "unpublished"
+    published_at: datetime | None = None
+    public_closed_at: datetime | None = None
     experience: str | None = None
     requirements: list[str] | None = None
     required_skills: list[str] | None = None
@@ -71,3 +78,19 @@ class JobResponse(BaseModel):
     source_file_error: str | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class PublicJobResponse(BaseModel):
+    title: str
+    organization_name: str
+    location: str | None
+    job_type: str | None
+    work_mode: str | None
+    experience: str | None
+    description: str | None
+    responsibilities: list[str]
+    required_qualifications: list[str]
+    other_qualifications: list[str]
+    preferred_qualifications: list[str]
+    publication_status: str
+    accepting_applications: bool

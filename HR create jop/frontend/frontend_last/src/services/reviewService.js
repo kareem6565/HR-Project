@@ -27,6 +27,7 @@ export async function getReviewBundle(applicationId) {
     evaluation: data.evaluation,
     evidence: data.evidence || [],
     poolRow: data.pool_row,
+    decisionHistory: data.decision_history || [],
   };
 }
 

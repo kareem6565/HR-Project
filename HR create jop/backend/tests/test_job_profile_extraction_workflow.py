@@ -103,7 +103,7 @@ def test_success_creates_profile_and_traces(db_session: Session) -> None:
     assert profile.source == "ai_extracted"
     assert profile.is_current is True
     assert profile.profile_data == {
-        "schema_version": "1.3",
+        "schema_version": "1.4",
         "title": "Data Engineer",
         "summary": "Builds pipelines",
         "requirements": [
@@ -118,6 +118,8 @@ def test_success_creates_profile_and_traces(db_session: Session) -> None:
         "quality_review": {"status": "unavailable", "findings": []},
         "coverage": {
             "skill": "uncertain",
+            "technical_skill": "unspecified",
+            "soft_skill": "unspecified",
             "experience": "unspecified",
             "education": "unspecified",
             "certification": "unspecified",
@@ -132,6 +134,10 @@ def test_success_creates_profile_and_traces(db_session: Session) -> None:
         "workflow_run_id": str(run.id),
         "workflow_step_trace_id": str(step.id),
         "ai_trace_id": str(trace.id),
+        "ai_extraction": {
+            "status": "completed",
+            "completed_at": profile.provenance["ai_extraction"]["completed_at"],
+        },
     }
     assert profile.raw_input_snapshot == {
         "entity": "job",
@@ -178,7 +184,7 @@ def test_flat_v1_requirements_persisted_as_canonical_v1_3(db_session: Session) -
 
     profile = db_session.get(JobProfile, result.profile_id)
     assert profile.profile_data == {
-        "schema_version": "1.3",
+        "schema_version": "1.4",
         "title": "Data Engineer",
         "summary": "Builds pipelines",
         "requirements": [
@@ -193,6 +199,8 @@ def test_flat_v1_requirements_persisted_as_canonical_v1_3(db_session: Session) -
         "quality_review": {"status": "unavailable", "findings": []},
         "coverage": {
             "skill": "uncertain",
+            "technical_skill": "unspecified",
+            "soft_skill": "unspecified",
             "experience": "unspecified",
             "education": "unspecified",
             "certification": "unspecified",
@@ -231,7 +239,9 @@ def test_quality_review_persists_only_exact_source_quotes(db_session: Session) -
                         "finding_type": "unclear_requirement",
                         "source_quote": "Experience with backend systems.",
                         "concern": "The relevant systems and expected depth are unspecified.",
-                        "question_for_hr": "Which backend systems and experience level are required?",
+                        "question_for_hr": (
+                            "Which backend systems and experience level are required?"
+                        ),
                     },
                     {
                         "finding_type": "potential_conflict",
@@ -247,8 +257,13 @@ def test_quality_review_persists_only_exact_source_quotes(db_session: Session) -
                     },
                     {
                         "finding_type": "priority_unclear",
-                        "source_quote": "Python, Docker, and PostgreSQL are listed as both essential and preferred.",
-                        "concern": "The description does not distinguish required skills from preferences.",
+                        "source_quote": (
+                            "Python, Docker, and PostgreSQL are listed as both essential "
+                            "and preferred."
+                        ),
+                        "concern": (
+                            "The description does not distinguish required skills from preferences."
+                        ),
                         "question_for_hr": "Which of these skills are essential?",
                     },
                     {
@@ -301,6 +316,8 @@ def test_quality_review_persists_only_exact_source_quotes(db_session: Session) -
 
     prompt = json.loads(provider.last_input)
     assert "Do not add, rewrite, or infer requirements" in prompt["trusted_task_instructions"]
+    assert "Ignore employer branding" in prompt["trusted_task_instructions"]
+    assert "do not infer priority" in prompt["trusted_task_instructions"]
     assert "<<<MANUAL_DESCRIPTION_START>>>" in prompt["manual_description_source"]
     assert raw_description in prompt["manual_description_source"]
 
@@ -334,7 +351,9 @@ def test_quality_review_with_four_exact_quotes_is_verified(db_session: Session) 
         },
         {
             "finding_type": "priority_unclear",
-            "source_quote": "Python, Docker, and PostgreSQL are listed as both essential and preferred.",
+            "source_quote": (
+                "Python, Docker, and PostgreSQL are listed as both essential and preferred."
+            ),
             "concern": "The description does not distinguish required skills from preferences.",
             "question_for_hr": "Which of these skills are essential?",
         },
@@ -438,6 +457,55 @@ def test_new_extraction_makes_version_current_when_none_approved(db_session: Ses
     assert profile.status == "draft"
 
 
+def test_new_version_preserves_linkedin_source_provenance(db_session: Session) -> None:
+    organization = create_organization(db_session)
+    create_user(db_session, organization)
+    job = create_job(db_session, organization)
+    source_metadata = {
+        "source_type": "linkedin",
+        "source_url": "https://www.linkedin.com/jobs/view/example",
+        "company_name": "Example Co",
+    }
+    original_text = "Original imported description." * 20
+    prior = JobProfile(
+        job_id=job.id,
+        version_number=1,
+        status="draft",
+        source="ai_extracted",
+        profile_data={"title": job.title, "summary": "", "requirements": []},
+        raw_input_snapshot={"original_listing_text": original_text},
+        provenance={
+            "creation_method": "pasted_external",
+            "source_type": "linkedin",
+            "source": source_metadata,
+            "linkedin_import": {"source_type": "linkedin", "status": "succeeded"},
+            "source_url": source_metadata["source_url"],
+            "custom_import_metadata": {"actor_id": "fetch_cat/linkedin-jobs-scraper"},
+        },
+        is_current=True,
+    )
+    db_session.add(prior)
+    db_session.commit()
+    workflow, _ = make_workflow()
+
+    result = workflow.run(db_session, job_id=job.id, organization_id=organization.id)
+    db_session.commit()
+
+    new_profile = db_session.get(JobProfile, result.profile_id)
+    assert new_profile.provenance["source_type"] == "linkedin"
+    assert new_profile.provenance["source"] == source_metadata
+    assert new_profile.provenance["linkedin_import"] == {
+        "source_type": "linkedin",
+        "status": "succeeded",
+    }
+    assert new_profile.provenance["source_url"] == source_metadata["source_url"]
+    assert new_profile.provenance["custom_import_metadata"] == prior.provenance[
+        "custom_import_metadata"
+    ]
+    assert new_profile.raw_input_snapshot["original_listing_text"] == original_text
+    assert new_profile.provenance["ai_extraction"]["status"] == "completed"
+
+
 def test_extraction_preserves_approved_profile(db_session: Session) -> None:
     organization = create_organization(db_session)
     user = create_user(db_session, organization)
@@ -482,7 +550,9 @@ def test_reanalysis_carries_source_provenance_and_hr_field_origins(db_session: S
         status="draft",
         source="hr_edited",
         profile_data={"title": "HR edited title", "requirements": []},
-        raw_input_snapshot={"original_listing_text": "Original synthetic listing, separate from HR fields."},
+        raw_input_snapshot={
+            "original_listing_text": "Original synthetic listing, separate from HR fields."
+        },
         provenance={
             "source": {"source_name": "Synthetic source", "source_import_id": "source-1"},
             "field_origins": {"title": "hr_edited_after_hera_suggestion"},
@@ -596,6 +666,7 @@ def test_provider_timeout_records_failure(db_session: Session) -> None:
     assert run.status == "failed"
     assert step.status == "failed"
     assert step.error_type == "ProviderTimeoutError"
+    assert step.error_message == "AI provider request timed out."
     assert trace.status == "failed"
 
 

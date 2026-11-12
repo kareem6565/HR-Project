@@ -3,13 +3,15 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import JobDetails from "./JobDetails";
-import { deleteJob, getJobById, updateJob } from "../../services/jobService";
-import { approveJobProfile, extractJobProfile, listJobProfiles, updateJobProfile } from "../../services/jobProfileService";
+import { closePublicJob, deleteJob, getJobById, publishJob, updateJob } from "../../services/jobService";
+import { approveJobProfile, buildJobDescription, extractJobProfile, listJobProfiles, updateJobProfile } from "../../services/jobProfileService";
 
 vi.mock("../../services/jobService", () => ({
   getJobById: vi.fn(),
   deleteJob: vi.fn(),
   updateJob: vi.fn(),
+  publishJob: vi.fn(),
+  closePublicJob: vi.fn(),
   downloadJobSourceFile: vi.fn(),
 }));
 
@@ -18,6 +20,7 @@ vi.mock("../../services/jobProfileService", () => ({
   extractJobProfile: vi.fn(),
   approveJobProfile: vi.fn(),
   updateJobProfile: vi.fn(),
+  buildJobDescription: vi.fn(),
 }));
 
 function RouteProbe() {
@@ -55,6 +58,8 @@ beforeEach(() => {
   getJobById.mockResolvedValue(job);
   listJobProfiles.mockResolvedValue([]);
   updateJob.mockImplementation((_id, updates) => Promise.resolve({ ...job, ...updates }));
+  publishJob.mockResolvedValue({ ...job, publicId: "a".repeat(32), publicationStatus: "published" });
+  closePublicJob.mockResolvedValue({ ...job, publicId: "a".repeat(32), publicationStatus: "closed" });
   deleteJob.mockResolvedValue({ success: true });
   extractJobProfile.mockResolvedValue({});
   approveJobProfile.mockResolvedValue({});
@@ -66,6 +71,18 @@ afterEach(() => {
 });
 
 describe("JobDetails", () => {
+  it("publishes the job and exposes its public URL", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole("button", { name: "Publish job publicly" }));
+    await waitFor(() => expect(publishJob).toHaveBeenCalledWith("job-1"));
+    expect(await screen.findByRole("status")).toHaveTextContent("Public job link copied");
+    expect(screen.getByRole("link", { name: "Open public listing" })).toHaveAttribute(
+      "href",
+      `/careers/${"a".repeat(32)}`
+    );
+  });
+
   it("shows role information once and separates the persisted description suffix", async () => {
     renderPage();
 
@@ -123,6 +140,115 @@ describe("JobDetails", () => {
       { text: "Communicate with teams", category: "must_have", dimension: "skill" },
     ]);
     expect(screen.getByRole("button", { name: "Approve" })).toBeInTheDocument();
+  });
+
+  it("shows draft provenance and uncertainties, and lets HR edit the overview", async () => {
+    const profile = {
+      id: "profile-origin",
+      status: "draft",
+      source: "ai_extracted",
+      version_number: 1,
+      is_current: true,
+      provenance: { creation_method: "pasted_external" },
+      raw_input_snapshot: {
+        needs_confirmation: ["Confirm seniority level"],
+        original_listing_text: "Original listing text supplied by HR.",
+      },
+      profile_data: {
+        schema_version: "1.3",
+        title: "Senior Engineer",
+        summary: "Previous overview.",
+        requirements: [
+          { text: "Own service reliability", category: "must_have", dimension: "responsibility" },
+        ],
+      },
+    };
+    listJobProfiles.mockResolvedValue([profile]);
+    updateJobProfile.mockResolvedValue(profile);
+    const user = userEvent.setup();
+    renderPage();
+
+    expect(await screen.findByText(/Description origin: Pasted external description/)).toBeInTheDocument();
+    expect(screen.getByText("Confirm seniority level")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Responsibilities" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Review / edit" }));
+    buildJobDescription.mockResolvedValueOnce({
+      summary: "Lead service reliability and incident response.",
+      requirements: [],
+    });
+    await user.click(screen.getByRole("button", { name: "Improve with AI" }));
+    expect(await screen.findByText("Lead service reliability and incident response.")).toBeInTheDocument();
+    expect(buildJobDescription).toHaveBeenCalledWith(expect.objectContaining({
+      operation: "improve",
+      section_name: "Responsibilities item",
+      selected_section: "Own service reliability",
+    }));
+    await user.click(screen.getByRole("button", { name: "Use suggestion" }));
+    await user.clear(screen.getByRole("textbox", { name: "Job overview" }));
+    await user.type(screen.getByRole("textbox", { name: "Job overview" }), "Updated overview.");
+    await user.click(screen.getByRole("button", { name: "Save review" }));
+
+    await waitFor(() => expect(updateJobProfile).toHaveBeenCalledWith(
+      "profile-origin",
+      expect.objectContaining({
+        summary: "Updated overview.",
+        requirements: [expect.objectContaining({ text: "Lead service reliability and incident response." })],
+      })
+    ));
+  });
+
+  it("labels LinkedIn source separately from failed AI extraction and collapses the original listing", async () => {
+    const original = `Role responsibilities and qualifications. ${"Imported source text. ".repeat(500)}`;
+    getJobById.mockResolvedValueOnce({
+      ...job,
+      description: original,
+      workMode: "hybrid",
+    });
+    const profile = {
+      id: "linkedin-profile",
+      status: "draft",
+      source: "ai_extracted",
+      version_number: 1,
+      is_current: true,
+      provenance: {
+        creation_method: "pasted_external",
+        source: { source_type: "linkedin", company_name: "Example Co" },
+        linkedin_import: { source_type: "linkedin", status: "succeeded" },
+        ai_extraction: { status: "failed", error_code: "ProviderUnavailableError" },
+      },
+      raw_input_snapshot: { original_listing_text: original },
+      profile_data: { title: "Senior Engineer", summary: "", requirements: [] },
+    };
+    listJobProfiles.mockResolvedValueOnce([profile]);
+    renderPage();
+
+    expect(await screen.findByText(/Description origin: LinkedIn import/)).toBeInTheDocument();
+    expect(screen.getByText("AI extraction failed. The original listing is preserved; retry extraction or review the source manually.")).toBeInTheDocument();
+    expect(screen.queryByText(/AI extracted/)).not.toBeInTheDocument();
+    expect(screen.getByText("Example Co")).toBeInTheDocument();
+    expect(screen.getByText("hybrid")).toBeInTheDocument();
+    expect(screen.getByText(/Role responsibilities and qualifications/)).toBeInTheDocument();
+    const originalDetails = screen.getByText("View full original job description").closest("details");
+    expect(originalDetails).not.toHaveAttribute("open");
+    expect(screen.getByRole("button", { name: "Approve" })).toBeInTheDocument();
+  });
+
+  it("shows extraction in progress while a retry is running", async () => {
+    const profile = {
+      id: "pending-profile", status: "draft", source: "ai_extracted", version_number: 1,
+      is_current: true, provenance: { ai_extraction: { status: "failed" } },
+      profile_data: { title: "Senior Engineer", summary: "", requirements: [] },
+    };
+    listJobProfiles.mockResolvedValue([profile]);
+    let resolveRequest;
+    extractJobProfile.mockImplementationOnce(() => new Promise((resolve) => { resolveRequest = resolve; }));
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click((await screen.findAllByRole("button", { name: "Re-run AI extraction" }))[0]);
+    expect(await screen.findByText("AI is extracting structured responsibilities, qualifications, and skills…")).toBeInTheDocument();
+    resolveRequest({});
+    await waitFor(() => expect(extractJobProfile).toHaveBeenCalled());
   });
 
   it("preserves the existing status update behavior", async () => {
@@ -355,7 +481,7 @@ describe("JobDetails", () => {
       "href",
       "https://example.test/jobs/role"
     );
-    await user.click(screen.getByText("View original listing text provided by HR"));
+    await user.click(screen.getByText("View full original job description"));
     expect(screen.getByText("Original synthetic listing text.")).toBeInTheDocument();
     await user.click(screen.getByText("How these fields were prepared"));
     expect(screen.getByText(/Suggested by HERA, then reviewed or edited by HR/)).toBeInTheDocument();

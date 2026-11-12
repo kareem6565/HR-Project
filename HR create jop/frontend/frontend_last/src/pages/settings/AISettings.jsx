@@ -62,7 +62,7 @@ export default function AISettings() {
   if (error || !settings)
     return <ErrorState message="Unable to load AI settings. Try again." onRetry={load} />;
 
-  const soalActive = settings.provider === "soal";
+  const activeProvider = settings.provider;
 
   return (
     <section>
@@ -115,11 +115,9 @@ export default function AISettings() {
           </div>
         </div>
 
-        {!soalActive && (
-          <p className="muted-note">
-            Soal is not currently configured as the active provider. System operators can set SOAL_API_KEY in the server environment.
-          </p>
-        )}
+        <p className="muted-note">
+          Active provider: {activeProvider}. System operators manage the provider and its API key in the backend environment.
+        </p>
 
         {(formError || notice) && (
           <div className={formError ? "form-error" : "success-message"}>{formError || notice}</div>

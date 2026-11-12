@@ -21,6 +21,9 @@ services:
   backend:
     build:
       context: ./backend
+    env_file:
+      - path: ./backend/.env
+        required: false
     container_name: hr_ai_assistant_backend
     ports:
       - "8000:8000"

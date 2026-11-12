@@ -20,6 +20,13 @@ vi.mock("../../services/resumeService", () => ({
 vi.mock("../../services/interviewService", () => ({
   createCandidateInterviewInvitation: vi.fn(),
 }));
+vi.mock("../../services/githubEvidenceService", () => ({
+  getLatestGitHubEvidence: vi.fn().mockResolvedValue(null),
+  requestGitHubEvidenceConsent: vi.fn(),
+  retryGitHubEvidence: vi.fn(),
+  previewGitHubEvidenceConsent: vi.fn(),
+  respondToGitHubEvidenceConsent: vi.fn(),
+}));
 
 const workspace = {
   application: {

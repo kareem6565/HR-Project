@@ -4,7 +4,16 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, func
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -35,6 +44,13 @@ class JobApplication(Base):
         Index("ix_job_applications_job_id_status", "job_id", "status"),
         Index("ix_job_applications_candidate_id", "candidate_id"),
         Index("ix_job_applications_resume_id", "resume_id"),
+        UniqueConstraint("public_reference", name="uq_job_applications_public_reference"),
+        UniqueConstraint(
+            "organization_id",
+            "job_id",
+            "idempotency_key_hash",
+            name="uq_job_applications_idempotency",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -58,6 +74,21 @@ class JobApplication(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    public_reference: Mapped[str | None] = mapped_column(String(48), nullable=True)
+    idempotency_key_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    source: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    source_medium: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    source_campaign: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    linkedin_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    github_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    portfolio_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    privacy_notice_accepted: Mapped[bool] = mapped_column(nullable=False, default=False)
+    privacy_notice_version: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    privacy_notice_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    privacy_notice_accepted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    public_contact_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     organization: Mapped[Organization] = relationship()
     job: Mapped[Job] = relationship(back_populates="applications")

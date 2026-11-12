@@ -20,6 +20,7 @@ from app.ai.providers.base import AIProvider
 from app.ai.providers.errors import ProviderConfigurationError
 from app.ai.providers.fake import FakeAIProvider
 from app.ai.providers.ollama_cloud import OllamaCloudProvider
+from app.ai.providers.openrouter import OpenRouterProvider
 from app.ai.providers.soal import SoalProvider
 from app.core.config import Settings
 from app.core.runtime_config import get_api_key as runtime_api_key
@@ -33,7 +34,7 @@ def resolve_ai_config(settings: Settings) -> dict:
     """Return the effective provider config as a dict.
 
     Keys:
-    - ``provider``: "ollama", "soal" or "fake"
+    - ``provider``: "ollama", "soal", "openrouter" or "fake"
     - ``model``: the active model ("" when fake)
     - ``base_url``: the active endpoint ("" when fake)
     - ``api_key``: the active API key ("" when none)
@@ -71,6 +72,17 @@ def resolve_ai_config(settings: Settings) -> dict:
             else API_KEY_SOURCE_NONE,
             "is_fake": False,
         }
+    if settings.ai_provider == "openrouter":
+        return {
+            "provider": "openrouter",
+            "model": settings.openrouter_model,
+            "base_url": settings.openrouter_base_url,
+            "api_key": settings.openrouter_api_key or "",
+            "api_key_source": API_KEY_SOURCE_ENVIRONMENT
+            if settings.openrouter_api_key
+            else API_KEY_SOURCE_NONE,
+            "is_fake": False,
+        }
     if settings.ai_provider == "fake":
         return {
             "provider": "fake",
@@ -94,12 +106,21 @@ def get_provider(settings: Settings, **fake_kwargs) -> AIProvider:
         )
     if config["provider"] == "ollama":
         if not config["api_key"]:
-            raise ProviderConfigurationError(
-                "OLLAMA_API_KEY is required when AI_PROVIDER=ollama."
-            )
+            raise ProviderConfigurationError("OLLAMA_API_KEY is required when AI_PROVIDER=ollama.")
         return OllamaCloudProvider(
             api_key=config["api_key"],
             model=config["model"],
             base_url=config["base_url"],
+        )
+    if config["provider"] == "openrouter":
+        if not config["api_key"]:
+            raise ProviderConfigurationError(
+                "OPENROUTER_API_KEY is required when AI_PROVIDER=openrouter."
+            )
+        return OpenRouterProvider(
+            api_key=config["api_key"],
+            model=config["model"],
+            base_url=config["base_url"],
+            max_tokens=settings.openrouter_max_tokens,
         )
     return FakeAIProvider(**fake_kwargs)

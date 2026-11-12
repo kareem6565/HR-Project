@@ -24,6 +24,7 @@ from app.ai.contracts.interview_questions import (
     InterviewQuestionSetOutput,
     validate_interview_question_set,
 )
+from app.ai.contracts.job_description import JobDescriptionDraftOutput
 from app.ai.contracts.job_draft import JobDraftSuggestionOutput
 from app.ai.contracts.job_profile import (
     REQUIREMENT_CATEGORIES,
@@ -48,6 +49,7 @@ from app.ai.contracts.validation import (
     normalize_job_profile_requirements,
     validate_candidate_profile_extraction,
     validate_evaluation_explanation,
+    validate_job_description_draft,
     validate_job_draft_suggestion,
     validate_job_profile_extraction,
     validate_match_evidence,
@@ -69,6 +71,7 @@ __all__ = [
     "INTERVIEW_QUESTION_SCHEMA_VERSION",
     "JOB_PROFILE_EXTRACTION_SCHEMA_VERSION",
     "JobDraftSuggestionOutput",
+    "JobDescriptionDraftOutput",
     "JobProfileExtractionOutput",
     "JobRequirement",
     "MAX_REPLY_LINKS",
@@ -87,6 +90,7 @@ __all__ = [
     "validate_hera_reply",
     "validate_interview_question_set",
     "validate_job_draft_suggestion",
+    "validate_job_description_draft",
     "validate_job_profile_extraction",
     "validate_match_evidence",
     "validate_match_evidence_list",

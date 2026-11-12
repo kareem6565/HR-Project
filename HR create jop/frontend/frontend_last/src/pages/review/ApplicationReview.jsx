@@ -42,6 +42,7 @@ import { formatScore, parseScore } from "../../utils/score";
 import { BAND_CONFIG } from "../../components/common/ScoreBadge";
 import { getApplicationStatusGroup } from "../../utils/applicationStatus";
 import { createCandidateInterviewInvitation } from "../../services/interviewService";
+import GitHubEvidencePanel from "../../components/review/GitHubEvidencePanel";
 
 const DECISION_LABELS = {
   [HRDecisionValue.ADVANCE]: "Advance",
@@ -215,7 +216,7 @@ export default function ApplicationReview() {
     );
   }
 
-  const { application, candidate, job, evaluation, evidence, poolRow, resume, profile } = bundle;
+  const { application, candidate, job, evaluation, evidence, poolRow, resume, profile, decisionHistory = [] } = bundle;
 
   const hasEvaluation = !!evaluation;
   const score = parseScore(evaluation?.score);
@@ -242,16 +243,25 @@ export default function ApplicationReview() {
     email: profileData.email || candidate?.email || null,
     phone: profileData.phone || candidate?.phone || null,
   };
-  const withScheme = (value) =>
-    value && !/^https?:\/\//i.test(value) ? `https://${value}` : value;
+  const withScheme = (value) => {
+    if (!value || typeof value !== "string") return null;
+    const candidate = /^https?:\/\//i.test(value.trim()) ? value.trim() : `https://${value.trim()}`;
+    try {
+      const parsed = new URL(candidate);
+      return parsed.protocol === "https:" || parsed.protocol === "http:" ? parsed.href : null;
+    } catch {
+      return null;
+    }
+  };
 
   const profileLinks = [
-    { label: "LinkedIn", url: profileData.linkedin_url, icon: Link2 },
-    { label: "GitHub", url: profileData.github_url, icon: Link2 },
-    { label: "Portfolio", url: profileData.portfolio_url, icon: Globe },
+    { label: "LinkedIn", url: application.linkedin_url || profileData.linkedin_url, icon: Link2 },
+    { label: "GitHub", url: application.github_url || profileData.github_url, icon: Link2 },
+    { label: "Portfolio", url: application.portfolio_url || profileData.portfolio_url, icon: Globe },
   ]
-    .filter((link) => link.url)
-    .map((link) => ({ ...link, url: withScheme(link.url) }));
+    .map((link) => ({ ...link, url: withScheme(link.url) }))
+    .filter((link) => link.url);
+  const githubProfileUrl = profileLinks.find((link) => link.label === "GitHub")?.url || "";
 
   const handleDownloadCv = async () => {
     if (!resume?.id) return;
@@ -373,7 +383,7 @@ export default function ApplicationReview() {
   };
 
   return (
-    <section>
+    <section className="application-review-page">
       <div className="review-workspace-top">
         <button type="button" className="back" onClick={() => navigate("/applications")}>
           <ArrowLeft size={17} aria-hidden="true" /> Back to Applications
@@ -397,7 +407,7 @@ export default function ApplicationReview() {
         </div>
       )}
 
-      <div className="review-summary-shell">
+      <div className="review-summary-shell application-review-overview">
       <header className="review-workspace-heading" aria-labelledby="review-candidate-name">
         <div className="review-workspace-identity">
           <div className="big-avatar" aria-hidden="true">
@@ -420,8 +430,8 @@ export default function ApplicationReview() {
 
       {/* ===== Status Strip Summary ===== */}
       <div className="status-strip review-status-strip" role="group" aria-label="Application review summary">
-        <span className="status-item">
-          <span>
+        <span className="status-item review-metric-state">
+          <span className="review-metric-label"><ShieldCheck size={13} aria-hidden="true" />
             {applicationStatusGroup?.id === "processing"
               ? "Processing status"
               : applicationStatusGroup?.id === "decision"
@@ -432,22 +442,26 @@ export default function ApplicationReview() {
           </span>
           <strong><Badge status={application.status} /></strong>
         </span>
-        <span className="status-item">
-          <span>AI Evaluation Status</span>
+        <span className="status-item review-metric-cv">
+          <span className="review-metric-label"><FileText size={13} aria-hidden="true" /> CV Processing</span>
+          <strong>{normalizeStatus(application.screening_status || "not_started")}</strong>
+        </span>
+        <span className="status-item review-metric-evaluation">
+          <span className="review-metric-label"><Sparkles size={13} aria-hidden="true" /> AI Evaluation Status</span>
           <strong>{hasEvaluation ? `v${evaluation.version_number} · ${normalizeStatus(evaluation.status)}` : "Not run yet"}</strong>
         </span>
-        <span className="status-item">
-          <span>AI Match Score (0–100)</span>
+        <span className="status-item review-metric-score">
+          <span className="review-metric-label"><Activity size={13} aria-hidden="true" /> AI Match Score (0–100)</span>
           <strong>{hasEvaluation ? formatScore(score) : "Not available"}</strong>
         </span>
-        <span className="status-item">
-          <span>AI Review Category</span>
+        <span className="status-item review-metric-category">
+          <span className="review-metric-label"><Sparkles size={13} aria-hidden="true" /> AI Review Category</span>
           <strong>
             <span className="application-ai-category">{BAND_CONFIG[group]?.label || "Not available"}</span>
           </strong>
         </span>
-        <span className="status-item">
-          <span>Human HR Decision</span>
+        <span className="status-item review-metric-decision">
+          <span className="review-metric-label"><ShieldCheck size={13} aria-hidden="true" /> Human HR Decision</span>
           <strong>
             {currentDecision ? (
               <span className={`badge badge-${DECISION_TONE[currentDecision] || "grey"}`}>
@@ -457,13 +471,13 @@ export default function ApplicationReview() {
             ) : "No decision recorded"}
           </strong>
         </span>
-        <span className="status-item">
-          <span>Review Signals</span>
-          <strong>{hasEvaluation ? signalsCount : "—"}</strong>
+        <span className="status-item review-metric-signals">
+          <span className="review-metric-label"><AlertCircle size={13} aria-hidden="true" /> Review Signals</span>
+          <strong><span className="review-signal-count">{hasEvaluation ? signalsCount : "—"}</span></strong>
         </span>
       </div>
 
-      <div className="review-quick-actions">
+      <div className="review-quick-actions application-review-quick-actions">
         <div className="review-quick-actions-copy">
           <strong>Human decision</strong>
           <span>Review the evidence, then choose an action. You will confirm before it is recorded.</span>
@@ -503,7 +517,7 @@ export default function ApplicationReview() {
       {/* =======================================================
           1. CANDIDATE PROFILE (AI Assisted)
           ======================================================= */}
-      <div className="panel review-block">
+      <div className="panel review-block review-candidate-profile">
         <div className="review-block-title">
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <User size={18} />
@@ -514,9 +528,9 @@ export default function ApplicationReview() {
           </span>
         </div>
 
-        {summary && <p className="muted-note" dir="auto" style={{ margin: "0 0 16px" }}>{summary}</p>}
+        {summary && <p className="muted-note review-candidate-summary" dir="auto">{summary}</p>}
 
-        <div className="review-stack" style={{ marginBottom: 16 }}>
+        <div className="review-stack review-contact-grid">
           <div className="info">
             <span><Mail size={13} style={{ display: "inline", verticalAlign: "-2px", marginRight: 4 }} /> Contact · Email</span>
             <strong>{contact.email || "—"}</strong>
@@ -533,8 +547,8 @@ export default function ApplicationReview() {
           )}
         </div>
 
-        <div style={{ marginTop: 16 }}>
-          <h4><Briefcase size={15} style={{ display: "inline", verticalAlign: "-2px", marginRight: 6 }} /> Experience</h4>
+        <div className="review-profile-section">
+          <h4><Briefcase size={15} aria-hidden="true" /> Experience</h4>
           {experience.length ? (
             <ul className="strengths-list" style={{ marginBottom: 12 }}>
               {experience.map((item, i) => (
@@ -548,7 +562,7 @@ export default function ApplicationReview() {
 
         {(profileLinks.length > 0 || education.length > 0 || languages.length > 0 || certifications.length > 0) && (
           <details className="review-profile-more">
-            <summary>Additional profile details</summary>
+            <summary><span><FileText size={15} aria-hidden="true" /> Additional profile details</span><ArrowDown size={14} aria-hidden="true" /></summary>
             <div className="review-profile-more-content">
               {profileLinks.length > 0 && (
                 <div>
@@ -561,7 +575,7 @@ export default function ApplicationReview() {
                           key={link.label}
                           href={link.url}
                           target="_blank"
-                          rel="noreferrer"
+                          rel="noopener noreferrer"
                           className="btn btn-secondary btn-small"
                         >
                           <LinkIcon size={14} aria-hidden="true" /> {link.label}
@@ -608,8 +622,8 @@ export default function ApplicationReview() {
           </details>
         )}
 
-        <div style={{ marginTop: 16 }}>
-          <h4>Skills</h4>
+        <div className="review-profile-section review-skills-section">
+          <h4><Sparkles size={15} aria-hidden="true" /> Skills</h4>
           {skills.length ? (
             <div className="chips" style={{ marginBottom: 12 }}>
               {skills.map((s) => (
@@ -623,10 +637,10 @@ export default function ApplicationReview() {
           )}
         </div>
 
-        <div style={{ marginTop: 16 }}>
-          <h4>Resume Document</h4>
-          <div className="resume-meta" style={{ padding: 12, borderRadius: 8, background: "var(--bg-muted, #f8fafc)", display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-            <FileText size={24} style={{ color: "var(--primary-color, #2563eb)" }} />
+        <div className="review-profile-section">
+          <h4><FileText size={15} aria-hidden="true" /> Resume document</h4>
+          <div className="resume-meta review-resume-card">
+            <FileText size={23} aria-hidden="true" />
             <div style={{ flex: 1, minWidth: 180 }}>
               <strong>{resume?.original_filename || "Resume on file"}</strong>
               {(resume?.content_type || formatBytes(resume?.file_size_bytes)) && (
@@ -653,7 +667,7 @@ export default function ApplicationReview() {
       {/* =======================================================
           2. APPLICATION / JOB CONTEXT (Human Review)
           ======================================================= */}
-      <div className="panel review-block">
+      <div className="panel review-block review-job-context">
         <div className="review-block-title">
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <Briefcase size={18} />
@@ -704,15 +718,27 @@ export default function ApplicationReview() {
               <span>Applied On</span>
               <strong>{formatTimestamp(application.created_at)}</strong>
             </div>
+            <div className="info">
+              <span>Application source</span>
+              <strong>{application.source || "Unspecified"}</strong>
+            </div>
+            {(application.source_medium || application.source_campaign) && (
+              <div className="info">
+                <span>Attribution</span>
+                <strong>{[application.source_medium, application.source_campaign].filter(Boolean).join(" · ")}</strong>
+              </div>
+            )}
           </div>
         </div>
 
       </div>
 
+      <GitHubEvidencePanel applicationId={applicationId} githubUrl={githubProfileUrl} />
+
       {/* =======================================================
           3. AI EVALUATION (AI Generated)
           ======================================================= */}
-      <div className="panel review-block ai-box">
+      <div className="panel review-block ai-box review-ai-evaluation">
         <div className="review-block-title">
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <Sparkles size={18} />
@@ -768,7 +794,22 @@ export default function ApplicationReview() {
         onSelectDecision={openDecision}
         disabled={saving}
         showActions={false}
+        className="application-review-decision"
       />
+      {decisionHistory.length > 0 && (
+        <details className="panel review-block application-review-history" style={{ marginTop: 14 }}>
+          <summary><span><Clock3 size={15} aria-hidden="true" /> HR decision history</span><span className="review-history-count">{decisionHistory.length}</span></summary>
+          <ol className="strengths-list" style={{ marginTop: 12 }}>
+            {decisionHistory.map((entry) => (
+              <li key={entry.id}>
+                <strong>{DECISION_LABELS[entry.decision] || normalizeStatus(entry.decision)}</strong>
+                <span className="muted-note"> · {formatTimestamp(entry.created_at)}</span>
+                {entry.reason && <div className="muted-note">{entry.reason}</div>}
+              </li>
+            ))}
+          </ol>
+        </details>
+      )}
 
       {/* ===== Decision Confirmation Modal ===== */}
       <Modal

@@ -1,4 +1,5 @@
 import apiClient from "./apiClient";
+import { getPublicJob as fetchPublicJob } from "./publicApi";
 
 // Real-job service. Contract: src/types/api/job.js.
 //
@@ -43,6 +44,7 @@ function toBackendCreate(job) {
     department: job.department,
     location: job.location,
     job_type: job.type,
+    work_mode: job.workMode || null,
     experience: job.experience,
     requirements: job.requirements || [],
     required_skills: job.requiredSkills || [],
@@ -58,6 +60,7 @@ function toBackendUpdate(updates) {
   if (updates.department !== undefined) body.department = updates.department;
   if (updates.location !== undefined) body.location = updates.location;
   if (updates.type !== undefined) body.job_type = updates.type;
+  if (updates.workMode !== undefined) body.work_mode = updates.workMode || null;
   if (updates.experience !== undefined) body.experience = updates.experience;
   if (updates.requirements !== undefined) body.requirements = updates.requirements;
   if (updates.requiredSkills !== undefined) body.required_skills = updates.requiredSkills;
@@ -82,6 +85,10 @@ function adaptFromBackend(job) {
     department: job.department || "",
     location: job.location || "",
     type: job.job_type || "Full-time",
+    workMode: job.work_mode || "",
+    publicId: job.public_id || "",
+    publicationStatus: job.publication_status || "unpublished",
+    publishedAt: job.published_at || null,
     experience: job.experience || "",
     requirements: job.requirements || [],
     requiredSkills: job.required_skills || [],
@@ -163,6 +170,20 @@ export async function suggestJobDraft(rawDescription) {
 export async function updateJob(id, updates) {
   const { data } = await apiClient.patch(`/jobs/${id}`, toBackendUpdate(updates));
   return adaptFromBackend(data);
+}
+
+export async function publishJob(id) {
+  const { data } = await apiClient.post(`/jobs/${id}/publish`);
+  return adaptFromBackend(data);
+}
+
+export async function closePublicJob(id) {
+  const { data } = await apiClient.post(`/jobs/${id}/close`);
+  return adaptFromBackend(data);
+}
+
+export async function getPublicJob(publicId, params = {}) {
+  return fetchPublicJob(publicId, params);
 }
 
 export async function deleteJob(id) {

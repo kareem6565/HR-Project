@@ -1,4 +1,5 @@
 import logging
+import re
 import threading
 import uuid
 from contextlib import asynccontextmanager
@@ -64,6 +65,22 @@ def create_app() -> FastAPI:
     # Correlation middleware wraps request handling to generate X-Request-ID
     app.add_middleware(RequestCorrelationMiddleware)
 
+    @app.middleware("http")
+    async def limit_public_application_request_size(request: Request, call_next):
+        if re.fullmatch(
+            rf"{re.escape(settings.api_v1_prefix)}/public/jobs/[^/]+/applications",
+            request.url.path,
+        ):
+            content_length = request.headers.get("content-length")
+            if content_length and content_length.isdigit():
+                max_request_bytes = settings.max_upload_bytes + 128 * 1024
+                if int(content_length) > max_request_bytes:
+                    return JSONResponse(
+                        status_code=413,
+                        content={"detail": "Application upload exceeds the request size limit."},
+                    )
+        return await call_next(request)
+
     # CORS middleware
     app.add_middleware(
         CORSMiddleware,
@@ -80,7 +97,11 @@ def create_app() -> FastAPI:
     @app.exception_handler(ValidationError)
     async def validation_error_handler(request: Request, exc: ValidationError) -> JSONResponse:
         msg = str(exc).lower()
-        if "different organization" in msg or "another organization" in msg or "same organization" in msg:
+        if (
+            "different organization" in msg
+            or "another organization" in msg
+            or "same organization" in msg
+        ):
             return JSONResponse(status_code=404, content={"detail": "Resource was not found."})
         content = {"detail": str(exc)}
         if hasattr(exc, "code") and exc.code:

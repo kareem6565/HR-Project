@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import re
+import secrets
 import uuid
+from datetime import UTC, datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -39,6 +42,7 @@ class JobService:
         department: str | None = None,
         location: str | None = None,
         job_type: str | None = None,
+        work_mode: str | None = None,
         experience: str | None = None,
         requirements: list[str] | None = None,
         required_skills: list[str] | None = None,
@@ -67,6 +71,7 @@ class JobService:
             department=department,
             location=location,
             job_type=job_type,
+            work_mode=work_mode,
             experience=experience,
             requirements=requirements or [],
             required_skills=required_skills or [],
@@ -142,6 +147,8 @@ class JobService:
         department: str | None = None,
         location: str | None = None,
         job_type: str | None = None,
+        work_mode: str | None = None,
+        clear_work_mode: bool = False,
         experience: str | None = None,
         requirements: list[str] | None = None,
         required_skills: list[str] | None = None,
@@ -160,6 +167,10 @@ class JobService:
             job.location = location
         if job_type is not None:
             job.job_type = job_type
+        if clear_work_mode:
+            job.work_mode = None
+        elif work_mode is not None:
+            job.work_mode = work_mode
         if experience is not None:
             job.experience = experience
         if requirements is not None:
@@ -172,6 +183,128 @@ class JobService:
             job.status = status
         db.flush()
         return job
+
+    def publish(
+        self,
+        db: Session,
+        *,
+        job_id: uuid.UUID,
+        organization_id: uuid.UUID,
+        actor_user_id: uuid.UUID | None = None,
+    ) -> Job:
+        job = self.get(db, job_id=job_id, organization_id=organization_id)
+        if job.publication_status == "published":
+            return job
+        if job.status != "active":
+            raise InvalidStateError(
+                "Activate this vacancy internally before publishing it publicly."
+            )
+        self.validate_required_vacancy_fields(job)
+        profile = db.scalar(
+            select(JobProfile)
+            .where(JobProfile.job_id == job.id, JobProfile.status == "approved")
+            .order_by(JobProfile.is_current.desc(), JobProfile.version_number.desc())
+        )
+        if profile is None:
+            raise InvalidStateError(
+                "Approve a job requirements profile before publishing this vacancy."
+            )
+        if not job.public_id:
+            job.public_id = secrets.token_urlsafe(24)
+        job.published_job_profile_id = profile.id
+        job.publication_status = "published"
+        job.published_at = datetime.now(UTC)
+        job.public_closed_at = None
+        db.flush()
+        self._audit_publication(db, job, "job.publication.published", actor_user_id)
+        return job
+
+    def close_publication(
+        self,
+        db: Session,
+        *,
+        job_id: uuid.UUID,
+        organization_id: uuid.UUID,
+        actor_user_id: uuid.UUID | None = None,
+    ) -> Job:
+        job = self.get(db, job_id=job_id, organization_id=organization_id)
+        if job.publication_status == "unpublished":
+            raise InvalidStateError("This vacancy has not been published.")
+        if job.publication_status != "closed":
+            job.publication_status = "closed"
+            job.public_closed_at = datetime.now(UTC)
+            db.flush()
+            self._audit_publication(db, job, "job.publication.closed", actor_user_id)
+        return job
+
+    @staticmethod
+    def public_details(db: Session, *, public_id: str) -> dict:
+        if not re.fullmatch(r"[A-Za-z0-9_-]{32}", public_id or ""):
+            raise NotFoundError("Public job was not found.")
+        job = db.scalar(select(Job).where(Job.public_id == public_id))
+        if job is None or job.publication_status == "unpublished":
+            raise NotFoundError("Public job was not found.")
+        profile = (
+            db.get(JobProfile, job.published_job_profile_id)
+            if job.published_job_profile_id
+            else None
+        )
+        requirements = (profile.profile_data or {}).get("requirements", []) if profile else []
+        requirements = [
+            item
+            for item in requirements
+            if isinstance(item, dict) and isinstance(item.get("text"), str)
+        ]
+        responsibilities = [
+            item["text"] for item in requirements if item.get("dimension") == "responsibility"
+        ]
+        required = [
+            item["text"]
+            for item in requirements
+            if item.get("category") == "must_have" and item.get("dimension") != "responsibility"
+        ]
+        other = [
+            item["text"]
+            for item in requirements
+            if item.get("category") == "important" and item.get("dimension") != "responsibility"
+        ]
+        preferred = [
+            item["text"]
+            for item in requirements
+            if item.get("category") == "nice_to_have" and item.get("dimension") != "responsibility"
+        ]
+        return {
+            "title": job.title,
+            "organization_name": job.organization.name,
+            "location": job.location,
+            "job_type": job.job_type,
+            "work_mode": job.work_mode,
+            "experience": job.experience,
+            "description": job.description_text or job.raw_description or job.source_file_text,
+            "responsibilities": responsibilities,
+            "required_qualifications": required,
+            "other_qualifications": other,
+            "preferred_qualifications": preferred,
+            "publication_status": job.publication_status,
+            "accepting_applications": job.publication_status == "published",
+        }
+
+    @staticmethod
+    def _audit_publication(
+        db: Session, job: Job, action: str, actor_user_id: uuid.UUID | None
+    ) -> None:
+        from app.services.audit_service import AuditService
+
+        AuditService().log_event(
+            db,
+            action=action,
+            entity_type="job",
+            organization_id=job.organization_id,
+            actor_user_id=actor_user_id,
+            entity_id=job.id,
+            metadata={"publication_status": job.publication_status},
+            flush=False,
+        )
 
     def validate_for_activation(self, db: Session, job: Job) -> None:
         """Ensure a vacancy is complete and has an approved evaluation profile."""

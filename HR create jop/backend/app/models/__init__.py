@@ -8,15 +8,19 @@ from app.models.chat_message import ChatMessage
 from app.models.chat_thread import ChatThread
 from app.models.hr_decision import HRDecision
 from app.models.hr_feedback_correction import HRFeedbackCorrection
+from app.models.github_evidence_analysis import GitHubEvidenceAnalysis
 from app.models.interview import Interview
 from app.models.interview_availability import InterviewAvailability
 from app.models.interview_question import InterviewQuestion
 from app.models.interview_question_set import InterviewQuestionSet
 from app.models.job import Job
 from app.models.job_application import JobApplication
+from app.models.job_distribution import JobDistribution, JobDistributionView
 from app.models.job_profile import JobProfile
+from app.models.linkedin_job_import import LinkedInJobImport
 from app.models.match_evidence import MatchEvidence
 from app.models.organization import Organization
+from app.models.public_application_rate_limit import PublicApplicationRateLimit
 from app.models.resume import Resume
 from app.models.screening_batch import ScreeningBatch
 from app.models.screening_batch_item import ScreeningBatchItem
@@ -36,15 +40,20 @@ __all__ = [
     "ChatThread",
     "HRDecision",
     "HRFeedbackCorrection",
+    "GitHubEvidenceAnalysis",
     "Interview",
     "InterviewAvailability",
     "InterviewQuestion",
     "InterviewQuestionSet",
     "Job",
     "JobApplication",
+    "JobDistribution",
+    "JobDistributionView",
+    "LinkedInJobImport",
     "JobProfile",
     "MatchEvidence",
     "Organization",
+    "PublicApplicationRateLimit",
     "Resume",
     "ScreeningBatch",
     "ScreeningBatchItem",

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Search, Plus, ChevronRight, Archive } from "lucide-react";
+import { Search, Plus, ChevronRight, Archive, UserRound, BadgeCheck, Sparkles, BriefcaseBusiness, CalendarDays, UsersRound } from "lucide-react";
 import Badge from "../../components/common/Badge";
 import Pagination from "../../components/common/Pagination";
 import LoadingSpinner from "../../components/common/LoadingSpinner";
@@ -76,6 +76,9 @@ export default function CandidatesList() {
     const start = (page - 1) * PAGE_SIZE;
     return filtered.slice(start, start + PAGE_SIZE);
   }, [filtered, page]);
+
+  const activeCount = filtered.filter((candidate) => candidate.status === CandidateStatus.ACTIVE).length;
+  const profilesWithSkills = filtered.filter((candidate) => candidate.skills.length > 0).length;
 
   const confirmArchive = async () => {
     if (!candidateToArchive || archiving) return;
@@ -163,11 +166,11 @@ export default function CandidatesList() {
               <table>
                 <thead>
                   <tr>
-                    <th scope="col">Candidate</th>
-                    <th scope="col">Status</th>
-                    <th scope="col">Profile Skills</th>
-                    <th scope="col">Experience</th>
-                    <th scope="col">Added</th>
+                    <th scope="col"><span className="candidate-heading-label"><UserRound size={14} aria-hidden="true" /> Candidate</span></th>
+                    <th scope="col"><span className="candidate-heading-label"><BadgeCheck size={14} aria-hidden="true" /> Status</span></th>
+                    <th scope="col"><span className="candidate-heading-label"><Sparkles size={14} aria-hidden="true" /> Profile Skills</span></th>
+                    <th scope="col"><span className="candidate-heading-label"><BriefcaseBusiness size={14} aria-hidden="true" /> Experience</span></th>
+                    <th scope="col"><span className="candidate-heading-label"><CalendarDays size={14} aria-hidden="true" /> Added</span></th>
                     <th scope="col"><span className="sr-only">Actions</span></th>
                   </tr>
                 </thead>
@@ -212,8 +215,8 @@ export default function CandidatesList() {
                           {c.skills.length > 3 && <span>+{c.skills.length - 3}</span>}
                         </div>
                       </td>
-                      <td>{c.experience || "—"}</td>
-                      <td>{c.appliedAt ? new Date(c.appliedAt).toLocaleDateString() : "—"}</td>
+                      <td><span className="candidate-data-label"><BriefcaseBusiness size={14} aria-hidden="true" /> {c.experience || "—"}</span></td>
+                      <td><span className="candidate-data-label"><CalendarDays size={14} aria-hidden="true" /> {c.appliedAt ? new Date(c.appliedAt).toLocaleDateString() : "—"}</span></td>
                       <td>
                         <div className="candidate-row-actions">
                           {c.status === CandidateStatus.ACTIVE && (
@@ -256,6 +259,21 @@ export default function CandidatesList() {
                 )}
               />
             )}
+          </div>
+
+          <div className="candidate-roster-insights" aria-label="Candidate roster summary">
+            <div className="candidate-roster-insight">
+              <span className="candidate-roster-insight-icon"><UsersRound size={16} aria-hidden="true" /></span>
+              <span><strong>{filtered.length}</strong><small>In this view</small></span>
+            </div>
+            <div className="candidate-roster-insight">
+              <span className="candidate-roster-insight-icon is-active"><BadgeCheck size={16} aria-hidden="true" /></span>
+              <span><strong>{activeCount}</strong><small>Active candidates</small></span>
+            </div>
+            <div className="candidate-roster-insight">
+              <span className="candidate-roster-insight-icon is-skills"><Sparkles size={16} aria-hidden="true" /></span>
+              <span><strong>{profilesWithSkills}</strong><small>With profile skills</small></span>
+            </div>
           </div>
 
           <Pagination total={filtered.length} pageSize={PAGE_SIZE} page={page} onPageChange={setPage} />

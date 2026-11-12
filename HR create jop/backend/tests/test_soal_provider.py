@@ -17,6 +17,7 @@ from app.ai.contracts import CandidateProfileExtractionOutput, JobProfileExtract
 from app.ai.providers import (
     FakeAIProvider,
     OllamaCloudProvider,
+    OpenRouterProvider,
     ProviderConfigurationError,
     ProviderInvalidRequestError,
     ProviderRateLimitError,
@@ -71,8 +72,10 @@ class _FakeCompletions:
         self._exception = exception
         self._sequence = sequence
         self._call_count = 0
+        self.calls = []
 
-    def create(self, **_kwargs):
+    def create(self, **kwargs):
+        self.calls.append(kwargs)
         if self._exception is not None:
             raise self._exception
         if self._sequence is not None:
@@ -104,7 +107,7 @@ class _HTTPError(Exception):
 
 def _patch_client(completions: _FakeCompletions) -> mock._patch:
     return mock.patch(
-        "app.ai.providers.soal.OpenAI",
+        "app.ai.providers.openai_compatible.OpenAI",
         return_value=_FakeOpenAI(completions),
     )
 
@@ -363,7 +366,7 @@ def test_text_generation_writes_no_db_rows(db_session: Session) -> None:
 def test_factory_returns_soal_with_key() -> None:
     settings = Settings(ai_provider="soal", soal_api_key="secret", soal_model="gemini-3.5-flash")
     with mock.patch(
-        "app.ai.providers.soal.OpenAI",
+        "app.ai.providers.openai_compatible.OpenAI",
         return_value=_FakeOpenAI(_FakeCompletions()),
     ):
         provider = get_provider(settings)
@@ -376,7 +379,7 @@ def test_factory_returns_soal_with_key() -> None:
 def test_factory_returns_ollama_cloud_with_key() -> None:
     settings = Settings(ai_provider="ollama", ollama_api_key="secret")
     with mock.patch(
-        "app.ai.providers.soal.OpenAI",
+        "app.ai.providers.openai_compatible.OpenAI",
         return_value=_FakeOpenAI(_FakeCompletions()),
     ):
         provider = get_provider(settings)
@@ -385,6 +388,38 @@ def test_factory_returns_ollama_cloud_with_key() -> None:
     assert provider.provider_name == "ollama"
     assert provider.model_name == "gemma4:31b"
     assert provider.base_url == "https://ollama.com/v1"
+
+
+def test_factory_returns_openrouter_with_key() -> None:
+    settings = Settings(ai_provider="openrouter", openrouter_api_key="test-key")
+    with mock.patch(
+        "app.ai.providers.openai_compatible.OpenAI",
+        return_value=_FakeOpenAI(_FakeCompletions()),
+    ):
+        provider = get_provider(settings)
+
+    assert isinstance(provider, OpenRouterProvider)
+    assert provider.provider_name == "openrouter"
+    assert provider.model_name == "deepseek/deepseek-v4.1-flash-1017"
+    assert provider.base_url == "https://openrouter.ai/api/v1"
+    assert provider.max_tokens == settings.openrouter_max_tokens
+
+
+def test_openrouter_sends_configured_output_token_limit() -> None:
+    completions = _FakeCompletions(completion=_completion("OK"))
+    with _patch_client(completions):
+        provider = OpenRouterProvider(api_key="test-key", max_tokens=64)
+
+    provider.generate_text(TextGenerationRequest(input="reply OK"))
+
+    assert completions.calls[0]["max_tokens"] == 64
+
+
+def test_factory_requires_openrouter_key_instead_of_using_fake() -> None:
+    settings = Settings(ai_provider="openrouter", openrouter_api_key=None)
+
+    with pytest.raises(ProviderConfigurationError, match="OPENROUTER_API_KEY"):
+        get_provider(settings)
 
 
 def test_factory_requires_ollama_key_instead_of_using_fake() -> None:

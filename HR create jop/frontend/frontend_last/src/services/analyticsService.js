@@ -131,6 +131,15 @@ export async function getApplicationStatusBreakdown(now = new Date()) {
 }
 
 export async function getCandidateSources() {
-  // No candidate-source endpoint or source data is currently available.
-  return null;
+  const apps = await getApplications();
+  const sourceCounts = new Map();
+  for (const app of apps) {
+    const source = app.source || "Unspecified";
+    const medium = app.sourceMedium || "";
+    const key = `${source}\u0000${medium}`;
+    const current = sourceCounts.get(key) || { source, medium: medium || null, applications: 0 };
+    current.applications += 1;
+    sourceCounts.set(key, current);
+  }
+  return [...sourceCounts.values()].sort((a, b) => b.applications - a.applications);
 }

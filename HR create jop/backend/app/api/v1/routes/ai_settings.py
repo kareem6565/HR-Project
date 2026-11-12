@@ -20,6 +20,7 @@ from app.ai.providers import ProviderError, ProviderRateLimitError
 from app.ai.providers.base import TextGenerationRequest
 from app.ai.providers.factory import resolve_ai_config
 from app.ai.providers.ollama_cloud import OllamaCloudProvider
+from app.ai.providers.openrouter import OpenRouterProvider
 from app.ai.providers.soal import SoalProvider
 from app.api.v1.deps import RequestContext, require_roles
 from app.api.v1.schemas.ai_settings import (
@@ -62,7 +63,10 @@ def set_ai_api_key(
     """
     raise HTTPException(
         status_code=status.HTTP_405_METHOD_NOT_ALLOWED,
-        detail="Runtime AI key modification is disabled. AI provider credentials must be configured by system operators via environment variables.",
+        detail=(
+            "Runtime AI key modification is disabled. AI provider credentials must be configured "
+            "by system operators via environment variables."
+        ),
     )
 
 
@@ -75,7 +79,10 @@ def clear_ai_api_key(_: RequestContext = Depends(require_roles("admin"))) -> AIS
     """
     raise HTTPException(
         status_code=status.HTTP_405_METHOD_NOT_ALLOWED,
-        detail="Runtime AI key modification is disabled. AI provider credentials must be configured by system operators via environment variables.",
+        detail=(
+            "Runtime AI key modification is disabled. AI provider credentials must be configured "
+            "by system operators via environment variables."
+        ),
     )
 
 
@@ -94,7 +101,11 @@ def verify_ai_api_key(
     config = resolve_ai_config(settings)
     api_key = body.api_key.strip() if body and body.api_key else config["api_key"]
     model = config["model"] or (
-        settings.soal_model if settings.ai_provider == "soal" else settings.ollama_model
+        settings.soal_model
+        if settings.ai_provider == "soal"
+        else settings.openrouter_model
+        if settings.ai_provider == "openrouter"
+        else settings.ollama_model
     )
 
     if not api_key:
@@ -103,6 +114,7 @@ def verify_ai_api_key(
     provider_type = {
         "soal": SoalProvider,
         "ollama": OllamaCloudProvider,
+        "openrouter": OpenRouterProvider,
     }.get(config["provider"])
     if provider_type is None:
         return VerifyApiKeyResponse(
@@ -110,11 +122,22 @@ def verify_ai_api_key(
             message="Select a live AI provider before verifying an API key.",
             model=model,
         )
+    provider_kwargs = {
+        "api_key": api_key,
+        "model": model,
+        "base_url": config["base_url"]
+        or (
+            settings.soal_base_url
+            if config["provider"] == "soal"
+            else settings.openrouter_base_url
+            if config["provider"] == "openrouter"
+            else settings.ollama_base_url
+        ),
+    }
+    if config["provider"] == "openrouter":
+        provider_kwargs["max_tokens"] = settings.openrouter_max_tokens
     provider = provider_type(
-        api_key=api_key,
-        model=model,
-        base_url=config["base_url"]
-        or (settings.soal_base_url if config["provider"] == "soal" else settings.ollama_base_url),
+        **provider_kwargs,
     )
     started = time.monotonic()
     try:

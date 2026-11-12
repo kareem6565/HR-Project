@@ -23,6 +23,13 @@ class JobApplicationResponse(BaseModel):
     status: str
     created_at: datetime
     updated_at: datetime
+    screening_status: str = "not_started"
+    source: str | None = None
+    source_medium: str | None = None
+    source_campaign: str | None = None
+    linkedin_url: str | None = None
+    github_url: str | None = None
+    portfolio_url: str | None = None
 
 
 class RequirementEvidenceSummary(BaseModel):
@@ -61,3 +68,19 @@ class ApplicationSummaryResponse(BaseModel):
     status: str
     created_at: datetime
     evidence: list[RequirementEvidenceSummary] = Field(default_factory=list)
+    candidate_email: str | None = None
+    candidate_phone: str | None = None
+    source: str | None = None
+    source_medium: str | None = None
+    source_campaign: str | None = None
+    screening_status: str = "not_started"
+    decision_status: str = "pending_review"
+    decision_created_at: datetime | None = None
+
+
+class ApplicationPageResponse(BaseModel):
+    items: list[ApplicationSummaryResponse]
+    page: int
+    page_size: int
+    total: int
+    pages: int

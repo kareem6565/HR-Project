@@ -1,10 +1,20 @@
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
-import uuid
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, func
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -25,9 +35,16 @@ class ScreeningBatchItem(Base):
             "status IN ('queued', 'running', 'done', 'failed', 'duplicate', 'cancelled')",
             name="ck_screening_batch_items_status",
         ),
+        CheckConstraint(
+            "source IN ('manual_upload', 'public_application')",
+            name="ck_screening_batch_items_source",
+        ),
         Index("ix_screening_batch_items_batch_id", "batch_id"),
         Index("ix_screening_batch_items_claim", "status", "next_attempt_at"),
         Index("ix_screening_batch_items_sha256", "sha256"),
+        Index("uq_screening_batch_items_public_application", "application_id", unique=True,
+              postgresql_where=text("source = 'public_application' AND application_id IS NOT NULL"),
+              sqlite_where=text("source = 'public_application' AND application_id IS NOT NULL")),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -40,6 +57,10 @@ class ScreeningBatchItem(Base):
     storage_key: Mapped[str] = mapped_column(Text, nullable=False)
     sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="queued")
+    source: Mapped[str] = mapped_column(String(32), nullable=False, default="manual_upload")
+    job_profile_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("job_profiles.id", ondelete="RESTRICT"), nullable=True
+    )
     stage: Mapped[str | None] = mapped_column(String(50), nullable=True)
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=3)

@@ -17,7 +17,13 @@ from app.ai.contracts.schema import JOB_PROFILE_EXTRACTION_SCHEMA_VERSION, Schem
 
 RequirementCategory = Literal["must_have", "important", "nice_to_have"]
 RequirementDimension = Literal[
-    "skill", "experience", "education", "certification", "responsibility"
+    "skill",
+    "technical_skill",
+    "soft_skill",
+    "experience",
+    "education",
+    "certification",
+    "responsibility",
 ]
 RequirementSource = Literal["manual_description", "uploaded_file", "structured_specification"]
 JobQualityFindingType = Literal[
@@ -35,6 +41,8 @@ REQUIREMENT_CATEGORIES: tuple[RequirementCategory, ...] = (
 
 REQUIREMENT_DIMENSIONS: tuple[RequirementDimension, ...] = (
     "skill",
+    "technical_skill",
+    "soft_skill",
     "experience",
     "education",
     "certification",

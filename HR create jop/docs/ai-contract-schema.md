@@ -15,15 +15,19 @@ architecture or product documentation.
 
 ## Schema Versioning
 
-The initial contract schema version is `1.0`; Phase 4.1 added `1.1` for the
-structured job requirement vocabulary, and Phase 4.2 added `1.2` for the
-structured per-requirement match evidence contract.
+The initial contract schema version is `1.0`; `1.1` added structured job
+requirements, `1.2` added per-requirement match evidence, `1.3` added job
+description quality findings, and `1.4` distinguishes technical and soft
+skills in job requirements.
 
-- `AI_CONTRACT_SCHEMA_VERSION` is `1.1` and is the default for the job profile,
-  candidate profile, and explanation contracts. Every contract carries a
+- `AI_CONTRACT_SCHEMA_VERSION` is `1.1` and is the default for general AI
+  contracts. Every contract carries a
   `schema_version` field that defaults to the current supported version, must be
   a non-empty string, and must be one of the supported versions
-  (`SUPPORTED_SCHEMA_VERSIONS`, currently `{1.0, 1.1}`).
+- The accepted versions are defined by `SUPPORTED_SCHEMA_VERSIONS` and include
+  the supported revisions documented above.
+- `JOB_PROFILE_EXTRACTION_SCHEMA_VERSION` is `1.4`; prior versions remain
+  readable for existing profiles.
 - `EVIDENCE_CONTRACT_SCHEMA_VERSION` is `1.2` and is the default for the match
   evidence contract (`MatchEvidenceListOutput`). It is versioned separately so
   that introducing the `requirement_ref`/`requirement_key` boundary does not
@@ -31,10 +35,9 @@ structured per-requirement match evidence contract.
 
 This lets a producer signal which contract revision it conformed to and lets a
 consumer reject unrecognized revisions before processing. `1.0` remains readable
-everywhere; only the job profile contract gained a structured requirement
-vocabulary in `1.1` and the match evidence contract gained a structured
-per-requirement list in `1.2` (the other contracts simply inherit the new
-default revision, which does not change their structure).
+everywhere. The job profile contract retains the historical requirement
+categories and adds `technical_skill` and `soft_skill` dimensions in `1.4`;
+existing screening weights and approved profile snapshots remain unchanged.
 
 ## Contracts
 
@@ -42,6 +45,7 @@ default revision, which does not change their structure).
 | --- | --- | --- |
 | `JobProfileExtractionOutput` | job profile extraction | `title`, `summary?`, `requirements[]` |
 | `JobRequirement` | inside `JobProfileExtractionOutput.requirements` | `key`, `text`, `category`, `dimension` |
+| `JobDescriptionDraftOutput` | generate, parse, or improve job descriptions | `title`, `summary?`, `requirements[]`, `needs_confirmation[]` |
 | `CandidateProfileExtractionOutput` | candidate profile extraction | `full_name`, `summary?`, `skills[]`, `experience[]` |
 | `MatchEvidenceListOutput` | matching evidence | `evidence_items[]`, `provenance?`, `schema_version` |
 | `MatchEvidenceOutput` | inside `MatchEvidenceListOutput.evidence_items` | `evidence_type` (`matched`/`missing`/`partial`), `requirement_ref` (mandatory, with `requirement_key`), `candidate_evidence?`, `strength?`, `provenance?` |

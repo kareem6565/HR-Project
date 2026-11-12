@@ -39,3 +39,18 @@ export async function updateJobProfile(profileId, profileData) {
   });
   return data;
 }
+
+export async function buildJobDescription(payload) {
+  const { data } = await apiClient.post("/jobs/ai/build-description", payload);
+  return data;
+}
+
+export async function startLinkedInJobImport(sourceUrl) {
+  const { data } = await apiClient.post("/jobs/linkedin-imports", { source_url: sourceUrl });
+  return data;
+}
+
+export async function getLinkedInJobImport(importId) {
+  const { data } = await apiClient.get(`/jobs/linkedin-imports/${importId}`);
+  return data;
+}

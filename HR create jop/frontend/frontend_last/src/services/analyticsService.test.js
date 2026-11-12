@@ -63,13 +63,26 @@ describe("period-scoped analytics", () => {
     expect(result.applicationTrend.reduce((sum, bucket) => sum + bucket.applications, 0)).toBe(4);
   });
 
-  it("returns explicit zero shares for an empty period and marks sources unavailable", async () => {
+  it("returns explicit zero shares and an empty source breakdown when no applications exist", async () => {
     getApplications.mockResolvedValue([]);
     const result = await getAnalyticsSnapshot("90d", NOW);
     expect(result.statusBreakdown.every((row) => row.count === 0 && row.percent === 0)).toBe(true);
     expect(result.applicationTrend.every((bucket) => bucket.applications === 0)).toBe(true);
     expect(result.metrics.find((metric) => metric.key === "applications").label).toContain("last 90 days");
-    await expect(getCandidateSources()).resolves.toBeNull();
+    await expect(getCandidateSources()).resolves.toEqual([]);
+  });
+
+  it("groups submitted applications by source and medium", async () => {
+    getApplications.mockResolvedValue([
+      { ...app("1", "created", NOW.toISOString()), source: "linkedin", sourceMedium: "social" },
+      { ...app("2", "created", NOW.toISOString()), source: "linkedin", sourceMedium: "social" },
+      { ...app("3", "created", NOW.toISOString()), source: null, sourceMedium: null },
+    ]);
+
+    await expect(getCandidateSources()).resolves.toEqual([
+      { source: "linkedin", medium: "social", applications: 2 },
+      { source: "Unspecified", medium: null, applications: 1 },
+    ]);
   });
 
   it("keeps rounded status percentages totaling exactly 100", async () => {

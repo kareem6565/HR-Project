@@ -22,12 +22,16 @@ from app.ai.providers.errors import (
 from app.ai.providers.factory import get_provider
 from app.ai.providers.fake import FakeAIProvider
 from app.ai.providers.ollama_cloud import OllamaCloudProvider
+from app.ai.providers.openai_compatible import OpenAICompatibleProvider
+from app.ai.providers.openrouter import OpenRouterProvider
 from app.ai.providers.soal import SoalProvider
 
 __all__ = [
     "AIProvider",
     "FakeAIProvider",
     "OllamaCloudProvider",
+    "OpenAICompatibleProvider",
+    "OpenRouterProvider",
     "SoalProvider",
     "ProviderError",
     "ProviderConfigurationError",

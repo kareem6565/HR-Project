@@ -116,6 +116,17 @@ def test_empty_profile_scores_zero_with_review_signal() -> None:
     assert result["review_signals"] == ["no_requirements"]
 
 
+def test_missing_preferred_technical_and_soft_skills_are_not_mandatory_signals() -> None:
+    requirements = [
+        JobRequirement(text="Kubernetes", category="nice_to_have", dimension="technical_skill"),
+        JobRequirement(text="Public speaking", category="nice_to_have", dimension="soft_skill"),
+    ]
+    result = ScoringService().compute(requirements, {})
+
+    assert result["review_signals"] == []
+    assert all(item["category"] == "nice_to_have" for item in result["breakdown"].values())
+
+
 def test_breakdown_contains_per_requirement_detail() -> None:
     requirements = _requirements()
     key = _keys(requirements)[0]

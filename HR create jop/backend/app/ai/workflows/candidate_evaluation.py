@@ -24,6 +24,7 @@ import hashlib
 import json
 import uuid
 from dataclasses import dataclass
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -256,6 +257,7 @@ class CandidateEvaluationWorkflow:
         job_application_id: uuid.UUID,
         payload: CandidateEvaluationPayload,
         organization_id: uuid.UUID | None = None,
+        job_profile_id: uuid.UUID | None = None,
     ) -> CandidateEvaluationResult:
         """Persist generated evaluation, match evidence, and traces in a short transaction."""
         application = self._get_application(
@@ -263,7 +265,7 @@ class CandidateEvaluationWorkflow:
         )
         resolved_org_id = organization_id or application.organization_id
         job_profile = self._get_approved_job_profile(
-            db, application, organization_id=resolved_org_id
+            db, application, organization_id=resolved_org_id, job_profile_id=job_profile_id
         )
         candidate_profile = self._get_current_candidate_profile(
             db, application, organization_id=resolved_org_id
@@ -400,6 +402,7 @@ class CandidateEvaluationWorkflow:
         *,
         job_application_id: uuid.UUID,
         organization_id: uuid.UUID | None = None,
+        job_profile_id: uuid.UUID | None = None,
     ) -> CandidateEvaluationResult:
         """Execute evaluation by composing generate() outside DB transactions and persist()."""
         application = self._get_application(
@@ -407,7 +410,7 @@ class CandidateEvaluationWorkflow:
         )
         resolved_org_id = organization_id or application.organization_id
         job_profile = self._get_approved_job_profile(
-            db, application, organization_id=resolved_org_id
+            db, application, organization_id=resolved_org_id, job_profile_id=job_profile_id
         )
         candidate_profile = self._get_current_candidate_profile(
             db, application, organization_id=resolved_org_id
@@ -448,6 +451,7 @@ class CandidateEvaluationWorkflow:
             job_application_id=application.id,
             payload=payload,
             organization_id=resolved_org_id,
+            job_profile_id=job_profile.id,
         )
 
     def _handle_generation_error(
@@ -560,10 +564,19 @@ class CandidateEvaluationWorkflow:
         application: JobApplication,
         *,
         organization_id: uuid.UUID,
+        job_profile_id: uuid.UUID | None = None,
     ) -> JobProfile:
-        job_profile = self._job_profile_service.get_current_or_latest(
-            db, job_id=application.job_id, organization_id=organization_id
-        )
+        if job_profile_id is not None:
+            job_profile = db.get(JobProfile, job_profile_id)
+            if job_profile is not None and (
+                job_profile.job_id != application.job_id
+                or job_profile.status not in {"approved", "superseded"}
+            ):
+                job_profile = None
+        else:
+            job_profile = self._job_profile_service.get_current_or_latest(
+                db, job_id=application.job_id, organization_id=organization_id
+            )
         if job_profile is None or job_profile.status != "approved":
             raise ValidationError("An approved current JobProfile is required for evaluation.")
         return job_profile

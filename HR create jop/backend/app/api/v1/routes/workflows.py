@@ -1,8 +1,10 @@
 import uuid
 
 from fastapi import APIRouter, Depends, File, Header, UploadFile
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.ai.providers.errors import ProviderError
 from app.api.v1.deps import RequestContext, get_request_context
 from app.api.v1.schemas.workflows import (
     CandidateEvaluationRunResponse,
@@ -45,21 +47,77 @@ def extract_job_profile(
     job_uuid = uuid.UUID(job_id)
     job = JobService().get(db, job_id=job_uuid, organization_id=ctx.organization_id)
 
-    if not resolve_ai_config(settings)["is_fake"]:
-        provider = get_provider(settings)
-    else:
-        provider = get_provider(
-            settings,
-            provider="fake",
-            model="fake-model",
-            structured_payload=_derive_extraction_payload(job),
+    workflow_started = False
+    try:
+        if not resolve_ai_config(settings)["is_fake"]:
+            provider = get_provider(settings)
+        else:
+            provider = get_provider(
+                settings,
+                provider="fake",
+                model="fake-model",
+                structured_payload=_derive_extraction_payload(job),
+            )
+        workflow_started = True
+        result = JobProfileExtractionWorkflow(provider).run(
+            db,
+            job_id=job_uuid,
+            organization_id=ctx.organization_id,
+            request_key=idempotency_key,
         )
-    result = JobProfileExtractionWorkflow(provider).run(
-        db,
-        job_id=job_uuid,
-        organization_id=ctx.organization_id,
-        request_key=idempotency_key,
-    )
+    except ProviderError as error:
+        # The request dependency rolls back on raised API errors. Commit both
+        # workflow traces and a safe status marker before handing the error to
+        # the normal API exception handler.
+        from datetime import UTC, datetime
+
+        from app.models import JobProfile
+        from app.services.workflow_trace_service import WorkflowTraceService
+
+        if not workflow_started:
+            traces = WorkflowTraceService()
+            run = traces.start_run(
+                db,
+                organization_id=ctx.organization_id,
+                workflow_type="job_profile_extraction",
+                related_entity_type="job",
+                related_entity_id=job_uuid,
+            )
+            step = traces.start_step(
+                db, workflow_run_id=run.id, step_name="extract_job_profile"
+            )
+            traces.record_ai_trace(
+                db,
+                workflow_step_trace_id=step.id,
+                ai_component_name="job_profile_extractor",
+                status="failed",
+                provider=settings.ai_provider,
+                prompt_version="3",
+                input_reference={"entity": "job", "entity_id": str(job_uuid)},
+            )
+            traces.mark_step_failed(
+                db,
+                workflow_step_trace_id=step.id,
+                error_type=type(error).__name__,
+                error_message="AI provider could not be initialized.",
+            )
+            traces.mark_run_failed(db, workflow_run_id=run.id)
+
+        profile = db.scalar(
+            select(JobProfile)
+            .where(JobProfile.job_id == job_uuid, JobProfile.is_current.is_(True))
+            .with_for_update()
+        )
+        if profile is not None and profile.status == "draft":
+            provenance = dict(profile.provenance or {})
+            provenance["ai_extraction"] = {
+                "status": "failed",
+                "error_code": type(error).__name__,
+                "failed_at": datetime.now(UTC).isoformat(),
+            }
+            profile.provenance = provenance
+        db.commit()
+        raise
     if job.status == "draft":
         job.status = "awaiting_profile_review"
     db.commit()
@@ -255,12 +313,18 @@ def _default_job_requirements(job) -> list[dict[str, str]]:
     """
     requirements: list[dict[str, str]] = []
     seen: set[str] = set()
-    for value in [*(job.required_skills or []), *(job.requirements or [])]:
-        text = (value or "").strip()
-        if not text or text.lower() in seen:
-            continue
-        seen.add(text.lower())
-        requirements.append({"text": text, "category": "must_have", "dimension": "skill"})
+    for values, dimension in (
+        (job.required_skills or [], "technical_skill"),
+        (job.requirements or [], "skill"),
+    ):
+        for value in values:
+            text = (value or "").strip()
+            if not text or text.lower() in seen:
+                continue
+            seen.add(text.lower())
+            requirements.append(
+                {"text": text, "category": "must_have", "dimension": dimension}
+            )
     requirements.append(
         {
             "text": "Relevant professional experience",

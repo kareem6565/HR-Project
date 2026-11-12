@@ -15,6 +15,7 @@ import { AuthProvider } from "../../context/AuthContext";
 
 vi.mock("../../services/applicationService", () => ({
   getApplications: vi.fn(),
+  getApplicationJobs: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock("../../services/jobService", () => ({
@@ -71,7 +72,7 @@ describe("UI-03: Null Score Display", () => {
   });
 
   it("renders a dash for null application score and never displays 'null%'", async () => {
-    applicationService.getApplications.mockResolvedValue([
+    applicationService.getApplications.mockResolvedValue({ items: [
       {
         id: "app-1",
         candidateName: "Ada Lovelace",
@@ -79,6 +80,7 @@ describe("UI-03: Null Score Display", () => {
         appliedAt: "2025-01-10",
         score: null,
         status: "ready_for_review",
+        screeningStatus: "completed",
       },
       {
         id: "app-2",
@@ -87,8 +89,9 @@ describe("UI-03: Null Score Display", () => {
         appliedAt: "2025-01-11",
         score: 88,
         status: "advanced",
+        screeningStatus: "completed",
       },
-    ]);
+    ], total: 2, page: 1, pageSize: 20, pages: 1 });
 
     render(
       <MemoryRouter>
@@ -99,7 +102,7 @@ describe("UI-03: Null Score Display", () => {
     await screen.findByText("Ada Lovelace");
 
     // Null score is rendered as dash "—", Alan's score is "88%"
-    expect(screen.getByText("—")).toBeInTheDocument();
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
     expect(screen.getByText("88%")).toBeInTheDocument();
     expect(screen.queryByText(/null%/i)).not.toBeInTheDocument();
   });

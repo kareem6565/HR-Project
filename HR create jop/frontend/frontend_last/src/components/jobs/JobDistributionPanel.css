@@ -1,0 +1,113 @@
+.job-distribution-panel {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+
+.job-distribution-heading,
+.job-distribution-title,
+.job-distribution-editor-meta,
+.job-distribution-actions,
+.job-distribution-history h4 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.job-distribution-heading,
+.job-distribution-editor-meta {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.job-distribution-title { min-width: 0; }
+.job-distribution-title h3 { margin: 3px 0 0; }
+.job-distribution-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  color: var(--hera-teal, #1b3a3a);
+  background: color-mix(in srgb, var(--hera-teal, #1b3a3a) 10%, transparent);
+  border-radius: 12px;
+}
+.job-distribution-note,
+.job-distribution-footnote,
+.job-distribution-generated { color: var(--hera-muted, #64748b); font-size: .875rem; }
+.job-distribution-new,
+.job-distribution-editor { display: grid; gap: 14px; min-width: 0; }
+.job-distribution-new { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: end; }
+.job-distribution-new label,
+.job-distribution-editor > label { display: grid; gap: 6px; min-width: 0; }
+.job-distribution-new input,
+.job-distribution-new select,
+.job-distribution-editor input[type="url"],
+.job-distribution-editor > label input,
+.job-distribution-editor textarea {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+}
+.job-distribution-new button { min-height: 42px; }
+.job-distribution-editor-meta > span:first-child { overflow-wrap: anywhere; }
+.job-distribution-status {
+  border: 1px solid var(--hera-border, #d9e2e2);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: .8rem;
+  white-space: nowrap;
+}
+.job-distribution-status.status-shared { color: #08734d; background: #e9f8f1; border-color: #b5e4ce; }
+.job-distribution-status.status-draft { color: #795500; background: #fff7dd; border-color: #f1dda0; }
+.job-distribution-link-wrap {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--hera-border, #d9e2e2);
+  border-radius: 10px;
+  background: var(--hera-surface-subtle, #f7f9f9);
+}
+.job-distribution-link-wrap span { color: var(--hera-muted, #64748b); font-size: .82rem; }
+.job-distribution-link-wrap a { overflow-wrap: anywhere; }
+.job-distribution-external-url span { color: var(--hera-muted, #64748b); font-weight: 400; }
+.job-distribution-generated { display: flex; align-items: center; gap: 6px; margin: 0; }
+.job-distribution-review { display: flex; align-items: flex-start; gap: 9px; line-height: 1.5; }
+.job-distribution-review input { margin-top: 4px; min-width: 18px; min-height: 18px; }
+.job-distribution-actions { flex-wrap: wrap; }
+.job-distribution-actions > * { min-height: 40px; }
+.job-distribution-open-platform[aria-disabled="true"] { opacity: .55; cursor: not-allowed; }
+.job-distribution-feedback { color: var(--hera-teal, #1b3a3a); margin: 0; }
+.job-distribution-history { border-top: 1px solid var(--hera-border, #d9e2e2); padding-top: 14px; }
+.job-distribution-history h4 { margin: 0 0 10px; }
+.job-distribution-history ul { display: grid; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.job-distribution-history li { min-width: 0; }
+.job-distribution-history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid var(--hera-border, #d9e2e2);
+  border-radius: 9px;
+  color: inherit;
+  background: transparent;
+  text-align: start;
+  cursor: pointer;
+}
+.job-distribution-history-item span:first-child { display: grid; min-width: 0; }
+.job-distribution-history-item strong,
+.job-distribution-history-item small { overflow-wrap: anywhere; }
+.job-distribution-history-item small { color: var(--hera-muted, #64748b); }
+.job-distribution-history li > a { display: inline-block; margin: 6px 10px; }
+.job-distribution-footnote { margin: 0; line-height: 1.5; }
+
+@media (max-width: 640px) {
+  .job-distribution-new { grid-template-columns: minmax(0, 1fr); }
+  .job-distribution-actions { align-items: stretch; }
+  .job-distribution-actions > * { justify-content: center; width: 100%; }
+  .job-distribution-history-item { align-items: flex-start; }
+}

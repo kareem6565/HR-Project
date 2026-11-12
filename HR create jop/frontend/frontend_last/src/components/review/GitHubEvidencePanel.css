@@ -1,0 +1,44 @@
+.github-evidence-panel textarea {
+  box-sizing: border-box;
+  display: block;
+  margin: 8px 0 4px;
+  min-height: 72px;
+  padding: 10px 12px;
+  resize: vertical;
+  width: 100%;
+}
+
+.github-evidence-panel button {
+  min-height: 44px;
+}
+
+.github-evidence-panel a:focus-visible,
+.github-evidence-panel button:focus-visible,
+.github-evidence-panel textarea:focus-visible {
+  outline: 3px solid var(--primary-color, #2563eb);
+  outline-offset: 2px;
+}
+
+.github-requirement-evidence {
+  border-top: 1px solid var(--border-color, #d1d5db);
+  margin-top: 14px;
+  padding-top: 12px;
+}
+
+.github-requirement-evidence h4 {
+  margin: 0 0 4px;
+}
+
+.github-requirement-evidence pre {
+  max-height: 240px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  .github-evidence-panel .interview-invite-link-row input {
+    max-width: 100%;
+    width: 100%;
+  }
+}

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import secrets
 import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
@@ -36,6 +37,15 @@ class Job(Base):
         ),
         Index("ix_jobs_organization_id_status", "organization_id", "status"),
         UniqueConstraint("organization_id", "idempotency_key", name="uq_jobs_org_idempotency_key"),
+        UniqueConstraint("public_id", name="uq_jobs_public_id"),
+        CheckConstraint(
+            "publication_status IN ('unpublished', 'published', 'closed')",
+            name="ck_jobs_publication_status",
+        ),
+        CheckConstraint(
+            "work_mode IS NULL OR work_mode IN ('onsite', 'hybrid', 'remote')",
+            name="ck_jobs_work_mode",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -49,6 +59,27 @@ class Job(Base):
     raw_description: Mapped[str | None] = mapped_column(Text, nullable=True)
     description_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="draft")
+    public_id: Mapped[str | None] = mapped_column(
+        String(32), nullable=True, default=lambda: secrets.token_urlsafe(24)
+    )
+    publication_status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="unpublished", server_default="unpublished"
+    )
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    public_closed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    published_job_profile_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(
+            "job_profiles.id",
+            ondelete="SET NULL",
+            name="fk_jobs_published_job_profile_id_job_profiles",
+            use_alter=True,
+        ),
+        nullable=True,
+    )
+    work_mode: Mapped[str | None] = mapped_column(String(20), nullable=True)
     department: Mapped[str | None] = mapped_column(String(100), nullable=True)
     location: Mapped[str | None] = mapped_column(String(100), nullable=True)
     job_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
@@ -74,5 +105,7 @@ class Job(Base):
     organization: Mapped[Organization] = relationship(back_populates="jobs")
     created_by: Mapped[User | None] = relationship(back_populates="created_jobs")
     applications: Mapped[list[JobApplication]] = relationship(back_populates="job")
-    profiles: Mapped[list[JobProfile]] = relationship(back_populates="job")
+    profiles: Mapped[list[JobProfile]] = relationship(
+        back_populates="job", foreign_keys="JobProfile.job_id"
+    )
     screening_batches: Mapped[list[ScreeningBatch]] = relationship(back_populates="job")
