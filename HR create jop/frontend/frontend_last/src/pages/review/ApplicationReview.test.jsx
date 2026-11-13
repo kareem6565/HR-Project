@@ -64,6 +64,7 @@ function renderPage(initialEntry = "/applications/app-1/review", state = undefin
 describe("ApplicationReview pipeline decision", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  sessionStorage.clear();
     getReviewWorkspace.mockResolvedValue(workspace);
     recordDecision.mockResolvedValue({});
     createCandidateInterviewInvitation.mockResolvedValue({ token: "opaque-test-token" });
@@ -123,6 +124,37 @@ describe("ApplicationReview pipeline decision", () => {
     );
     expect(createCandidateInterviewInvitation).toHaveBeenCalledWith("app-1");
     expect(screen.getByText(/invalidates the previous unused link/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Console Provider does not send real email/i).length).toBeGreaterThan(0);
+  });
+
+  it("restores the existing unused invitation after review navigation", async () => {
+    const user = userEvent.setup();
+    getReviewWorkspace.mockResolvedValue({ ...workspace, poolRow: { group: "A", decision: "advance" } });
+    renderPage();
+    await screen.findByRole("heading", { name: "Ada Lovelace" });
+    await user.click(screen.getByRole("button", { name: "Create scheduling link" }));
+    const link = await screen.findByLabelText("Share this link with the candidate");
+    const expected = link.getAttribute("value");
+
+    renderPage();
+    expect(await screen.findByLabelText("Share this link with the candidate")).toHaveValue(expected);
+    expect(createCandidateInterviewInvitation).toHaveBeenCalledTimes(1);
+  });
+
+  it("copies the existing invitation link without creating another invitation", async () => {
+    const user = userEvent.setup();
+    getReviewWorkspace.mockResolvedValue({ ...workspace, poolRow: { group: "A", decision: "advance" } });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    sessionStorage.setItem("hera.candidate-interview-invite.app-1", "https://example.test/interview/schedule#opaque-test-token");
+    renderPage();
+    await screen.findByRole("heading", { name: "Ada Lovelace" });
+    await user.click(screen.getByRole("button", { name: "Copy link" }));
+    expect(writeText).toHaveBeenCalledWith("https://example.test/interview/schedule#opaque-test-token");
+    expect(createCandidateInterviewInvitation).not.toHaveBeenCalled();
   });
 
   it("displays current recorded decision badge and timestamp when decision is present in poolRow", async () => {
