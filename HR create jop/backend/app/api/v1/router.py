@@ -23,6 +23,8 @@ from app.api.v1.routes.job_applications import router as job_applications_router
 from app.api.v1.routes.job_drafts import router as job_drafts_router
 from app.api.v1.routes.job_profiles import router as job_profiles_router
 from app.api.v1.routes.jobs import router as jobs_router
+from app.api.v1.routes.google_calendar import public_router as google_calendar_public_router
+from app.api.v1.routes.google_calendar import router as google_calendar_router
 from app.api.v1.routes.observability import router as observability_router
 from app.api.v1.routes.resumes import router as resumes_router
 from app.api.v1.routes.screening_batches import router as screening_batches_router
@@ -57,9 +59,12 @@ recruitment_router.include_router(feedback_learning_router, tags=["feedback-lear
 recruitment_router.include_router(interview_questions_router, tags=["interview-questions"])
 recruitment_router.include_router(interview_question_sets_router, tags=["interview-questions"])
 recruitment_router.include_router(chat_router, tags=["chat"])
+recruitment_router.include_router(google_calendar_router, tags=["google-calendar"])
 
 # Candidate-facing invitation endpoints are intentionally public. Their HR-only
 # invitation-creation endpoint enforces recruiter/admin access at the route.
 api_router.include_router(candidate_portal_router, tags=["candidate-portal"])
 api_router.include_router(talent_pool_consent_router, tags=["talent-pool-consent"])
+# Google OAuth browser callback is public (validated via short-lived, hashed, one-time state).
+api_router.include_router(google_calendar_public_router, tags=["google-calendar"])
 api_router.include_router(recruitment_router)

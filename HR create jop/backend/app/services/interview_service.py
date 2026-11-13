@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import re
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -11,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.models import (
     Candidate,
     Interview,
+    InterviewAvailability,
     Job,
     JobApplication,
     Organization,
@@ -31,6 +33,9 @@ class InterviewService:
     so it stays grounded in the recruitment pipeline.
     """
 
+    def __init__(self, now_fn=None):
+        self._now_fn = now_fn or datetime.now
+
     def schedule(
         self,
         db: Session,
@@ -45,7 +50,13 @@ class InterviewService:
         meeting_link: str | None = None,
         scheduled_duration_minutes: int = DEFAULT_DURATION_MINUTES,
         interview_question_set_id: uuid.UUID | None = None,
+        timezone_name: str = "UTC",
+        calendar_prechecked: bool = False,
     ) -> Interview:
+        from zoneinfo import ZoneInfo
+        from sqlalchemy.exc import IntegrityError
+        from app.models import InterviewSlotReservation
+
         organization = db.get(Organization, organization_id)
         if organization is None:
             raise NotFoundError("Organization was not found.")
@@ -59,13 +70,14 @@ class InterviewService:
         # Stage G: Enforce Advance Gate
         self._check_advance_gate(db, application)
 
-        interviewer = None
-        if interviewer_user_id is not None:
-            interviewer = UserService().get(
-                db,
-                user_id=interviewer_user_id,
-                organization_id=organization_id,
-            )
+        if interviewer_user_id is None:
+            raise ValidationError("An interviewer must be assigned to schedule an interview.")
+
+        interviewer = UserService().get(
+            db,
+            user_id=interviewer_user_id,
+            organization_id=organization_id,
+        )
         self._validate_schedule(
             interview_type,
             scheduled_date,
@@ -91,6 +103,49 @@ class InterviewService:
                 )
             question_set = candidate_set
 
+        interval = _to_minutes(scheduled_time)
+        availability_tz_name, start_local, end_local = self._require_matching_availability_window(
+            db,
+            organization_id=organization_id,
+            interviewer_user_id=interviewer.id,
+            scheduled_date=scheduled_date,
+            start_minutes=interval,
+            duration_minutes=scheduled_duration_minutes,
+        )
+
+        # Never allow booking an interview whose start has already passed in the
+        # availability's actual time zone (e.g. Africa/Cairo). Rejects both past
+        # dates and today's slots whose start is at or before the current time.
+        # Backend validation is mandatory; the frontend must not be relied on alone.
+        now_local = self._now_fn(ZoneInfo(availability_tz_name))
+        if start_local <= now_local:
+            raise ValidationError(
+                "Cannot schedule an interview in the past. Choose a future time slot."
+            )
+
+        # HR scheduling must verify the assigned interviewer's own calendar before
+        # creating any HERA rows. Candidate booking performs this check in its
+        # workflow and passes calendar_prechecked=True to avoid a duplicate call.
+        if not calendar_prechecked:
+            from app.services.google_calendar_service import GoogleCalendarService
+
+            calendar_service = GoogleCalendarService()
+            connection = calendar_service.ensure_hr_ready(
+                db,
+                organization_id=organization_id,
+                interviewer_user_id=interviewer.id,
+            )
+            if not calendar_service.check_freebusy(
+                db,
+                connection,
+                start=start_local,
+                end=end_local,
+                calendar_id=(connection.calendar_id if connection else "primary"),
+            ):
+                raise ConflictError(
+                    "Selected time is not available on the interviewer's Google Calendar."
+                )
+
         # Concurrency protection: lock application row to prevent race conditions
         db.scalars(
             select(JobApplication)
@@ -98,26 +153,27 @@ class InterviewService:
             .with_for_update()
         ).first()
 
-        interval = _to_minutes(scheduled_time)
         conflicts = self.find_conflicts(
             db,
             organization_id=organization_id,
             job_application_id=application.id,
             candidate_id=application.candidate_id,
-            interviewer_user_id=interviewer.id if interviewer is not None else None,
+            interviewer_user_id=interviewer.id,
             scheduled_date=scheduled_date,
             start_minutes=interval,
             duration_minutes=scheduled_duration_minutes,
         )
         if conflicts:
-            requested_interviewer_id = interviewer.id if interviewer is not None else None
             raise ConflictError(
                 _conflict_message(
                     conflicts[0],
-                    requested_interviewer_user_id=requested_interviewer_id,
+                    requested_interviewer_user_id=interviewer.id,
                     requested_candidate_id=application.candidate_id,
                 )
             )
+
+        start_utc = start_local.astimezone(ZoneInfo("UTC"))
+        end_utc = end_local.astimezone(ZoneInfo("UTC"))
 
         interview = Interview(
             organization_id=organization_id,
@@ -129,9 +185,46 @@ class InterviewService:
             scheduled_date=scheduled_date,
             scheduled_time=scheduled_time,
             scheduled_duration_minutes=scheduled_duration_minutes,
+            scheduled_start_at=start_utc,
+            scheduled_end_at=end_utc,
             meeting_link=meeting_link,
+            calendar_sync_status="pending",
         )
         db.add(interview)
+        db.flush()
+
+        # DB-enforced overlap protection for interviewer and candidate
+        reservation = InterviewSlotReservation(
+            organization_id=organization_id,
+            interview_id=interview.id,
+            candidate_id=application.candidate_id,
+            interviewer_user_id=interviewer.id if interviewer is not None else None,
+            scheduled_start_at=start_utc,
+            scheduled_end_at=end_utc,
+            status="active",
+        )
+        db.add(reservation)
+        try:
+            db.flush()
+        except IntegrityError as exc:
+            raise ConflictError("Selected time is no longer available.") from exc
+
+        # Durably outbox Google Calendar sync in the same DB transaction as interview creation.
+        from app.services.calendar_outbox_service import CalendarOutboxService
+
+        CalendarOutboxService().enqueue(
+            db,
+            organization_id=interview.organization_id,
+            interview_id=interview.id,
+            hr_user_id=interviewer.id,
+            operation="upsert_interview",
+            idempotency_key=f"interview:{interview.id}:upsert:{start_utc.isoformat()}",
+            payload={
+                "interview_id": str(interview.id),
+                "hr_user_id": str(interviewer.id),
+                "timezone": availability_tz_name,
+            },
+        )
         db.flush()
         return interview
 
@@ -174,12 +267,41 @@ class InterviewService:
         interview_id: uuid.UUID,
         organization_id: uuid.UUID,
     ) -> Interview:
+        from sqlalchemy import update
+        from app.models import InterviewSlotReservation
+
         interview = self.get(db, interview_id=interview_id, organization_id=organization_id)
         if interview.status == "cancelled":
             return interview
         if interview.status == "completed":
             raise ValidationError("A completed interview cannot be cancelled.")
         interview.status = "cancelled"
+        db.execute(
+            update(InterviewSlotReservation)
+            .where(
+                InterviewSlotReservation.interview_id == interview.id,
+                InterviewSlotReservation.status == "active",
+            )
+            .values(status="released")
+        )
+        if interview.google_event_id:
+            from app.services.calendar_outbox_service import CalendarOutboxService
+
+            CalendarOutboxService().enqueue(
+                db,
+                organization_id=interview.organization_id,
+                interview_id=interview.id,
+                hr_user_id=interview.interviewer_user_id,
+                operation="cancel_event",
+                idempotency_key=f"interview:{interview.id}:cancel:{interview.google_event_id}",
+                payload={
+                    "interview_id": str(interview.id),
+                    "hr_user_id": str(interview.interviewer_user_id) if interview.interviewer_user_id else None,
+                    "calendar_id": interview.google_calendar_id or "primary",
+                    "event_id": interview.google_event_id,
+                },
+            )
+            interview.calendar_sync_status = "pending_cancel"
         db.flush()
         return interview
 
@@ -280,9 +402,12 @@ class InterviewService:
             "scheduled_date": interview.scheduled_date,
             "scheduled_time": interview.scheduled_time,
             "scheduled_duration_minutes": interview.scheduled_duration_minutes,
+            "scheduled_start_at": interview.scheduled_start_at,
+            "scheduled_end_at": interview.scheduled_end_at,
             "interview_question_set_id": interview.interview_question_set_id,
             "meeting_link": interview.meeting_link,
             "feedback": interview.feedback,
+            "calendar_sync_status": getattr(interview, "calendar_sync_status", None),
             "created_at": interview.created_at,
         }
 
@@ -312,6 +437,61 @@ class InterviewService:
                 "Screen the candidate for the job before scheduling an interview."
             )
         return application
+
+    def _require_matching_availability_window(
+        self,
+        db: Session,
+        *,
+        organization_id: uuid.UUID,
+        interviewer_user_id: uuid.UUID,
+        scheduled_date: date,
+        start_minutes: int,
+        duration_minutes: int,
+    ) -> tuple[str, datetime, datetime]:
+        """Ensure the requested interview fits entirely within a published availability window.
+
+        Validates against the assigned HR interviewer's available windows for the date and
+        returns (timezone_name, start_local_dt, end_local_dt) from the matching window.
+        """
+        availabilities = list(
+            db.scalars(
+                select(InterviewAvailability)
+                .where(
+                    InterviewAvailability.organization_id == organization_id,
+                    InterviewAvailability.interviewer_user_id == interviewer_user_id,
+                    InterviewAvailability.scheduled_date == scheduled_date,
+                    InterviewAvailability.status == "available",
+                )
+                .with_for_update()
+            )
+        )
+        if not availabilities:
+            raise ValidationError(
+                "Requested interview time is outside the interviewer's published availability."
+            )
+
+        end_minutes = start_minutes + duration_minutes
+        for availability in availabilities:
+            try:
+                tz = ZoneInfo(availability.timezone or "UTC")
+            except ZoneInfoNotFoundError:
+                continue
+            window_start = _to_minutes(availability.start_time)
+            window_end = _to_minutes(availability.end_time)
+            if start_minutes < window_start or end_minutes > window_end:
+                continue
+            start_local = datetime.combine(
+                scheduled_date,
+                time(hour=start_minutes // 60, minute=start_minutes % 60),
+                tzinfo=tz,
+            )
+            end_local = start_local + timedelta(minutes=duration_minutes)
+            # Use the matching published availability window's timezone for exact boundaries.
+            return availability.timezone or "UTC", start_local, end_local
+
+        raise ValidationError(
+            "Requested interview time is outside the interviewer's published availability."
+        )
 
     @staticmethod
     def _validate_schedule(
@@ -343,6 +523,7 @@ class InterviewService:
         scheduled_date,
         start_minutes: int,
         duration_minutes: int,
+        exclude_interview_id: uuid.UUID | None = None,
     ) -> list[Interview]:
         """Return scheduled interviews overlapping the requested window.
 
@@ -353,14 +534,17 @@ class InterviewService:
         back-to-back interviews do not conflict.
         """
         end_minutes = start_minutes + duration_minutes
+        conditions = [
+            Interview.organization_id == organization_id,
+            Interview.status != "cancelled",
+            Interview.scheduled_date == scheduled_date,
+        ]
+        if exclude_interview_id is not None:
+            conditions.append(Interview.id != exclude_interview_id)
         statement = (
             select(Interview, JobApplication.candidate_id)
             .join(JobApplication, JobApplication.id == Interview.job_application_id)
-            .where(
-                Interview.organization_id == organization_id,
-                Interview.status != "cancelled",
-                Interview.scheduled_date == scheduled_date,
-            )
+            .where(*conditions)
         )
         conflicts: list[Interview] = []
         for existing, existing_candidate_id in db.execute(statement):

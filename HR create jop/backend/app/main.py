@@ -31,28 +31,59 @@ logger = logging.getLogger("app.main")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Start the screening worker thread on startup and stop it on shutdown."""
-    if not settings.enable_screening_worker:
-        yield
-        return
+    """Start background workers on startup and stop them on shutdown."""
+    threads: list[threading.Thread] = []
+    workers: list[object] = []
 
-    from app.worker import ScreeningWorker
+    # Run outbox worker for durable async delivery/reconciliation (email + calendar)
+    if settings.enable_outbox_worker:
+        try:
+            from app.services.outbox_worker import OutboxWorker
 
-    worker = ScreeningWorker()
-    worker_thread = threading.Thread(
-        target=worker.run_loop,
-        kwargs={"poll_interval_seconds": 2.0},
-        daemon=True,
-        name="screening-worker",
-    )
-    worker_thread.start()
-    logger.info("Screening worker thread started.")
+            outbox_worker = OutboxWorker()
+            outbox_thread = threading.Thread(
+                target=outbox_worker.run_loop,
+                kwargs={"poll_interval_seconds": 2.0},
+                daemon=True,
+                name="outbox-worker",
+            )
+            outbox_thread.start()
+            workers.append(outbox_worker)
+            threads.append(outbox_thread)
+            logger.info("Outbox worker thread started.")
+        except Exception:
+            logger.exception("Failed to start outbox worker")
+
+    if settings.enable_screening_worker:
+        from app.worker import ScreeningWorker
+
+        worker = ScreeningWorker()
+        worker_thread = threading.Thread(
+            target=worker.run_loop,
+            kwargs={"poll_interval_seconds": 2.0},
+            daemon=True,
+            name="screening-worker",
+        )
+        worker_thread.start()
+        workers.append(worker)
+        threads.append(worker_thread)
+        logger.info("Screening worker thread started.")
+
     try:
         yield
     finally:
-        worker.request_shutdown()
-        worker_thread.join(timeout=2.0)
-        logger.info("Screening worker thread stopped.")
+        for w in workers:
+            try:
+                if hasattr(w, "request_shutdown"):
+                    w.request_shutdown()
+            except Exception:
+                pass
+        for t in threads:
+            try:
+                t.join(timeout=2.0)
+            except Exception:
+                pass
+        logger.info("Background workers stopped.")
 
 
 def create_app() -> FastAPI:
