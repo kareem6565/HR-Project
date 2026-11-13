@@ -1,5 +1,5 @@
 import uuid
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy.orm import Session
@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.models import (
     Candidate,
     Interview,
+    InterviewAvailability,
     Job,
     JobApplication,
     Organization,
@@ -64,9 +65,70 @@ def create_parent_records(
     return organization, user, interviewer, job, application, candidate
 
 
+def _future_date() -> date:
+    """A date that is always in the future relative to when the test runs.
+
+    Scheduling in the past is now rejected, so tests must book future slots.
+    """
+    return date.today() + timedelta(days=1)
+
+
+def _fix_now(monkeypatch) -> None:
+    """Freeze the clock at 2026-11-12 15:54 UTC (== 17:54 Africa/Cairo).
+
+    The freeze is a single absolute moment expressed in whichever time zone is
+    requested, so a slot's past/future status depends on the availability's
+    actual time zone rather than on UTC wall-clock minutes.
+    """
+    import app.services.interview_service as interview_service_module
+
+    fixed_utc = datetime(2026, 11, 12, 15, 54, 0, tzinfo=timezone.utc)
+
+    class _FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            if tz is None:
+                return fixed_utc.astimezone(timezone.utc).replace(tzinfo=None)
+            return fixed_utc.astimezone(tz)
+
+    monkeypatch.setattr(interview_service_module, "datetime", _FixedDateTime)
+
+
+def publish_availability(
+    db_session: Session,
+    *,
+    organization_id: uuid.UUID,
+    interviewer_user_id: uuid.UUID,
+    scheduled_date: date,
+    start_time: str = "09:00",
+    end_time: str = "17:00",
+    duration_minutes: int = 30,
+    timezone: str = "UTC",
+) -> InterviewAvailability:
+    availability = InterviewAvailability(
+        organization_id=organization_id,
+        interviewer_user_id=interviewer_user_id,
+        scheduled_date=scheduled_date,
+        start_time=start_time,
+        end_time=end_time,
+        duration_minutes=duration_minutes,
+        timezone=timezone,
+        status="available",
+    )
+    db_session.add(availability)
+    db_session.flush()
+    return availability
+
+
 def test_schedule_resolves_application_and_sets_fields(db_session: Session) -> None:
     organization, _user, interviewer, job, _application, _candidate = create_parent_records(
         db_session
+    )
+    publish_availability(
+        db_session,
+        organization_id=organization.id,
+        interviewer_user_id=interviewer.id,
+        scheduled_date=_future_date(),
     )
     service = InterviewService()
 
@@ -76,7 +138,7 @@ def test_schedule_resolves_application_and_sets_fields(db_session: Session) -> N
         candidate_id=_candidate.id,
         job_id=job.id,
         interview_type="technical",
-        scheduled_date=date(2026, 9, 9),
+        scheduled_date=_future_date(),
         scheduled_time="10:00 AM",
         interviewer_user_id=interviewer.id,
         meeting_link="https://meet.example.com/abc",
@@ -85,7 +147,7 @@ def test_schedule_resolves_application_and_sets_fields(db_session: Session) -> N
 
     assert interview.status == "scheduled"
     assert interview.interview_type == "technical"
-    assert interview.scheduled_date == date(2026, 9, 9)
+    assert interview.scheduled_date == _future_date()
     assert interview.scheduled_time == "10:00 AM"
     assert interview.meeting_link == "https://meet.example.com/abc"
     assert interview.interviewer_user_id == interviewer.id
@@ -110,7 +172,7 @@ def test_schedule_without_application_fails(db_session: Session) -> None:
             candidate_id=candidate.id,
             job_id=other_job.id,
             interview_type="technical",
-            scheduled_date=date(2026, 9, 9),
+            scheduled_date=_future_date(),
             scheduled_time="10:00 AM",
             interviewer_user_id=interviewer.id,
         )
@@ -138,7 +200,7 @@ def test_schedule_rejects_interviewer_from_other_org(db_session: Session) -> Non
             candidate_id=candidate.id,
             job_id=job.id,
             interview_type="technical",
-            scheduled_date=date(2026, 9, 9),
+            scheduled_date=_future_date(),
             scheduled_time="10:00 AM",
             interviewer_user_id=other_user.id,
         )
@@ -148,6 +210,7 @@ def test_list_filters_by_status_and_scopes_to_org(db_session: Session) -> None:
     organization, _user, interviewer, job, _application, _candidate = create_parent_records(
         db_session
     )
+    publish_availability(db_session, organization_id=organization.id, interviewer_user_id=interviewer.id, scheduled_date=_future_date())
     service = InterviewService()
     interview = service.schedule(
         db_session,
@@ -155,7 +218,7 @@ def test_list_filters_by_status_and_scopes_to_org(db_session: Session) -> None:
         candidate_id=_candidate.id,
         job_id=job.id,
         interview_type="hr",
-        scheduled_date=date(2026, 9, 10),
+        scheduled_date=_future_date(),
         scheduled_time="11:00 AM",
         interviewer_user_id=interviewer.id,
     )
@@ -180,6 +243,7 @@ def test_cancel_marks_cancelled(db_session: Session) -> None:
     organization, _user, interviewer, job, _application, _candidate = create_parent_records(
         db_session
     )
+    publish_availability(db_session, organization_id=organization.id, interviewer_user_id=interviewer.id, scheduled_date=_future_date())
     service = InterviewService()
     interview = service.schedule(
         db_session,
@@ -187,7 +251,7 @@ def test_cancel_marks_cancelled(db_session: Session) -> None:
         candidate_id=_candidate.id,
         job_id=job.id,
         interview_type="behavioral",
-        scheduled_date=date(2026, 9, 11),
+        scheduled_date=_future_date(),
         scheduled_time="02:00 PM",
         interviewer_user_id=interviewer.id,
     )
@@ -206,6 +270,7 @@ def test_completed_interview_cannot_be_cancelled(db_session: Session) -> None:
     organization, _user, interviewer, job, _application, _candidate = create_parent_records(
         db_session
     )
+    publish_availability(db_session, organization_id=organization.id, interviewer_user_id=interviewer.id, scheduled_date=_future_date())
     service = InterviewService()
     interview = service.schedule(
         db_session,
@@ -213,7 +278,7 @@ def test_completed_interview_cannot_be_cancelled(db_session: Session) -> None:
         candidate_id=_candidate.id,
         job_id=job.id,
         interview_type="technical",
-        scheduled_date=date(2026, 9, 11),
+        scheduled_date=_future_date(),
         scheduled_time="02:00 PM",
         interviewer_user_id=interviewer.id,
     )
@@ -238,6 +303,7 @@ def test_submit_feedback_marks_completed_and_stores_payload(db_session: Session)
     organization, _user, interviewer, job, _application, _candidate = create_parent_records(
         db_session
     )
+    publish_availability(db_session, organization_id=organization.id, interviewer_user_id=interviewer.id, scheduled_date=_future_date())
     service = InterviewService()
     interview = service.schedule(
         db_session,
@@ -245,7 +311,7 @@ def test_submit_feedback_marks_completed_and_stores_payload(db_session: Session)
         candidate_id=_candidate.id,
         job_id=job.id,
         interview_type="technical",
-        scheduled_date=date(2026, 9, 11),
+        scheduled_date=_future_date(),
         scheduled_time="02:00 PM",
         interviewer_user_id=interviewer.id,
     )
@@ -269,6 +335,7 @@ def test_cancelled_interview_rejects_feedback(db_session: Session) -> None:
     organization, _user, interviewer, job, _application, _candidate = create_parent_records(
         db_session
     )
+    publish_availability(db_session, organization_id=organization.id, interviewer_user_id=interviewer.id, scheduled_date=_future_date())
     service = InterviewService()
     interview = service.schedule(
         db_session,
@@ -276,7 +343,7 @@ def test_cancelled_interview_rejects_feedback(db_session: Session) -> None:
         candidate_id=_candidate.id,
         job_id=job.id,
         interview_type="technical",
-        scheduled_date=date(2026, 9, 11),
+        scheduled_date=_future_date(),
         scheduled_time="02:00 PM",
         interviewer_user_id=interviewer.id,
     )
@@ -301,6 +368,7 @@ def test_to_response_includes_candidate_job_and_interviewer(db_session: Session)
     organization, _user, interviewer, job, _application, candidate = create_parent_records(
         db_session
     )
+    publish_availability(db_session, organization_id=organization.id, interviewer_user_id=interviewer.id, scheduled_date=_future_date())
     service = InterviewService()
     interview = service.schedule(
         db_session,
@@ -308,7 +376,7 @@ def test_to_response_includes_candidate_job_and_interviewer(db_session: Session)
         candidate_id=candidate.id,
         job_id=job.id,
         interview_type="technical",
-        scheduled_date=date(2026, 9, 11),
+        scheduled_date=_future_date(),
         scheduled_time="10:00 AM",
         interviewer_user_id=interviewer.id,
     )
