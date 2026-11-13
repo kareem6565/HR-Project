@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, ArrowLeft, ArrowRight, CalendarDays, CheckCircle2, Clock3, ShieldCheck } from "lucide-react";
+import { AlertCircle, ArrowLeft, ArrowRight, CalendarDays, CheckCircle2, Clock3, RefreshCw, ShieldCheck } from "lucide-react";
 import {
   bookCandidateInterview,
   getCandidateInterviewMonth,
   getCandidateInterviewPreview,
+  rescheduleCandidateInterview,
 } from "../../services/candidateInterviewPortalService";
 
 function monthStartKey(value) {
@@ -40,6 +41,14 @@ function readToken() {
   return window.location.hash.slice(1).trim();
 }
 
+function futureSlots(slots) {
+  const now = Date.now();
+  return slots.filter((slot) => {
+    const start = Date.parse(slot.start_at || "");
+    return Number.isFinite(start) && start > now;
+  });
+}
+
 export default function CandidateInterviewPortal() {
   const token = useMemo(readToken, []);
   const [month, setMonth] = useState(() => {
@@ -55,6 +64,8 @@ export default function CandidateInterviewPortal() {
   const [booking, setBooking] = useState(false);
   const [error, setError] = useState("");
   const [slotLoadError, setSlotLoadError] = useState("");
+  const [rescheduleMode, setRescheduleMode] = useState(false);
+  const [bookingSuccess, setBookingSuccess] = useState("");
 
   const load = useCallback(async () => {
     if (!token) {
@@ -73,13 +84,13 @@ export default function CandidateInterviewPortal() {
         invitationRef.current = preview;
         setInvitation(preview);
       }
-      if (invitationRef.current?.status === "booked") {
+      if (invitationRef.current?.status === "booked" && !invitationRef.current?.can_reschedule) {
         setSlots([]);
         setSelectedDate("");
         setLoading(false);
         return;
       }
-      const monthSlots = await getCandidateInterviewMonth(token, monthStartKey(month));
+      const monthSlots = futureSlots(await getCandidateInterviewMonth(token, monthStartKey(month)));
       setSlots(monthSlots);
       setSelectedDate((current) =>
         current && monthSlots.some((slot) => slot.date === current) ? current : "",
@@ -111,6 +122,7 @@ export default function CandidateInterviewPortal() {
   const monthLabel = month.toLocaleDateString(undefined, { month: "long", year: "numeric" });
   const visibleSlots = selectedDate ? slotsByDate.get(selectedDate) || [] : [];
   const booked = invitation?.status === "booked";
+  const canReschedule = !!invitation?.can_reschedule;
 
   const changeMonth = (offset) => {
     setSelectedDate("");
@@ -123,26 +135,62 @@ export default function CandidateInterviewPortal() {
     if (!selectedSlot || booking) return;
     setBooking(true);
     setError("");
+    setBookingSuccess("");
     try {
-      const confirmation = await bookCandidateInterview({
-        token,
-        availabilityId: selectedSlot.availability_id,
-        scheduledTime: selectedSlot.start_time,
-      });
+      const wasRescheduling = booked && rescheduleMode && invitation?.interview_id;
+      let confirmation;
+      if (wasRescheduling) {
+        confirmation = await rescheduleCandidateInterview({
+          token,
+          interviewId: invitation.interview_id,
+          availabilityId: selectedSlot.availability_id,
+          scheduledTime: selectedSlot.start_time,
+        });
+      } else {
+        confirmation = await bookCandidateInterview({
+          token,
+          availabilityId: selectedSlot.availability_id,
+          scheduledTime: selectedSlot.start_time,
+        });
+      }
       const updatedInvitation = {
         ...invitationRef.current,
+        // Candidate portal invitation becomes booked after a successful booking/reschedule.
         status: "booked",
+        interview_id: confirmation.interview_id || invitationRef.current?.interview_id,
         scheduled_date: confirmation.scheduled_date,
         scheduled_time: confirmation.scheduled_time,
         scheduled_duration_minutes: confirmation.scheduled_duration_minutes,
         timezone: confirmation.timezone,
+        can_reschedule: true,
       };
       invitationRef.current = updatedInvitation;
       setInvitation(updatedInvitation);
       setSelectedSlot(null);
+      setSelectedDate("");
+      setRescheduleMode(false);
+      setSlots([]);
+      setSlotLoadError("");
+      setBookingSuccess(wasRescheduling
+        ? "Interview rescheduled successfully. Your previous time has been replaced."
+        : "Interview booked successfully. Your time is confirmed.");
     } catch (err) {
-      setError(err?.response?.data?.detail || "That time is no longer available. Refresh the dates and choose another.");
-      await load();
+      const message = err?.response?.data?.detail || "That time could not be booked. Try another time or refresh the page.";
+      setError(message);
+      setSlotLoadError("");
+      // Refresh slots without clearing the booking error so the user sees what happened.
+      try {
+        if (token) {
+          const monthSlots = futureSlots(await getCandidateInterviewMonth(token, monthStartKey(month)));
+          setSlots(monthSlots);
+          setSelectedDate((current) =>
+            current && monthSlots.some((slot) => slot.date === current) ? current : "",
+          );
+          setSelectedSlot(null);
+        }
+      } catch {
+        // Keep the original booking error visible.
+      }
     } finally {
       setBooking(false);
     }
@@ -181,18 +229,34 @@ export default function CandidateInterviewPortal() {
         </div>
 
         {error && <div className="candidate-booking-inline-error" role="alert"><AlertCircle size={16} />{error}</div>}
+        {bookingSuccess && <div className="candidate-booking-success" role="status">{bookingSuccess}</div>}
 
-        {booked ? (
+        {booked && !rescheduleMode ? (
           <div className="candidate-booking-confirmation" role="status">
             <CheckCircle2 aria-hidden="true" />
             <div>
               <strong>Confirmed for {formatDate(invitation.scheduled_date)}</strong>
               <span>{invitation.scheduled_time} · {invitation.scheduled_duration_minutes} minutes · {invitation.timezone || "time zone set by recruiter"}</span>
-              <p>This link has been used. If you need to change the time, contact the recruiter.</p>
+              {canReschedule ? (
+                <>
+                  <p>You can reschedule this interview using the same link.</p>
+                  <button type="button" className="btn-secondary" onClick={() => { setRescheduleMode(true); setError(""); setSlotLoadError(""); load(); }}>
+                    <RefreshCw size={14} aria-hidden="true" /> Reschedule interview
+                  </button>
+                </>
+              ) : (
+                <p>This interview can no longer be rescheduled with this link. Contact the recruiter if you need help.</p>
+              )}
             </div>
           </div>
         ) : (
           <>
+            {rescheduleMode && booked && (
+              <div className="candidate-booking-inline-error" role="status">
+                Rescheduling your interview. Select a new time below.
+                <button type="button" className="btn-secondary" onClick={() => { setRescheduleMode(false); setSelectedDate(""); setSelectedSlot(null); setSlots([]); }}>Cancel</button>
+              </div>
+            )}
             <p className="candidate-booking-intro">Select a day with available times, then choose the time that works for you. Times are shown in the time zone listed beside each option.</p>
             <div className="candidate-booking-calendar">
               <div className="candidate-booking-monthbar">
@@ -207,7 +271,7 @@ export default function CandidateInterviewPortal() {
                   const key = dateKey(month.getFullYear(), month.getMonth(), day);
                   const count = slotsByDate.get(key)?.length || 0;
                   const isPast = key < todayKey;
-                  const disabled = isPast || count === 0 || booked;
+                  const disabled = isPast || count === 0 || (booked && !rescheduleMode);
                   return (
                     <button
                       type="button"
@@ -246,7 +310,7 @@ export default function CandidateInterviewPortal() {
                   })}
                 </div>
                 <button type="button" className="primary candidate-booking-submit" onClick={handleBooking} disabled={!selectedSlot || booking}>
-                  {booking ? "Booking…" : "Confirm this time"}
+                  {booking ? "Saving…" : (rescheduleMode ? "Confirm new time" : "Confirm this time")}
                 </button>
               </section>
             )}
