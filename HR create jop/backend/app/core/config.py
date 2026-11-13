@@ -61,6 +61,19 @@ class Settings(BaseSettings):
     hr_sso_issuer: str = Field(default="hr-manager", validation_alias="HR_SSO_ISSUER")
     allow_local_login: bool = Field(default=False, validation_alias="ALLOW_LOCAL_LOGIN")
     enable_screening_worker: bool = Field(default=True, validation_alias="ENABLE_SCREENING_WORKER")
+    enable_outbox_worker: bool = Field(default=True, validation_alias="ENABLE_OUTBOX_WORKER")
+
+    # Google Calendar / OAuth (EPIC 6)
+    google_token_encryption_key: str = Field(default="", validation_alias="GOOGLE_TOKEN_ENCRYPTION_KEY")
+    google_oauth_client_id: str = Field(default="", validation_alias="GOOGLE_OAUTH_CLIENT_ID")
+    google_oauth_client_secret: str = Field(default="", validation_alias="GOOGLE_OAUTH_CLIENT_SECRET")
+    google_oauth_redirect_uri: str = Field(default="", validation_alias="GOOGLE_OAUTH_REDIRECT_URI")
+    google_oauth_post_login_redirect_uri: str = Field(
+        default="", validation_alias="GOOGLE_OAUTH_POST_LOGIN_REDIRECT_URI"
+    )
+    frontend_base_url: str = Field(default="http://localhost:5174", validation_alias="FRONTEND_BASE_URL")
+    google_calendar_mode: str = Field(default="hera", validation_alias="GOOGLE_CALENDAR_MODE")  # "google" or "hera"
+    google_calendar_id: str = Field(default="primary", validation_alias="GOOGLE_CALENDAR_ID")
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
@@ -98,6 +111,22 @@ class Settings(BaseSettings):
                     "JWT_SECRET_KEY environment variable is required and must not be empty. "
                     "Set JWT_SECRET_KEY in your .env file or environment."
                 )
+
+        if self.app_env == "production":
+            if self.google_calendar_mode.strip().lower() == "hera":
+                raise ValueError(
+                    "HERA-only calendar mode is not allowed in production. "
+                    "Set GOOGLE_CALENDAR_MODE=google and ensure valid HR Google Calendar connections."
+                )
+            if not self.google_token_encryption_key or len(self.google_token_encryption_key) < 32:
+                raise ValueError(
+                    "GOOGLE_TOKEN_ENCRYPTION_KEY (at least 32 chars) is required in production."
+                )
+            if self.google_calendar_mode.strip().lower() == "google":
+                if not (self.google_oauth_client_id and self.google_oauth_client_secret and self.google_oauth_redirect_uri):
+                    raise ValueError(
+                        "GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, and GOOGLE_OAUTH_REDIRECT_URI are required in production when GOOGLE_CALENDAR_MODE=google."
+                    )
 
 
 @lru_cache
