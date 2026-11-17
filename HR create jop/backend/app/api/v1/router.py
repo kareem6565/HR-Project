@@ -8,10 +8,10 @@ from app.api.v1.routes.auth import router as auth_router
 from app.api.v1.routes.availability import router as availability_router
 from app.api.v1.routes.candidate_pool import router as candidate_pool_router
 from app.api.v1.routes.candidate_portal import router as candidate_portal_router
-from app.api.v1.routes.talent_pool_consent import router as talent_pool_consent_router
 from app.api.v1.routes.candidate_profiles import router as candidate_profiles_router
 from app.api.v1.routes.candidates import router as candidates_router
 from app.api.v1.routes.chat import router as chat_router
+from app.api.v1.routes.employee_chat import router as employee_chat_router
 from app.api.v1.routes.evaluations import router as evaluations_router
 from app.api.v1.routes.feedback_learning import router as feedback_learning_router
 from app.api.v1.routes.health import router as health_router
@@ -26,6 +26,7 @@ from app.api.v1.routes.jobs import router as jobs_router
 from app.api.v1.routes.observability import router as observability_router
 from app.api.v1.routes.resumes import router as resumes_router
 from app.api.v1.routes.screening_batches import router as screening_batches_router
+from app.api.v1.routes.talent_pool_consent import router as talent_pool_consent_router
 from app.api.v1.routes.users import router as users_router
 from app.api.v1.routes.workflows import router as workflows_router
 
@@ -34,6 +35,7 @@ recruitment_router = APIRouter(dependencies=[Depends(require_roles("admin", "rec
 
 api_router.include_router(health_router, tags=["health"])
 api_router.include_router(auth_router, tags=["auth"])
+api_router.include_router(employee_chat_router, tags=["employee-chat"])
 recruitment_router.include_router(audit_logs_router, tags=["audit-logs"])
 recruitment_router.include_router(users_router, tags=["users"])
 recruitment_router.include_router(jobs_router, tags=["jobs"])

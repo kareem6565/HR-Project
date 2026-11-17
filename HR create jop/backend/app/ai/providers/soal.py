@@ -22,6 +22,7 @@ from pydantic import BaseModel
 from app.ai.providers.base import AIProvider, StructuredGenerationRequest, TextGenerationRequest
 from app.ai.providers.errors import (
     ProviderError,
+    ProviderInsufficientCreditsError,
     ProviderInvalidRequestError,
     ProviderRateLimitError,
     ProviderTimeoutError,
@@ -52,10 +53,12 @@ class SoalProvider(AIProvider):
         base_url: str | None = None,
         timeout: float = 60.0,
         max_retries: int = 1,
+        max_tokens: int | None = None,
     ) -> None:
         self.api_key = api_key
         self.model_name = model
         self.base_url = base_url or _DEFAULT_BASE_URL
+        self.max_tokens = max_tokens
         self._client = OpenAI(
             api_key=api_key,
             base_url=self.base_url,
@@ -154,6 +157,8 @@ class SoalProvider(AIProvider):
         messages.append({"role": "user", "content": input_text})
 
         kwargs: dict[str, Any] = {"model": self.model_name, "messages": messages}
+        if self.max_tokens is not None:
+            kwargs["max_tokens"] = self.max_tokens
         if use_response_format:
             kwargs["response_format"] = {"type": "json_object"}
         return self._client.chat.completions.create(**kwargs)
@@ -251,6 +256,8 @@ def _map_exception(error: Exception) -> ProviderError | None:
             break
 
     if code is not None:
+        if code == 402:
+            return ProviderInsufficientCreditsError(str(error))
         if code == 408 or code == 504:
             return ProviderTimeoutError(str(error))
         if code == 429:

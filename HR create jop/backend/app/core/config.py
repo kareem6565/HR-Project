@@ -19,12 +19,30 @@ class Settings(BaseSettings):
         validation_alias="TEST_DATABASE_URL",
     )
     storage_root_dir: str = Field(default="./storage", validation_alias="STORAGE_ROOT_DIR")
-    ai_provider: Literal["fake", "soal", "ollama"] = Field(
+    ai_provider: Literal["fake", "soal", "ollama", "gemini", "openrouter"] = Field(
         default="ollama", validation_alias="AI_PROVIDER"
     )
     soal_api_key: str | None = Field(default=None, validation_alias="SOAL_API_KEY")
     soal_base_url: str = Field(default="https://soal.help/api/v1", validation_alias="SOAL_BASE_URL")
     soal_model: str = Field(default="gemini-3.5-flash", validation_alias="SOAL_MODEL")
+    gemini_api_key: str | None = Field(default=None, validation_alias="GEMINI_API_KEY")
+    gemini_base_url: str = Field(
+        default="https://generativelanguage.googleapis.com/v1beta/openai/",
+        validation_alias="GEMINI_BASE_URL",
+    )
+    gemini_model: str = Field(
+        default="gemini-3.8-flash", validation_alias="GEMINI_MODEL"
+    )
+    openrouter_api_key: str | None = Field(default=None, validation_alias="OPENROUTER_API_KEY")
+    openrouter_base_url: str = Field(
+        default="https://openrouter.ai/api/v1", validation_alias="OPENROUTER_BASE_URL"
+    )
+    openrouter_model: str = Field(
+        default="deepseek/deepseek-v4.1-flash-1017:nitro", validation_alias="OPENROUTER_MODEL"
+    )
+    openrouter_max_tokens: int = Field(
+        default=1024, ge=1, le=65536, validation_alias="OPENROUTER_MAX_TOKENS"
+    )
     ollama_api_key: str | None = Field(default=None, validation_alias="OLLAMA_API_KEY")
     ollama_base_url: str = Field(
         default="https://ollama.com/v1", validation_alias="OLLAMA_BASE_URL"
