@@ -39,6 +39,7 @@ class Interview(Base):
         Index("ix_interviews_organization_id_status", "organization_id", "status"),
         Index("ix_interviews_job_application_id", "job_application_id"),
         Index("ix_interviews_interviewer_user_id", "interviewer_user_id"),
+        Index("ix_interviews_scheduled_start_at", "scheduled_start_at"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -63,8 +64,15 @@ class Interview(Base):
     scheduled_date: Mapped[date] = mapped_column(Date, nullable=False)
     scheduled_time: Mapped[str] = mapped_column(String(20), nullable=False)
     scheduled_duration_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=60)
+    # Nullable for legacy rows: migration 021 must not invent/backfill historical instants.
+    scheduled_start_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    scheduled_end_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     meeting_link: Mapped[str | None] = mapped_column(String(500), nullable=True)
     feedback: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    google_calendar_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    google_event_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    calendar_sync_status: Mapped[str] = mapped_column(String(30), nullable=False, default="not_required")
+    calendar_sync_error: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

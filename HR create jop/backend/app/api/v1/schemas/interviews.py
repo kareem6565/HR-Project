@@ -75,10 +75,13 @@ class InterviewResponse(BaseModel):
     status: str
     scheduled_date: date
     scheduled_time: str
+    scheduled_start_at: datetime | None = None
+    scheduled_end_at: datetime | None = None
     scheduled_duration_minutes: int | None = None
     meeting_link: str | None = None
     interview_question_set_id: UUID | None = None
     feedback: dict[str, Any] | None = None
+    calendar_sync_status: str | None = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

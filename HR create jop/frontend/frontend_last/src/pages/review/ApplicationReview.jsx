@@ -173,7 +173,14 @@ export default function ApplicationReview() {
   const [downloading, setDownloading] = useState(false);
   const [cvError, setCvError] = useState("");
   const [interviewInviteBusy, setInterviewInviteBusy] = useState(false);
-  const [interviewInviteUrl, setInterviewInviteUrl] = useState("");
+  const inviteStorageKey = `hera.candidate-interview-invite.${applicationId}`;
+  const [interviewInviteUrl, setInterviewInviteUrl] = useState(() => {
+    try {
+      return sessionStorage.getItem(inviteStorageKey) || "";
+    } catch {
+      return "";
+    }
+  });
   const [interviewInviteMessage, setInterviewInviteMessage] = useState("");
 
   const load = useCallback(async () => {
@@ -354,8 +361,14 @@ export default function ApplicationReview() {
     setInterviewInviteUrl("");
     try {
       const invitation = await createCandidateInterviewInvitation(applicationId);
-      setInterviewInviteUrl(`${window.location.origin}/interview/schedule#${invitation.token}`);
-      setInterviewInviteMessage("Link created. Share it with the candidate; it expires in 7 days and can schedule one interview.");
+      const inviteUrl = `${window.location.origin}/interview/schedule#${invitation.token}`;
+      setInterviewInviteUrl(inviteUrl);
+      try {
+        sessionStorage.setItem(inviteStorageKey, inviteUrl);
+      } catch {
+        // The link remains available in component state when storage is unavailable.
+      }
+      setInterviewInviteMessage("Link created. Copy and share it manually; Console Provider does not send real email. It expires in 7 days and can schedule one interview.");
     } catch (err) {
       setInterviewInviteMessage(extractError(err));
     } finally {
@@ -482,6 +495,7 @@ export default function ApplicationReview() {
             <p className="eyebrow">CANDIDATE SELF-SCHEDULING</p>
             <h3 id="interview-invite-title">Let the candidate choose a time</h3>
             <p>Publish interviewer availability first. The candidate link opens only the scheduling page and expires after 7 days.</p>
+            <p className="availability-help">Console Provider does not send real email. Copy this link and share it with the candidate manually.</p>
           </div>
           <div className="interview-invite-actions">
             <button type="button" className="primary" onClick={createInterviewInvite} disabled={interviewInviteBusy}>

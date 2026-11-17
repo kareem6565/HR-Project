@@ -41,7 +41,7 @@ def _ensure_test_database_exists(test_database_url: str) -> None:
 
 @pytest.fixture(autouse=True)
 def _force_fake_ai_provider() -> Generator[None, None, None]:
-    """Keep the whole suite on FakeAIProvider.
+    """Keep the whole suite on FakeAIProvider and disable background outbox worker.
 
     ``backend/.env`` ships with ``AI_PROVIDER=soal`` for dev/demo use, which
     would otherwise resolve every ``get_provider(settings, provider="fake",
@@ -51,15 +51,25 @@ def _force_fake_ai_provider() -> Generator[None, None, None]:
     the same ``.env`` at startup) still uses Soal. Tests that need a real
     provider construct their own ``Settings(...)`` explicitly and are marked
     ``soal`` (skipped unless ``SOAL_API_KEY`` is exported as an env var).
+
+    The outbox worker is disabled in tests to avoid unrelated background errors
+    in TestClient/SQLite contexts where the app DB session factory is not bound
+    to the test schema; outbox behavior is exercised explicitly in tests.
     """
     from app.core.config import settings
 
-    original = settings.ai_provider
+    original_ai = settings.ai_provider
+    original_outbox = settings.enable_outbox_worker
+    original_calendar_mode = settings.google_calendar_mode
     settings.ai_provider = "fake"
+    settings.enable_outbox_worker = False
+    settings.google_calendar_mode = "hera"
     try:
         yield
     finally:
-        settings.ai_provider = original
+        settings.ai_provider = original_ai
+        settings.enable_outbox_worker = original_outbox
+        settings.google_calendar_mode = original_calendar_mode
 
 
 def _is_postgres_reachable(test_database_url: str) -> bool:
@@ -126,5 +136,15 @@ def db_session(test_engine) -> Generator[Session, None, None]:
         yield session
     finally:
         session.close()
-        transaction.rollback()
+        # Endpoints/services under test may commit, which can close/deassociate the
+        # outer test transaction in this joined-session setup; guard teardown to
+        # avoid rollback warnings while preserving per-test isolation.
+        try:
+            if transaction.is_active:
+                transaction.rollback()
+        except Exception:
+            try:
+                connection.rollback()
+            except Exception:
+                pass
         connection.close()
