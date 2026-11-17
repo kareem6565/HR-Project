@@ -62,7 +62,7 @@ export default function AISettings() {
   if (error || !settings)
     return <ErrorState message="Unable to load AI settings. Try again." onRetry={load} />;
 
-  const soalActive = settings.provider === "soal";
+  const liveProviderActive = settings.provider !== "fake";
 
   return (
     <section>
@@ -115,9 +115,9 @@ export default function AISettings() {
           </div>
         </div>
 
-        {!soalActive && (
+        {!liveProviderActive && (
           <p className="muted-note">
-            Soal is not currently configured as the active provider. System operators can set SOAL_API_KEY in the server environment.
+            No live AI provider is active. System operators can configure OpenRouter, Gemini, Soal, or Ollama in the server environment.
           </p>
         )}
 

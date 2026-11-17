@@ -1,6 +1,6 @@
 # Starts HERA without XAMPP, Apache, or MySQL.
-#   tools\start_hera.ps1              # PostgreSQL + Nginx/PHP + backend + frontend
-#   tools\start_hera.ps1 -InfraOnly   # PostgreSQL + Nginx/PHP (HR Manager only)
+#   tools\start_hera.ps1              # PostgreSQL + backend + Nginx/PHP + frontend
+#   tools\start_hera.ps1 -InfraOnly   # PostgreSQL + backend + HR Manager
 param([switch]$InfraOnly)
 
 $ErrorActionPreference = "Stop"
@@ -35,7 +35,7 @@ if (-not $dockerReady) {
     throw "Docker did not become ready. Open Docker Desktop and retry."
 }
 
-& docker compose -f $compose up -d postgres hr_php hr_web
+& docker compose -f $compose up -d postgres backend hr_php hr_web
 if ($LASTEXITCODE -ne 0) {
     throw "Failed to start the HERA Docker services."
 }
@@ -59,7 +59,6 @@ if (-not $hrReady) {
 Write-Output "HR Manager: http://localhost/BIC2_Mvp/login.php"
 
 if (-not $InfraOnly) {
-    & (Join-Path $PSScriptRoot "start_backend.ps1")
-    & (Join-Path $PSScriptRoot "start_frontend.ps1") 5174 http://localhost:8000/api/v1
+    & (Join-Path $PSScriptRoot "start_frontend.ps1") 5174 http://localhost:8001/api/v1
     Write-Output "Recruitment frontend: http://127.0.0.1:5174"
 }

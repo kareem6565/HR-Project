@@ -242,29 +242,9 @@ if ($isNightShift) {
     .stat-yellow{ border-top: 3px solid #f59e0b; }
     .stat-cyan  { border-top: 3px solid #06b6d4; }
 
-    /* Telegram Floating Button */
-    .telegram-btn {
-      position: fixed;
-      bottom: 1.5rem;
-      left: 1.5rem;
-      z-index: 999;
-      background: linear-gradient(135deg, #2AABEE, #229ED9);
-      box-shadow: 0 8px 25px rgba(34, 158, 217, 0.4);
-      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-    }
-    .telegram-btn:hover {
-      transform: translateY(-4px) scale(1.08);
-      box-shadow: 0 12px 35px rgba(34, 158, 217, 0.6);
-    }
-    .telegram-badge {
-      animation: telegramPulse 2s infinite;
-    }
-    @keyframes telegramPulse {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(42, 171, 238, 0.6); }
-      50% { box-shadow: 0 0 0 12px rgba(42, 171, 238, 0); }
-    }
   </style>
   <link rel="stylesheet" href="/BIC2_Mvp/assets/hera-brand.css?v=hera-unified-20261030-7" />
+  <link rel="stylesheet" href="/BIC2_Mvp/assets/employee-chatbot.css" />
   <script src="/BIC2_Mvp/assets/hera-language.js" defer></script>
 </head>
 <body class="hera-theme min-h-screen flex">
@@ -577,22 +557,9 @@ if ($isNightShift) {
   </div>
 </div>
 
-<!-- Telegram Chatbot Floating Icon -->
-<a
-  href="https://t.me/YOUR_BOT_USERNAME" 
-  target="_blank" 
-  id="telegramBotBtn" 
-  title="مساعد تليجرام الذكي (Telegram Bot)"
-  class="telegram-btn telegram-badge w-14 h-14 rounded-full flex items-center justify-center text-white cursor-pointer group"
->
-  <svg class="w-7 h-7 text-white fill-current group-hover:scale-110 transition-transform" viewBox="0 0 24 24">
-    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.2-.08-.06-.19-.04-.27-.02-.12.02-1.96 1.25-5.54 3.69-.52.36-1 .54-1.42.53-.47-.01-1.37-.26-2.03-.48-.82-.27-1.47-.42-1.42-.88.03-.24.37-.49 1.02-.75 3.99-1.74 6.66-2.89 8.01-3.45 3.81-1.59 4.6-1.87 5.12-1.88.11 0 .37.03.54.18.14.12.18.28.2.45-.02.07-.02.14-.04.22z"/>
-  </svg>
-</a>
+<?php require __DIR__ . '/includes/employee-chatbot.php'; ?>
 
 <script>
-// ── Config & Telegram Bot URL ──────────────────────────────────────────────────
-const TELEGRAM_BOT_URL = "https://t.me/MVP_BiC2_bot](https://t.me/MVP_BiC2_bot"; // 👈 استبدل هذا باللينك الخاص بالبوت عند إجهاده
 const COMPANY_LAT    = <?= json_encode((float)$catLat) ?>;
 const COMPANY_LNG    = <?= json_encode((float)$catLng) ?>;
 const ALLOWED_RADIUS = <?= json_encode((int)$catRadius) ?>;
@@ -853,5 +820,6 @@ document.addEventListener('DOMContentLoaded', () => {
   loadEmployeeNotifications();
 });
 </script>
+<script src="/BIC2_Mvp/assets/employee-chatbot.js" defer></script>
 </body>
 </html>

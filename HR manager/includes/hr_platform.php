@@ -37,6 +37,15 @@ function addNotification(PDO $pdo, int $userId, string $type, string $title, str
     $stmt->execute([$userId, $type, clean($title), clean($body), $link]);
 }
 
+function addLeaveRequestEvent(PDO $pdo, int $requestId, ?int $actorId, string $type, ?string $details = null, ?string $requestKey = null): void
+{
+    $stmt = $pdo->prepare(
+        'INSERT INTO leave_request_events (leave_request_id, actor_id, event_type, details, request_key)
+         VALUES (?, ?, ?, ?, ?)'
+    );
+    $stmt->execute([$requestId, $actorId, $type, $details === null ? null : clean($details), $requestKey]);
+}
+
 function notifyRoles(PDO $pdo, array $roles, string $type, string $title, string $body, ?string $link = null): void
 {
     if (!$roles) return;

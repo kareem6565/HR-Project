@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 
 from app.ai.providers.errors import (
     ProviderError,
+    ProviderInsufficientCreditsError,
     ProviderInvalidRequestError,
     ProviderRateLimitError,
     ProviderTimeoutError,
@@ -111,7 +112,11 @@ def create_app() -> FastAPI:
     @app.exception_handler(ValidationError)
     async def validation_error_handler(request: Request, exc: ValidationError) -> JSONResponse:
         msg = str(exc).lower()
-        if "different organization" in msg or "another organization" in msg or "same organization" in msg:
+        if (
+            "different organization" in msg
+            or "another organization" in msg
+            or "same organization" in msg
+        ):
             return JSONResponse(status_code=404, content={"detail": "Resource was not found."})
         content = {"detail": str(exc)}
         if hasattr(exc, "code") and exc.code:
@@ -144,17 +149,24 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(ProviderError)
     async def provider_error_handler(request: Request, exc: ProviderError) -> JSONResponse:
-        if isinstance(exc, ProviderTimeoutError):
+        if isinstance(exc, ProviderInsufficientCreditsError):
+            message = "AI provider credits are insufficient or the key spending limit was reached."
+            error_type = "insufficient_credits"
+            status_code = 402
+        elif isinstance(exc, ProviderTimeoutError):
             message = "AI provider timed out. Try again."
             error_type = "timeout"
+            status_code = 503
         elif isinstance(exc, ProviderInvalidRequestError):
             message = "AI provider rejected the request."
             error_type = "invalid_request"
+            status_code = 503
         else:
             message = "AI provider is currently unavailable. Try again."
             error_type = "unavailable"
+            status_code = 503
         return JSONResponse(
-            status_code=503,
+            status_code=status_code,
             content={
                 "detail": message,
                 "error_type": error_type,
