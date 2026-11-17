@@ -138,7 +138,7 @@ def create_app() -> FastAPI:
             message = "AI provider timed out. Try again."
             error_type = "timeout"
         elif isinstance(exc, ProviderInvalidRequestError):
-            message = "AI provider rejected the request."
+            message = "AI provider returned an invalid response. Try again."
             error_type = "invalid_request"
         else:
             message = "AI provider is currently unavailable. Try again."

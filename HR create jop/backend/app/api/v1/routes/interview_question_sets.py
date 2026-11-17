@@ -62,7 +62,9 @@ def generate_interview_question_set(
             organization_id=ctx.organization_id,
         )
     except ProviderError:
-        db.rollback()
+        # The workflow records provider failures before raising; commit those
+        # diagnostics so the failed attempt remains observable to HR.
+        db.commit()
         raise
     db.commit()
     question_set = InterviewQuestionService().get(

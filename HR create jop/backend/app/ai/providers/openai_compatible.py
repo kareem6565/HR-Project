@@ -46,11 +46,14 @@ class OpenAICompatibleProvider(AIProvider):
         self.model_name = model
         self.base_url = base_url
         self.max_tokens = max_tokens
+        # Secure by default, including direct provider construction outside the factory.
+        self.cost_policy_enabled = True
         self._client = OpenAI(
             api_key=api_key,
             base_url=base_url,
             timeout=timeout,
-            max_retries=max_retries,
+            # Every HTTP attempt must pass the shared policy and be metered.
+            max_retries=0,
         )
 
     def generate_structured(self, request: StructuredGenerationRequest) -> StructuredAIResult:
@@ -64,7 +67,10 @@ class OpenAICompatibleProvider(AIProvider):
             attempts += 1
             try:
                 payload = self._complete_chat(
-                    request.input, request.output_schema, use_response_format
+                    request.input,
+                    request.output_schema,
+                    use_response_format,
+                    request.metadata,
                 )
             except ProviderInvalidRequestError as error:
                 if use_response_format and _looks_like_json_format_rejection(error):
@@ -116,7 +122,9 @@ class OpenAICompatibleProvider(AIProvider):
     def generate_text(self, request: TextGenerationRequest) -> TextAIResult:
         started = time.monotonic()
         try:
-            payload = self._complete_chat(request.input, None, use_response_format=False)
+            payload = self._complete_chat(
+                request.input, None, use_response_format=False, metadata=request.metadata
+            )
         except ProviderError:
             raise
         except Exception as error:  # noqa: BLE001 - normalize vendor/network failures
@@ -133,21 +141,55 @@ class OpenAICompatibleProvider(AIProvider):
         )
 
     def _complete_chat(
-        self, input_text: str, output_schema: type[BaseModel] | None, use_response_format: bool
+        self,
+        input_text: str,
+        output_schema: type[BaseModel] | None,
+        use_response_format: bool,
+        metadata: dict[str, Any] | None = None,
     ) -> Any:
+        from app.ai.cost_policy import (
+            add_free_routing_constraints,
+            authorize_and_reserve,
+            minimize_hr_identifiers,
+            record_result,
+        )
+
+        minimized_input = minimize_hr_identifiers(input_text)
         messages: list[dict[str, Any]] = []
         if output_schema is not None:
             schema_json = json.dumps(output_schema.model_json_schema())
             messages.append(
                 {"role": "system", "content": f"{_SYSTEM_JSON_PROMPT}\n\n{schema_json}"}
             )
-        messages.append({"role": "user", "content": input_text})
+        messages.append({"role": "user", "content": minimized_input})
         kwargs: dict[str, Any] = {"model": self.model_name, "messages": messages}
         if self.max_tokens is not None:
             kwargs["max_tokens"] = self.max_tokens
         if use_response_format:
             kwargs["response_format"] = {"type": "json_object"}
-        return self._client.chat.completions.create(**kwargs)
+        if self.cost_policy_enabled:
+            add_free_routing_constraints(
+                kwargs, model=self.model_name, structured=output_schema is not None
+            )
+        event_id = None
+        if self.cost_policy_enabled:
+            event_id = authorize_and_reserve(
+                provider=self.provider_name,
+                model=self.model_name,
+                base_url=self.base_url,
+                structured=output_schema is not None,
+                metadata=metadata,
+                has_api_key=bool(self.api_key),
+            )
+        try:
+            response = self._client.chat.completions.create(**kwargs)
+        except Exception as error:
+            if event_id is not None:
+                record_result(event_id, status="failed", error=error)
+            raise
+        if event_id is not None:
+            record_result(event_id, status="succeeded", response=response)
+        return response
 
 
 def _extract_content(payload: Any) -> Any:

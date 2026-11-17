@@ -6,7 +6,7 @@ Verifies:
 3. Arabic and English normalization, diacritics, and technical synonym matching.
 4. Keyword stuffing and prompt injection resistance.
 5. Workflow separation: generate() without DB transactions vs persist().
-6. Evaluation engine versioning (evidence_engine_version="2.0") and historical preservation.
+6. Evaluation engine versioning (evidence_engine_version="2.1") and historical preservation.
 7. Quality measurement tool accuracy on synthetic benchmark.
 """
 
@@ -95,6 +95,60 @@ class TestEvidenceVerification:
         assert loc is not None
         assert loc["match_type"] in ("exact", "normalized")
 
+    def test_pdf_punctuation_dash_ligature_and_header_artifacts_verify(self):
+        source = "ExperienceSoftware Engineer | Built end–to–end React applicatons."
+        quote = "Software Engineer — Built end to end React applications."
+
+        is_verified, location = find_quote_in_source(quote, source)
+
+        assert is_verified is True
+        assert location is not None
+        assert location["match_type"] == "fuzzy"
+        assert location["similarity"] >= 85
+
+    def test_quote_verification_rejects_short_fuzzy_skill_mismatch(self):
+        source = "React engineer with frontend development experience."
+
+        is_verified, location = find_quote_in_source("Reakt", source)
+
+        assert is_verified is False
+        assert location is None
+
+    def test_profile_context_alone_does_not_verify_or_score_a_quote(self, caplog):
+        source = "Frontend engineer with experience building web applications."
+        req = JobRequirement(
+            key="req-0000000000000001",
+            text="Kubernetes",
+            category="must_have",
+            dimension="skill",
+        )
+        verified = EvidenceVerificationService().verify_evidence_items(
+            resume_text=source,
+            source_corpus={
+                "trust_level": "untrusted_source_data",
+                "content": source,
+                "derived_profile_fields": {"skills": ["Kubernetes"]},
+            },
+            evidence_items=[
+                {
+                    "evidence_type": "matched",
+                    "requirement_ref": {"requirement_key": req.key},
+                    "candidate_evidence": {"quote": "Kubernetes"},
+                    "strength": "strong",
+                }
+            ],
+            requirements=[req],
+        )
+
+        assert verified[0]["evidence_type"] == "missing"
+        assert verified[0]["candidate_evidence"]["verification_status"] == (
+            "profile_context_only"
+        )
+        assert verified[0]["candidate_evidence"]["verification_reason"] == (
+            "profile_context_only"
+        )
+        assert "reason=profile_context_only" in caplog.text
+
     def test_verifier_demotes_fabricated_quote_to_missing(self):
         source = "Frontend engineer with React and TypeScript skills."
         req = JobRequirement(key="req-0000000000000001", text="Kubernetes", category="must_have", dimension="skill")
@@ -144,6 +198,7 @@ class TestEvidenceVerification:
         assert len(verified) == 1
         assert verified[0]["evidence_type"] == "missing"
         assert verified[0]["candidate_evidence"]["verification_status"] == "unverified_quote"
+        assert verified[0]["candidate_evidence"]["verification_reason"] == "quote_not_provided"
 
     def test_verifier_demotes_positive_claim_when_source_text_is_unavailable(self):
         req = JobRequirement(
@@ -507,7 +562,7 @@ class TestVersioningAndQuality:
 
         eval_record = db_session.get(CandidateEvaluation, res.evaluation_id)
         assert eval_record is not None
-        assert eval_record.evidence_engine_version == "2.0"
+        assert eval_record.evidence_engine_version == "2.1"
         assert eval_record.scoring_version == "1.0"
 
     def test_eval_quality_script_benchmark_metrics(self):

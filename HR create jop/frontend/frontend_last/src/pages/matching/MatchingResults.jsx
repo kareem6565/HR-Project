@@ -1,6 +1,17 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Search, ChevronDown, ChevronRight, Briefcase, GitCompareArrows } from "lucide-react";
+import {
+  Search,
+  ChevronDown,
+  ChevronRight,
+  Briefcase,
+  GitCompareArrows,
+  UserRound,
+  CheckCircle2,
+  Clock3,
+  CircleHelp,
+  XCircle,
+} from "lucide-react";
 import ScoreCard from "../../components/common/ScoreCard";
 import Badge from "../../components/common/Badge";
 import PipelineActions from "../../components/common/PipelineActions";
@@ -49,13 +60,32 @@ const DECISION_VARIANTS = {
 const PAGE_SIZE = 25;
 const MAX_COMPARE_CANDIDATES = 3;
 
-function evidenceLabel(item) {
+function evidenceLabel(item, breakdownItem, index) {
   const ref = item?.requirement_ref;
-  if (typeof ref === "string") return ref;
-  if (ref && typeof ref === "object") {
-    return ref.text || ref.skill || ref.requirement || ref.requirement_key || "Requirement";
+  const candidates = [
+    typeof ref === "string" ? ref : null,
+    ref?.text,
+    ref?.skill,
+    ref?.requirement,
+    ref?.title,
+    ref?.name,
+    breakdownItem?.text,
+    breakdownItem?.label,
+    breakdownItem?.skill,
+    breakdownItem?.requirement,
+    breakdownItem?.requirement_text,
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim() && !/^req[-_][0-9a-f-]{4,}$/i.test(candidate.trim())) {
+      return candidate.trim();
+    }
   }
-  return "Requirement";
+  const key = ref?.requirement_key || breakdownItem?.requirement_key;
+  if (typeof key === "string" && !/^req[-_][0-9a-f-]{4,}$/i.test(key.trim())) {
+    const topic = key.split(":").at(-1)?.replace(/[_-]/g, " ").trim();
+    if (topic) return topic;
+  }
+  return `Requirement #${index}`;
 }
 
 function evidenceForRequirement(bundle, requirementKey) {
@@ -63,6 +93,51 @@ function evidenceForRequirement(bundle, requirementKey) {
     const key = item?.requirement_ref?.requirement_key;
     return key === requirementKey;
   });
+}
+
+function candidateInitials(name) {
+  return String(name || "Candidate")
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("");
+}
+
+function getComparisonStatus(item) {
+  const type = item?.evidence_type;
+  const verification = item?.candidate_evidence?.verification_status;
+  const quoteVerified = item?.candidate_evidence?.quote_verified === true;
+
+  if (
+    verification === "unverified_quote" ||
+    verification === "fabricated_quote" ||
+    verification === "profile_context_only"
+  ) {
+    return { label: "Unverified", kind: "unverified", Icon: CircleHelp };
+  }
+  if ((type === "matched" || type === "partial") && !quoteVerified) {
+    return { label: "Unverified", kind: "unverified", Icon: CircleHelp };
+  }
+  if (type === "matched") return { label: "Matched", kind: "matched", Icon: CheckCircle2 };
+  if (type === "partial") return { label: "Partial", kind: "partial", Icon: Clock3 };
+  if (type === "missing") return { label: "No evidence", kind: "missing", Icon: XCircle };
+  return { label: "Not available", kind: "unavailable", Icon: CircleHelp };
+}
+
+function requirementCategory(item, breakdownItem) {
+  const category = breakdownItem?.category
+    || item?.requirement_ref?.category
+    || item?.requirement_ref?.dimension
+    || item?.requirement_ref?.section;
+  if (!category) return "Requirement";
+  const normalized = String(category).toLowerCase().replace(/[-_\s]+/g, "");
+  if (normalized === "musthave") return "Must-Have";
+  if (normalized === "nicetohave") return "Nice-to-Have";
+  if (normalized === "important") return "Important";
+  return String(category)
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 // Groups the backend-classified evidence into display buckets.
@@ -681,6 +756,7 @@ export default function MatchingResults() {
         open={compareOpen}
         title={`Compare candidates · ${selectedJob?.title || "Selected job"}`}
         onClose={() => setCompareOpen(false)}
+        className="matching-comparison-modal"
       >
         {compareLoading ? (
           <p className="muted-note" role="status">Loading persisted evaluations and evidence…</p>
@@ -688,58 +764,146 @@ export default function MatchingResults() {
           <div className="form-error" role="alert">{compareError}</div>
         ) : (
           <div className="candidate-comparison">
-            <p className="muted-note">
-              This view aligns the current saved evidence for this job. It does not recalculate scores or recommend a hiring decision.
-            </p>
-            <div className="candidate-comparison-grid" style={{ "--comparison-count": compareBundles.length }}>
-              <div className="candidate-comparison-label"><strong>Current evaluation</strong></div>
+            <div className="candidate-comparison-intro">
+              <div>
+                <span className="candidate-comparison-kicker">Side-by-side review</span>
+                <p>
+                  This view aligns the current saved evidence for this job. It does not recalculate scores or recommend a hiring decision.
+                </p>
+              </div>
+              <div className="comparison-legend" aria-label="Evidence status legend">
+                <span className="comparison-status comparison-status-matched"><CheckCircle2 size={14} /> Matched</span>
+                <span className="comparison-status comparison-status-partial"><Clock3 size={14} /> Partial</span>
+                <span className="comparison-status comparison-status-unverified"><CircleHelp size={14} /> Unverified</span>
+              </div>
+            </div>
+            <div className="candidate-comparison-scroll" tabIndex={0} aria-label="Scrollable candidate comparison">
+              <div
+                className="candidate-comparison-grid"
+                role="table"
+                aria-label="Candidate evidence comparison"
+                style={{
+                  "--comparison-count": compareBundles.length,
+                  "--comparison-columns": `minmax(210px, 0.85fr) repeat(${compareBundles.length}, minmax(220px, 1fr))`,
+                  "--comparison-min-width": `${210 + compareBundles.length * 220}px`,
+                }}
+              >
+              <div className="comparison-header-row" role="row">
+                <div className="comparison-column-heading" role="columnheader">
+                  <strong>Job criteria</strong>
+                  <span>Evidence from each saved evaluation</span>
+                </div>
               {compareBundles.map((bundle) => (
-                <div className="candidate-comparison-cell" key={bundle.application.id}>
-                  <strong>{bundle.candidate?.name || "Candidate"}</strong>
-                      <span>Score: {formatScore(bundle.poolRow?.score)}</span>
-                      <span>
-                        HR decision: {{ advance: "Advance", hold: "Hold", reject: "Reject" }[
-                          bundle.poolRow?.decision
-                        ] || "Not recorded"}
-                      </span>
+                <div
+                  className="comparison-candidate-heading"
+                  role="columnheader"
+                  key={bundle.application.id}
+                >
+                  <div className="comparison-candidate-identity">
+                    <span className="comparison-candidate-avatar" aria-hidden="true">
+                      {candidateInitials(bundle.candidate?.name)}
+                    </span>
+                    <div>
+                      <strong>{bundle.candidate?.name || "Candidate"}</strong>
+                      <span>{bundle.poolRow?.jobTitle || selectedJob?.title || "Applicant"}</span>
+                    </div>
+                  </div>
+                  <div className="comparison-candidate-meta">
+                    <div className="comparison-score">
+                            <span>Score: {formatScore(bundle.poolRow?.score)}</span>
+                      <small>match score</small>
+                    </div>
+                    <span className="comparison-decision">
+                      <UserRound size={13} aria-hidden="true" />
+                      {{ advance: "Advanced", hold: "On hold", reject: "Rejected" }[
+                        bundle.poolRow?.decision
+                      ] || "No HR decision"}
+                    </span>
+                  </div>
                 </div>
               ))}
+              </div>
 
               {(() => {
                 const requirements = new Map();
                 compareBundles.forEach((bundle) => {
                   (bundle.evidence || []).forEach((item) => {
                     const key = item?.requirement_ref?.requirement_key;
-                    if (key && !requirements.has(key)) requirements.set(key, evidenceLabel(item));
+                    if (key && !requirements.has(key)) requirements.set(key, item);
                   });
                 });
                 if (requirements.size === 0) {
                   return (
-                    <div className="candidate-comparison-empty" role="status" key="no-evidence">
-                      No persisted requirement evidence is available for the selected applications.
+                    <div className="comparison-evidence-row comparison-empty-row" role="row">
+                      <div className="candidate-comparison-empty" role="cell" aria-live="polite">
+                        <CircleHelp size={18} aria-hidden="true" />
+                        <span>No saved requirement evidence is available for these applications.</span>
+                      </div>
                     </div>
                   );
                 }
-                return [...requirements].map(([key, label]) => (
-                  <React.Fragment key={key}>
-                    <div className="candidate-comparison-label">{label}</div>
-                    {compareBundles.map((bundle) => {
-                      const item = evidenceForRequirement(bundle, key);
-                      const type = item?.evidence_type;
-                      const quote = item?.candidate_evidence?.quote;
-                      const verifiedQuote = item?.candidate_evidence?.quote_verified === true && typeof quote === "string";
-                      return (
-                        <div className="candidate-comparison-cell" key={`${bundle.application.id}-${key}`}>
-                          <span className={`comparison-evidence comparison-${type || "unavailable"}`}>
-                            {type === "matched" ? "Matched" : type === "partial" ? "Partial" : type === "missing" ? "No evidence recorded" : "Not available"}
-                          </span>
-                          {verifiedQuote && <blockquote dir="auto">“{quote}”</blockquote>}
-                        </div>
-                      );
-                    })}
-                  </React.Fragment>
-                ));
+                return [...requirements].map(([key, example], index) => {
+                  const breakdownItem = compareBundles
+                    .map((bundle) => {
+                      const breakdown = bundle.evaluation?.score_breakdown;
+                      if (Array.isArray(breakdown)) {
+                        return breakdown.find((item) => item?.requirement_key === key);
+                      }
+                      return breakdown?.[key];
+                    })
+                    .find(Boolean);
+                  return (
+                    <div className="comparison-evidence-row" role="row" key={key}>
+                      <div className="comparison-requirement" role="rowheader">
+                        <span>{requirementCategory(example, breakdownItem)}</span>
+                        <strong>{evidenceLabel(example, breakdownItem, index + 1)}</strong>
+                      </div>
+                      {compareBundles.map((bundle) => {
+                        const item = evidenceForRequirement(bundle, key);
+                        const quote = item?.candidate_evidence?.quote;
+                        const verifiedQuote = item?.candidate_evidence?.quote_verified === true
+                          && typeof quote === "string"
+                          && quote.trim().length > 0;
+                        const status = getComparisonStatus(item);
+                        const StatusIcon = status.Icon;
+                        return (
+                          <div
+                            className="comparison-evidence-cell"
+                            role="cell"
+                            key={`${bundle.application.id}-${key}`}
+                          >
+                            <strong className="comparison-mobile-candidate">
+                              {bundle.candidate?.name || "Candidate"}
+                            </strong>
+                            <span className={`comparison-status comparison-status-${status.kind}`}>
+                              <StatusIcon size={15} aria-hidden="true" />
+                              {status.label}
+                            </span>
+                            {verifiedQuote ? (
+                              <div className="comparison-quote">
+                                <blockquote className="comparison-quote-preview" dir="auto">“{quote}”</blockquote>
+                                <details>
+                                  <summary>View full verified quote</summary>
+                                  <blockquote className="comparison-quote-full" dir="auto">“{quote}”</blockquote>
+                                </details>
+                              </div>
+                            ) : (
+                              <span className="comparison-evidence-note">
+                                {status.kind === "unverified"
+                                  ? "No verified quote is available."
+                                  : status.kind === "missing"
+                                    ? "No supporting quote was recorded."
+                                    : "Evidence is unavailable for this evaluation."}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                });
               })()}
+            </div>
             </div>
           </div>
         )}

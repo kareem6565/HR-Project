@@ -9,15 +9,19 @@ never contributes to a confident score.
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
 from app.ai.contracts.job_profile import JobRequirement
-from app.services.text_normalization import find_quote_in_source, normalize_for_matching
+from app.services.text_normalization import (
+    match_quote_in_source,
+    normalize_quote_for_verification,
+)
 
 logger = logging.getLogger(__name__)
 
-EVIDENCE_ENGINE_VERSION = "2.0"
+EVIDENCE_ENGINE_VERSION = "2.1"
 
 
 class EvidenceVerificationService:
@@ -32,6 +36,7 @@ class EvidenceVerificationService:
         resume_text: str | None,
         evidence_items: list[dict[str, Any]],
         requirements: list[JobRequirement],
+        source_corpus: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         """Verify each evidence item against the source resume text.
 
@@ -40,7 +45,14 @@ class EvidenceVerificationService:
         from producing a confident match.
         """
         verified_items: list[dict[str, Any]] = []
-        source = resume_text or ""
+        corpus = source_corpus or {}
+        source = str(corpus.get("content") or resume_text or "")
+        profile_fields = corpus.get("derived_profile_fields") or {}
+        profile_source = (
+            json.dumps(profile_fields, ensure_ascii=False, sort_keys=True)
+            if isinstance(profile_fields, dict | list)
+            else ""
+        )
         req_map = {req.key: req for req in requirements}
 
         for item in evidence_items:
@@ -75,6 +87,7 @@ class EvidenceVerificationService:
                 candidate_evidence["quote"] = None
                 candidate_evidence["quote_verified"] = False
                 candidate_evidence["verification_status"] = "source_unavailable"
+                candidate_evidence["verification_reason"] = "raw_resume_text_unavailable"
                 candidate_evidence["uncertainty"] = (
                     "The extracted resume text is unavailable, so this claim cannot be verified."
                 )
@@ -92,12 +105,17 @@ class EvidenceVerificationService:
             # 2. Positive evidence ('matched' or 'partial') requires verifiable grounding
             if not raw_quote or not str(raw_quote).strip():
                 # Empty quote associated with a positive match: demote to missing
-                logger.warning("Demoting ungrounded %s evidence for %s: missing supporting quote", evidence_type, req_key)
+                logger.warning(
+                    "Demoting ungrounded %s evidence for %s: reason=quote_not_provided",
+                    evidence_type,
+                    req_key,
+                )
                 verified_item["evidence_type"] = "missing"
                 verified_item["strength"] = "none"
                 candidate_evidence["quote"] = None
                 candidate_evidence["quote_verified"] = False
                 candidate_evidence["verification_status"] = "unverified_quote"
+                candidate_evidence["verification_reason"] = "quote_not_provided"
                 candidate_evidence["uncertainty"] = "No supporting text quote was provided to ground the claim."
                 candidate_evidence["explanation"] = (
                     "No verifiable quote provided. Sufficient evidence was not found in the resume."
@@ -107,13 +125,18 @@ class EvidenceVerificationService:
                 continue
 
             # 3. Verify the non-empty quote against the source text
-            is_verified, location = find_quote_in_source(str(raw_quote).strip(), source)
+            is_verified, location, diagnostic = match_quote_in_source(
+                str(raw_quote).strip(), source
+            )
 
             if is_verified and location:
                 # Retain original source quote wording and annotate verification metadata
                 candidate_evidence["quote"] = raw_quote
                 candidate_evidence["quote_verified"] = True
                 candidate_evidence["verification_status"] = "verified"
+                candidate_evidence["verification_reason"] = diagnostic["reason"]
+                if diagnostic.get("similarity") is not None:
+                    candidate_evidence["verification_similarity"] = diagnostic["similarity"]
                 candidate_evidence["source_location"] = {
                     "start": location["start"],
                     "end": location["end"],
@@ -122,19 +145,50 @@ class EvidenceVerificationService:
                 if uncertainty:
                     candidate_evidence["uncertainty"] = uncertainty
             else:
-                # Quote is fabricated, altered, or from another CV: reject quote & demote
-                logger.warning("Rejecting fabricated/unverifiable quote for requirement %s", req_key)
+                # Derived profile fields help the model locate evidence but are
+                # not authoritative source quotes and never independently score.
+                normalized_quote = normalize_quote_for_verification(str(raw_quote))
+                profile_only = bool(
+                    normalized_quote
+                    and normalized_quote in normalize_quote_for_verification(profile_source)
+                )
+                mismatch_reason = (
+                    "profile_context_only" if profile_only else diagnostic["reason"]
+                )
+                logger.warning(
+                    "Rejecting unverifiable evidence for requirement %s: reason=%s "
+                    "best_similarity=%s profile_context_match=%s",
+                    req_key,
+                    mismatch_reason,
+                    diagnostic.get("similarity"),
+                    profile_only,
+                )
                 candidate_evidence["quote"] = raw_quote
                 candidate_evidence["quote_verified"] = False
-                candidate_evidence["verification_status"] = "fabricated_quote"
+                candidate_evidence["verification_status"] = (
+                    "profile_context_only" if profile_only else "fabricated_quote"
+                )
+                candidate_evidence["verification_reason"] = mismatch_reason
+                if diagnostic.get("similarity") is not None:
+                    candidate_evidence["verification_similarity"] = diagnostic["similarity"]
                 candidate_evidence["source_location"] = None
-                candidate_evidence["uncertainty"] = (
-                    "The proposed supporting quote was not found in the candidate's CV text."
-                )
-                candidate_evidence["explanation"] = (
-                    "Evidence rejected: quote could not be verified in the source resume. "
-                    "Demoted to prevent ungrounded scoring."
-                )
+                if profile_only:
+                    candidate_evidence["uncertainty"] = (
+                        "The quote appears only in AI-derived profile context and could not be "
+                        "verified in the extracted CV text."
+                    )
+                    candidate_evidence["explanation"] = (
+                        "Profile context can guide review but is not source evidence. This item "
+                        "was not scored because its quote could not be verified in the CV."
+                    )
+                else:
+                    candidate_evidence["uncertainty"] = (
+                        "The proposed supporting quote was not found in the candidate's CV text."
+                    )
+                    candidate_evidence["explanation"] = (
+                        "Evidence rejected: quote could not be verified in the source resume. "
+                        "Demoted to prevent ungrounded scoring."
+                    )
                 # Demote claim: fabricated/unverified quotes cannot produce a matched state
                 verified_item["evidence_type"] = "missing"
                 verified_item["strength"] = "none"

@@ -6,7 +6,7 @@ variables and are never returned by the API.
 
 Security notes:
 - The configured key is never echoed back. Responses report only whether a key
-  is present and where it came from (``runtime`` / ``environment`` / ``none``).
+  is present and where it came from (``environment`` / ``none``).
 - The environment key is never echoed to clients, by design.
 """
 
@@ -19,9 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.ai.providers import ProviderError, ProviderRateLimitError
 from app.ai.providers.base import TextGenerationRequest
 from app.ai.providers.factory import resolve_ai_config
-from app.ai.providers.ollama_cloud import OllamaCloudProvider
 from app.ai.providers.openrouter import OpenRouterProvider
-from app.ai.providers.soal import SoalProvider
 from app.api.v1.deps import RequestContext, require_roles
 from app.api.v1.schemas.ai_settings import (
     AISettingsResponse,
@@ -111,34 +109,19 @@ def verify_ai_api_key(
     if not api_key:
         return VerifyApiKeyResponse(ok=False, message="No API key configured.", model=model)
 
-    provider_type = {
-        "soal": SoalProvider,
-        "ollama": OllamaCloudProvider,
-        "openrouter": OpenRouterProvider,
-    }.get(config["provider"])
-    if provider_type is None:
+    if config["provider"] != "openrouter":
         return VerifyApiKeyResponse(
             ok=False,
-            message="Select a live AI provider before verifying an API key.",
+            message="Only OpenRouter's approved free-model route is enabled for verification.",
             model=model,
         )
-    provider_kwargs = {
-        "api_key": api_key,
-        "model": model,
-        "base_url": config["base_url"]
-        or (
-            settings.soal_base_url
-            if config["provider"] == "soal"
-            else settings.openrouter_base_url
-            if config["provider"] == "openrouter"
-            else settings.ollama_base_url
-        ),
-    }
-    if config["provider"] == "openrouter":
-        provider_kwargs["max_tokens"] = settings.openrouter_max_tokens
-    provider = provider_type(
-        **provider_kwargs,
+    provider = OpenRouterProvider(
+        api_key=api_key,
+        model=model,
+        base_url=config["base_url"],
+        max_tokens=settings.openrouter_max_tokens,
     )
+    provider.cost_policy_enabled = True
     started = time.monotonic()
     try:
         result = provider.generate_text(TextGenerationRequest(input=_VERIFY_PROMPT))

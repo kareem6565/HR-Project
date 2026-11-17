@@ -1,5 +1,5 @@
 import React from "react";
-import { AlertCircle, RefreshCw } from "lucide-react";
+import { AlertCircle, ChevronDown, RefreshCw } from "lucide-react";
 import ScoreBadge, { BAND_CONFIG, groupForScore } from "../common/ScoreBadge";
 import { formatScore, parseScore } from "../../utils/score";
 
@@ -157,12 +157,22 @@ export default function EvaluationSummary({
       )}
 
       {/* 4. Explainable AI Summary ("Why this score?") */}
-      <div className="evaluation-explanation">
-        <h4 className="evaluation-section-title">Why this score?</h4>
+      <details className="evaluation-explanation">
+        <summary className="evaluation-explanation-toggle">
+          <span>
+            <strong>Why this score?</strong>
+            {points.length > 0 && (
+              <span className="evaluation-explanation-count">
+                {points.length} detail{points.length === 1 ? "" : "s"}
+              </span>
+            )}
+          </span>
+          <ChevronDown size={16} aria-hidden="true" />
+        </summary>
         {explanation ? (
-          <>
+          <div className="evaluation-explanation-content">
             {typeof explanation.summary === "string" && explanation.summary && (
-              <p className="ai-explanation" style={{ marginBottom: points.length ? 10 : 0 }}>
+              <p className="ai-explanation">
                 {explanation.summary}
               </p>
             )}
@@ -174,13 +184,13 @@ export default function EvaluationSummary({
                 })}
               </ul>
             )}
-          </>
+          </div>
         ) : (
-          <p className="muted-note">
+          <p className="muted-note evaluation-explanation-content">
             The evaluation did not include an explanation for this score.
           </p>
         )}
-      </div>
+      </details>
     </div>
   );
 }

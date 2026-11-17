@@ -59,7 +59,7 @@ if ($currentUser['role'] === 'employee' && $targetUserId !== (int)$currentUser['
     ::-webkit-scrollbar-track { background: #0f172a; }
     ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
   </style>
-  <link rel="stylesheet" href="/BIC2_Mvp/assets/hera-brand.css?v=hera-unified-20261030-7" />
+  <link rel="stylesheet" href="/BIC2_Mvp/assets/hera-brand.css?v=hera-motion-20261116-1" />
   <script src="/BIC2_Mvp/assets/hera-language.js" defer></script>
 </head>
 <body class="hera-theme hera-has-extra-sidebar hera-profile-layout min-h-screen p-4 md:p-8">

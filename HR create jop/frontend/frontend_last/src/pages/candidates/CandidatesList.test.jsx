@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import CandidatesList from "./CandidatesList";
@@ -78,7 +78,7 @@ describe("Candidates empty states", () => {
     expect(archiveCandidate).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(archiveCandidate).not.toHaveBeenCalled();
     expect(screen.getByRole("link", { name: "View candidate profile for Ada Lovelace" })).toBeInTheDocument();
 
