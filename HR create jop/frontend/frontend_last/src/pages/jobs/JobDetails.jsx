@@ -14,6 +14,11 @@ import {
   FileCheck2,
   Users,
   Copy,
+  Building2,
+  Laptop,
+  FileText,
+  ListChecks,
+  ChartNoAxesColumnIncreasing,
 } from "lucide-react";
 import Badge from "../../components/common/Badge";
 import ErrorState from "../../components/common/ErrorState";
@@ -579,17 +584,20 @@ export default function JobDetails() {
         <button className="btn btn-secondary job-details-back" onClick={() => navigate("/jobs")}>
           <ArrowLeft size={16} aria-hidden="true" /> Back to Jobs
         </button>
-        <div className="job-details-actions">
+        <div className="job-details-toolbar-tools">
+        <div className="job-details-statuses" role="group" aria-label="Job status">
           <Badge status={job.status} />
           <span className={`pill public-status public-status-${publicStatus}`}>Public: {publicStatus}</span>
+        </div>
+        <div className="job-details-actions">
           {publicStatus !== "published" && (
-            <button className="primary" onClick={onPublishPublic} disabled={publicationBusy}>
+            <button className="primary job-details-action-primary" onClick={onPublishPublic} disabled={publicationBusy}>
               <Rocket size={16} aria-hidden="true" /> {publicStatus === "closed" ? "Republish job" : "Publish job publicly"}
             </button>
           )}
           {publicStatus === "published" && <>
-            <button className="btn btn-secondary" onClick={onCopyPublicLink} disabled={publicationBusy}><Copy size={16} /> Copy public link</button>
-            <button className="btn btn-secondary" onClick={onClosePublic} disabled={publicationBusy}><Ban size={16} /> Close public job</button>
+            <button className="btn btn-secondary job-details-action-primary" onClick={onCopyPublicLink} disabled={publicationBusy}><Copy size={16} aria-hidden="true" /> Copy public link</button>
+            <button className="btn btn-secondary" onClick={onClosePublic} disabled={publicationBusy}><Ban size={16} aria-hidden="true" /> Close public job</button>
           </>}
           {!isActive && (
             <button className="primary" onClick={onChangeStatus}>
@@ -620,26 +628,33 @@ export default function JobDetails() {
             <Trash2 size={16} aria-hidden="true" />
           </button>
         </div>
+        </div>
       </div>
 
       <header className="detail-hero panel job-details-hero">
         <div className="job-details-identity">
+          <p className="job-details-overline">ROLE SNAPSHOT</p>
           <span className="pill">
             <Briefcase size={13} aria-hidden="true" /> {job.department || "Department not specified"}
           </span>
           <h2>{job.title}</h2>
           <div className="job-meta">
-            <span>
-              <MapPin size={14} aria-hidden="true" /> {job.location || "Location not specified"}
+            <span className="job-details-meta-item">
+              <MapPin size={15} aria-hidden="true" /> {job.location || "Location not specified"}
             </span>
-            <span>
-              <Clock3 size={14} aria-hidden="true" /> {job.type || "Employment type not specified"}
+            <span className="job-details-meta-item">
+              <Clock3 size={15} aria-hidden="true" /> {job.type || "Employment type not specified"}
             </span>
-            <span>{companyName || "Company not provided"}</span>
-            <span>{job.workMode || "Workplace type not provided"}</span>
-            {job.experience && <span>{job.experience} experience</span>}
+            <span className="job-details-meta-item">
+              <Building2 size={15} aria-hidden="true" /> {companyName || "Company not provided"}
+            </span>
+            <span className="job-details-meta-item">
+              <Laptop size={15} aria-hidden="true" /> {job.workMode || "Workplace type not provided"}
+            </span>
+            {job.experience && <span className="job-details-meta-item"><Briefcase size={15} aria-hidden="true" /> {job.experience} experience</span>}
           </div>
         </div>
+        <div className="job-details-hero-stamp" aria-hidden="true"><Briefcase size={25} /></div>
       </header>
 
       {activationError && <p className="form-error" role="alert">{activationError}</p>}
@@ -650,9 +665,12 @@ export default function JobDetails() {
       <div className="detail-grid job-details-grid">
         <div className="panel job-details-description-panel">
           <div className="job-details-section-heading">
-            <div>
+            <div className="job-details-title-row">
+              <span className="job-details-heading-icon" aria-hidden="true"><FileText size={18} /></span>
+              <div>
               <p className="eyebrow">ROLE OVERVIEW</p>
               <h3>Description</h3>
+              </div>
             </div>
           </div>
           {roleOverview ? (
@@ -695,9 +713,12 @@ export default function JobDetails() {
 
         <div className="panel job-details-facts-panel">
           <div className="job-details-section-heading">
-            <div>
+            <div className="job-details-title-row">
+              <span className="job-details-heading-icon job-details-heading-icon-gold" aria-hidden="true"><ListChecks size={18} /></span>
+              <div>
               <p className="eyebrow">ROLE REQUIREMENTS</p>
               <h3>Requirements</h3>
+              </div>
             </div>
           </div>
           {job.requirements?.length ? (
@@ -717,9 +738,12 @@ export default function JobDetails() {
       <div className="job-details-support-grid">
         <div className="panel job-details-skills-panel">
           <div className="job-details-section-heading">
-            <div>
+            <div className="job-details-title-row">
+              <span className="job-details-heading-icon" aria-hidden="true"><Sparkles size={17} /></span>
+              <div>
               <p className="eyebrow">CAPABILITIES</p>
               <h3>Required skills</h3>
+              </div>
             </div>
           </div>
           {job.requiredSkills?.length ? (
@@ -734,7 +758,7 @@ export default function JobDetails() {
         </div>
 
         <div className="panel job-details-activity-panel">
-          <p className="eyebrow">HIRING ACTIVITY</p>
+          <p className="eyebrow job-details-activity-title"><ChartNoAxesColumnIncreasing size={15} aria-hidden="true" /> HIRING ACTIVITY</p>
           <div className="job-details-snapshot">
             <div>
               <span>Applicants</span>

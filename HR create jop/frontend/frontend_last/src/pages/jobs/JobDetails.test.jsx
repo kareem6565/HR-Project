@@ -96,6 +96,22 @@ describe("JobDetails", () => {
     expect(screen.getByRole("button", { name: "Delete Senior Engineer" })).toBeInTheDocument();
   });
 
+  it("keeps published job controls visible with the redesigned status toolbar", async () => {
+    getJobById.mockResolvedValueOnce({
+      ...job,
+      publicationStatus: "published",
+      publicId: "public-job-1",
+    });
+    renderPage();
+
+    expect(await screen.findByRole("button", { name: "Copy public link" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Close public job" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit Senior Engineer" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete Senior Engineer" })).toBeInTheDocument();
+    expect(screen.getByText("Public: published")).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Job status" })).toBeInTheDocument();
+  });
+
   it("provides a retry state when loading the job request fails", async () => {
     getJobById.mockRejectedValueOnce(new Error("network error")).mockResolvedValueOnce(job);
     const user = userEvent.setup();

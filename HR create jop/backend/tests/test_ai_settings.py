@@ -144,7 +144,8 @@ def test_recruiter_cannot_access_ai_settings(client: httpx.Client) -> None:
 
 @pytest.mark.skipif(
     bool(get_settings().ollama_api_key)
-    or (get_settings().ai_provider == "soal" and bool(get_settings().soal_api_key)),
+    or (get_settings().ai_provider == "soal" and bool(get_settings().soal_api_key))
+    or bool(get_settings().openrouter_api_key),
     reason="requires no live provider key configured (otherwise verify performs a live call)",
 )
 def test_verify_missing_key_returns_inline_failure(client: httpx.Client) -> None:
@@ -160,30 +161,24 @@ def test_verify_missing_key_returns_inline_failure(client: httpx.Client) -> None
     assert body["model"]
 
 
-def test_verify_with_provided_key_calls_ollama(client: httpx.Client, monkeypatch) -> None:
-    """Verify uses the selected provider without persisting the prospective key."""
+def test_verify_refuses_non_openrouter_provider(client: httpx.Client, monkeypatch) -> None:
+    """The settings probe cannot bypass the approved free-only OpenRouter route."""
     from app.core.config import settings
 
     monkeypatch.setattr(settings, "ai_provider", "ollama")
     monkeypatch.setattr(settings, "ollama_api_key", None)
     org, user = bootstrap(client)
     h = auth_headers(org["id"], user["id"])
-    fake_result = mock.Mock()
-    fake_result.text = "OK"
-
-    with mock.patch("app.api.v1.routes.ai_settings.OllamaCloudProvider") as mock_provider_cls:
-        provider = mock_provider_cls.return_value
-        provider.generate_text.return_value = fake_result
-
+    with mock.patch("app.api.v1.routes.ai_settings.OpenRouterProvider") as mock_provider_cls:
         resp = client.post(
             "/api/v1/settings/ai/verify", json={"api_key": "gh-probe-key"}, headers=h
         )
 
-    mock_provider_cls.assert_called_once()
+    mock_provider_cls.assert_not_called()
     assert resp.status_code == 200
     body = resp.json()
-    assert body["ok"] is True
-    assert "verified" in body["message"].lower()
+    assert body["ok"] is False
+    assert "openrouter" in body["message"].lower()
 
 
 def test_verify_with_provided_key_calls_openrouter(client: httpx.Client, monkeypatch) -> None:
@@ -193,6 +188,7 @@ def test_verify_with_provided_key_calls_openrouter(client: httpx.Client, monkeyp
     runtime_config.clear_api_key()
     monkeypatch.setattr(settings, "ai_provider", "openrouter")
     monkeypatch.setattr(settings, "openrouter_api_key", None)
+    monkeypatch.setattr(settings, "openrouter_model", "openrouter/free")
     org, user = bootstrap(client)
     h = auth_headers(org["id"], user["id"])
     fake_result = mock.Mock()
@@ -246,13 +242,13 @@ def test_verify_rate_limit_reports_failure(client: httpx.Client, monkeypatch) ->
     from app.ai.providers.errors import ProviderRateLimitError
     from app.core.config import settings
 
-    monkeypatch.setattr(settings, "ai_provider", "ollama")
-    monkeypatch.setattr(settings, "ollama_api_key", None)
+    monkeypatch.setattr(settings, "ai_provider", "openrouter")
+    monkeypatch.setattr(settings, "openrouter_model", "openrouter/free")
 
     org, user = bootstrap(client)
     h = auth_headers(org["id"], user["id"])
 
-    with mock.patch("app.api.v1.routes.ai_settings.OllamaCloudProvider") as mock_provider_cls:
+    with mock.patch("app.api.v1.routes.ai_settings.OpenRouterProvider") as mock_provider_cls:
         provider = mock_provider_cls.return_value
         provider.generate_text.side_effect = ProviderRateLimitError("quota")
 
@@ -271,13 +267,13 @@ def test_verify_provider_error_reports_failure(client: httpx.Client, monkeypatch
     from app.ai.providers.errors import ProviderUnavailableError
     from app.core.config import settings
 
-    monkeypatch.setattr(settings, "ai_provider", "ollama")
-    monkeypatch.setattr(settings, "ollama_api_key", None)
+    monkeypatch.setattr(settings, "ai_provider", "openrouter")
+    monkeypatch.setattr(settings, "openrouter_model", "openrouter/free")
 
     org, user = bootstrap(client)
     h = auth_headers(org["id"], user["id"])
 
-    with mock.patch("app.api.v1.routes.ai_settings.OllamaCloudProvider") as mock_provider_cls:
+    with mock.patch("app.api.v1.routes.ai_settings.OpenRouterProvider") as mock_provider_cls:
         provider = mock_provider_cls.return_value
         provider.generate_text.side_effect = ProviderUnavailableError("boom")
 

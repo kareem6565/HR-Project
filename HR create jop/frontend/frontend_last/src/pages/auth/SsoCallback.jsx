@@ -18,6 +18,7 @@ export default function SsoCallback() {
 
     const params = new URLSearchParams(window.location.hash.slice(1));
     const assertion = params.get("assertion");
+    const workspaceEntry = new URLSearchParams(window.location.search).get("entry");
     window.history.replaceState(null, "", window.location.pathname + window.location.search);
     if (!assertion) {
       setState("error");
@@ -26,7 +27,13 @@ export default function SsoCallback() {
     }
 
     loginWithHRAssertion(assertion)
-      .then(() => isMounted.current && setState("done"))
+      .then(() => {
+        if (!isMounted.current) return;
+        if (workspaceEntry === "workspace-recruitment") {
+          try { sessionStorage.setItem("hera-workspace-entry-motion", "recruitment"); } catch (_) { /* Motion is optional when storage is unavailable. */ }
+        }
+        setState("done");
+      })
       .catch((error) => {
         if (!isMounted.current) return;
         const status = error?.response?.status;

@@ -13,7 +13,7 @@ class OpenRouterProvider(OpenAICompatibleProvider):
     def __init__(
         self,
         api_key: str,
-        model: str = "deepseek/deepseek-v4.1-flash-1017",
+        model: str = "openrouter/free",
         base_url: str = "https://openrouter.ai/api/v1",
         timeout: float = 60.0,
         max_retries: int = 1,

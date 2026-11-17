@@ -34,7 +34,7 @@ from app.ai.contracts import (
 )
 from app.ai.markers import wrap_untrusted
 from app.ai.providers.base import AIProvider, StructuredGenerationRequest
-from app.ai.providers.errors import ProviderError
+from app.ai.providers.errors import ProviderError, ProviderInvalidRequestError
 from app.models import CandidateProfile, JobApplication, JobProfile
 from app.services.candidate_profile_service import CandidateProfileService
 from app.services.errors import NotFoundError, ValidationError
@@ -171,6 +171,35 @@ class InterviewQuestionGenerationWorkflow:
             )
             self._trace_service.mark_run_failed(db, workflow_run_id=run.id)
             raise
+
+        if result.data is None:
+            message = "AI provider returned no structured interview-question output."
+            self._trace_service.record_ai_trace(
+                db,
+                workflow_step_trace_id=step.id,
+                ai_component_name=AI_COMPONENT_NAME,
+                status="failed",
+                provider=result.provider,
+                model_name=result.model,
+                prompt_version=PROMPT_VERSION,
+                input_schema_version=INTERVIEW_QUESTION_SCHEMA_VERSION,
+                output_schema_version=result.schema_version,
+                latency_ms=result.latency_ms,
+                input_reference=input_reference,
+                validation_error={
+                    "schema": result.schema_version,
+                    "message": "Provider returned empty or non-JSON structured content.",
+                },
+                token_usage=result.token_usage,
+            )
+            self._trace_service.mark_step_failed(
+                db,
+                workflow_step_trace_id=step.id,
+                error_type="ProviderInvalidRequestError",
+                error_message=message,
+            )
+            self._trace_service.mark_run_failed(db, workflow_run_id=run.id)
+            raise ProviderInvalidRequestError(message)
 
         try:
             validated = validate_interview_question_set(
