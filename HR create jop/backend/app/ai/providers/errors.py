@@ -23,6 +23,10 @@ class ProviderRateLimitError(ProviderError):
     """The provider rejected the call due to rate limiting."""
 
 
+class ProviderInsufficientCreditsError(ProviderError):
+    """The provider key has insufficient credits or has reached its spend limit."""
+
+
 class ProviderUnavailableError(ProviderError):
     """The provider is unreachable or currently unavailable."""
 

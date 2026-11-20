@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Generator
-from datetime import date
+from datetime import date, timedelta
 
 import httpx
 import pytest
@@ -123,6 +123,7 @@ def test_api_hr_schedule_commits_exactly_one_calendar_outbox_row(
 ) -> None:
     org, user, interviewer, job, candidate, application = seed_entities(db_session)
     headers = auth_headers(str(org.id), str(user.id))
+    scheduled_date = date.today() + timedelta(days=2)
 
     decision_response = client.post(
         f"/api/v1/job-applications/{application.id}/decisions",
@@ -135,7 +136,7 @@ def test_api_hr_schedule_commits_exactly_one_calendar_outbox_row(
         InterviewAvailability(
             organization_id=org.id,
             interviewer_user_id=interviewer.id,
-            scheduled_date=date(2026, 11, 20),
+            scheduled_date=scheduled_date,
             start_time="09:00",
             end_time="12:00",
             duration_minutes=30,
@@ -152,7 +153,7 @@ def test_api_hr_schedule_commits_exactly_one_calendar_outbox_row(
             "candidate_id": str(candidate.id),
             "job_id": str(job.id),
             "interview_type": "technical",
-            "scheduled_date": "2026-11-20",
+            "scheduled_date": scheduled_date.isoformat(),
             "scheduled_time": "10:00 AM",
             "interviewer_user_id": str(interviewer.id),
             "scheduled_duration_minutes": 30,

@@ -11,6 +11,7 @@ from app.models import (
     CandidateEvaluation,
     HRDecision,
     Interview,
+    InterviewAvailability,
     Job,
     JobApplication,
     JobProfile,
@@ -81,6 +82,24 @@ def seed_test_pipeline(
     db.commit()
 
     return org, recruiter, interviewer, job, candidate, application
+
+
+def publish_test_availability(
+    db: Session, org: Organization, interviewer: User, scheduled_date: date
+) -> None:
+    db.add(
+        InterviewAvailability(
+            organization_id=org.id,
+            interviewer_user_id=interviewer.id,
+            scheduled_date=scheduled_date,
+            start_time="09:00",
+            end_time="13:00",
+            duration_minutes=60,
+            timezone="UTC",
+            status="available",
+        )
+    )
+    db.flush()
 
 
 # ===========================================================================
@@ -190,6 +209,8 @@ def test_advance_gate_permits_scheduling_when_advance_decision_recorded(
     db_session.commit()
 
     assert application.status == "advanced"
+    scheduled_date = date.today() + timedelta(days=2)
+    publish_test_availability(db_session, org, interviewer, scheduled_date)
 
     interview = InterviewService().schedule(
         db_session,
@@ -197,7 +218,7 @@ def test_advance_gate_permits_scheduling_when_advance_decision_recorded(
         candidate_id=candidate.id,
         job_id=job.id,
         interview_type="technical",
-        scheduled_date=date(2026, 11, 20),
+        scheduled_date=scheduled_date,
         scheduled_time="10:00 AM",
         interviewer_user_id=interviewer.id,
     )
@@ -225,13 +246,15 @@ def test_hold_or_reject_after_scheduling_cancels_active_interviews(
     )
     db_session.commit()
 
+    scheduled_date = date.today() + timedelta(days=2)
+    publish_test_availability(db_session, org, interviewer, scheduled_date)
     interview = InterviewService().schedule(
         db_session,
         organization_id=org.id,
         candidate_id=candidate.id,
         job_id=job.id,
         interview_type="technical",
-        scheduled_date=date(2026, 11, 20),
+        scheduled_date=scheduled_date,
         scheduled_time="10:00 AM",
         interviewer_user_id=interviewer.id,
     )
@@ -653,13 +676,15 @@ def test_interview_feedback_validation_and_subsequent_decision(
         decision="advance",
         organization_id=org.id,
     )
+    scheduled_date = date.today() + timedelta(days=2)
+    publish_test_availability(db_session, org, interviewer, scheduled_date)
     interview = InterviewService().schedule(
         db_session,
         organization_id=org.id,
         candidate_id=candidate.id,
         job_id=job.id,
         interview_type="technical",
-        scheduled_date=date(2026, 11, 20),
+        scheduled_date=scheduled_date,
         scheduled_time="10:00 AM",
         interviewer_user_id=interviewer.id,
     )

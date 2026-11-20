@@ -327,6 +327,21 @@ if ($method === 'POST') {
         if (($actor['role'] ?? '') === 'admin') {
             jsonResponse(false, 'حساب مدير النظام لا يقدّم طلبات إجازة من النظام.');
         }
+        $requestKey = trim((string)($body['request_key'] ?? ''));
+        if ($requestKey !== '') {
+            if (!preg_match('/^[A-Za-z0-9_-]{16,64}$/', $requestKey)) {
+                jsonResponse(false, 'تعذر التحقق من مفتاح إرسال الطلب.');
+            }
+            $csrf = (string)($body['chat_csrf'] ?? '');
+            if (empty($_SESSION['employee_chat_csrf']) || !hash_equals($_SESSION['employee_chat_csrf'], $csrf)) {
+                http_response_code(403);
+                jsonResponse(false, 'انتهت صلاحية الجلسة. حدّث الصفحة وحاول مرة أخرى.');
+            }
+            $existing = $pdo->prepare('SELECT id, status FROM leave_requests WHERE user_id=? AND request_key=?');
+            $existing->execute([(int)$actor['id'], $requestKey]);
+            $existingRequest = $existing->fetch();
+            if ($existingRequest) jsonResponse(true, 'تم تسجيل الطلب بالفعل.', ['request_id' => (int)$existingRequest['id'], 'status' => $existingRequest['status']]);
+        }
         $leaveTypeId = (int)($body['leave_type_id'] ?? 0);
         $start = trim($body['start_date'] ?? '');
         $end = trim($body['end_date'] ?? '');
@@ -336,7 +351,7 @@ if ($method === 'POST') {
         $typeStmt->execute([$leaveTypeId]);
         $leaveType = $typeStmt->fetch();
         if (!$leaveType) jsonResponse(false, 'نوع الإجازة غير متاح.');
-        $overlap = $pdo->prepare("SELECT id FROM leave_requests WHERE user_id=? AND status IN ('pending_manager','pending_hr','approved') AND start_date<=? AND end_date>=?");
+        $overlap = $pdo->prepare("SELECT id FROM leave_requests WHERE user_id=? AND status IN ('pending_manager','needs_employee_info','pending_hr','approved') AND start_date<=? AND end_date>=?");
         $overlap->execute([(int)$actor['id'], $end, $start]);
         if ($overlap->fetch()) jsonResponse(false, 'يوجد طلب إجازة متداخل في هذه الفترة.');
 
@@ -351,31 +366,60 @@ if ($method === 'POST') {
         $managerStmt->execute([(int)$actor['id']]);
         $managerId = (int)($managerStmt->fetchColumn() ?: 0);
         $status = $managerId && (int)$leaveType['requires_manager_approval'] ? 'pending_manager' : 'pending_hr';
-        $stmt = $pdo->prepare('INSERT INTO leave_requests (user_id,leave_type_id,start_date,end_date,days_count,reason,status,manager_id) VALUES (?,?,?,?,?,?,?,?) RETURNING id');
-        $stmt->execute([(int)$actor['id'], $leaveTypeId, $start, $end, $days, clean($body['reason'] ?? ''), $status, $managerId ?: null]);
-        $requestId = (int)$stmt->fetchColumn();
+        if ($requestKey !== '') {
+            $stmt = $pdo->prepare('INSERT INTO leave_requests (user_id,leave_type_id,start_date,end_date,days_count,reason,status,manager_id,request_key) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT (request_key) WHERE request_key IS NOT NULL DO NOTHING RETURNING id');
+            $stmt->execute([(int)$actor['id'], $leaveTypeId, $start, $end, $days, clean($body['reason'] ?? ''), $status, $managerId ?: null, $requestKey]);
+            $requestId = (int)($stmt->fetchColumn() ?: 0);
+            if (!$requestId) {
+                $existing = $pdo->prepare('SELECT id, status FROM leave_requests WHERE user_id=? AND request_key=?');
+                $existing->execute([(int)$actor['id'], $requestKey]);
+                $existingRequest = $existing->fetch();
+                if ($existingRequest) jsonResponse(true, 'تم تسجيل الطلب بالفعل.', ['request_id' => (int)$existingRequest['id'], 'status' => $existingRequest['status']]);
+                jsonResponse(false, 'تعذر تسجيل طلب الإجازة.');
+            }
+        } else {
+            $stmt = $pdo->prepare('INSERT INTO leave_requests (user_id,leave_type_id,start_date,end_date,days_count,reason,status,manager_id) VALUES (?,?,?,?,?,?,?,?) RETURNING id');
+            $stmt->execute([(int)$actor['id'], $leaveTypeId, $start, $end, $days, clean($body['reason'] ?? ''), $status, $managerId ?: null]);
+            $requestId = (int)$stmt->fetchColumn();
+        }
+        addLeaveRequestEvent($pdo, $requestId, (int)$actor['id'], 'submitted', 'تم إنشاء طلب الإجازة.', $requestKey ?: null);
         if ($status === 'pending_manager') addNotification($pdo, $managerId, 'leave', 'طلب إجازة جديد', "يوجد طلب إجازة جديد بانتظار موافقتك.", '/BIC2_Mvp/notifications.php');
         else notifyRoles($pdo, ['admin', 'hr'], 'leave', 'طلب إجازة جديد', 'يوجد طلب إجازة جديد بانتظار مراجعة الموارد البشرية.', '/BIC2_Mvp/notifications.php');
         auditHRAction($pdo, (int)$actor['id'], 'create', 'leave_request', $requestId);
-        jsonResponse(true, 'تم إرسال طلب الإجازة بنجاح.');
+        jsonResponse(true, 'تم إرسال طلب الإجازة بنجاح.', ['request_id' => $requestId, 'status' => $status]);
     }
 
     if ($action === 'leave_decision') {
         $requestId = (int)($body['request_id'] ?? 0);
         $decision = $body['decision'] ?? '';
         $comment = clean($body['comment'] ?? '');
-        if (!$requestId || !in_array($decision, ['approved', 'rejected'], true)) jsonResponse(false, 'قرار المراجعة غير صحيح.');
+        if (!$requestId || !in_array($decision, ['approved', 'rejected', 'request_info', 'escalate'], true)) jsonResponse(false, 'قرار المراجعة غير صحيح.');
+        if (in_array($decision, ['request_info', 'escalate'], true) && $comment === '') jsonResponse(false, 'اكتب تفاصيل المعلومات المطلوبة أو سبب التصعيد.');
         $stmt = $pdo->prepare('SELECT lr.*, lt.name AS leave_type_name, lt.is_paid FROM leave_requests lr JOIN leave_types lt ON lt.id=lr.leave_type_id WHERE lr.id=?');
         $stmt->execute([$requestId]);
         $request = $stmt->fetch();
         if (!$request) jsonResponse(false, 'طلب الإجازة غير موجود.');
 
         if ($request['status'] === 'pending_manager' && (int)$request['manager_id'] === (int)$actor['id'] && ($actor['role'] ?? '') === 'manager') {
-            $next = $decision === 'approved' ? 'pending_hr' : 'rejected';
-            $pdo->prepare('UPDATE leave_requests SET status=?, manager_comment=?, manager_action_at=NOW() WHERE id=?')->execute([$next, $comment, $requestId]);
-            if ($next === 'pending_hr') notifyRoles($pdo, ['admin', 'hr'], 'leave', 'طلب إجازة بانتظار HR', 'تمت موافقة المدير على طلب إجازة وهو بانتظار قرار HR.', '/BIC2_Mvp/notifications.php');
-            else addNotification($pdo, (int)$request['user_id'], 'leave', 'تم رفض طلب الإجازة', 'قام المدير برفض طلب الإجازة. ' . $comment, '/BIC2_Mvp/notifications.php');
-        } elseif ($request['status'] === 'pending_hr' && isHRPlatformAdmin($actor)) {
+            if ($decision === 'request_info') {
+                $next = 'needs_employee_info';
+                $pdo->prepare('UPDATE leave_requests SET status=?, manager_comment=?, manager_action_at=NOW() WHERE id=?')->execute([$next, $comment, $requestId]);
+                addNotification($pdo, (int)$request['user_id'], 'leave', 'مطلوب معلومات إضافية', 'طلب مديرك معلومات إضافية لطلب الإجازة: ' . $comment, '/BIC2_Mvp/leaves.php');
+                addLeaveRequestEvent($pdo, $requestId, (int)$actor['id'], 'manager_info_requested', $comment);
+            } elseif ($decision === 'escalate') {
+                $next = 'pending_hr';
+                $pdo->prepare('UPDATE leave_requests SET status=?, manager_comment=?, manager_action_at=NOW() WHERE id=?')->execute([$next, $comment, $requestId]);
+                notifyRoles($pdo, ['admin', 'hr'], 'leave', 'طلب إجازة مصعّد للمراجعة', 'صعّد المدير طلب إجازة إلى الموارد البشرية: ' . $comment, '/BIC2_Mvp/leaves.php');
+                addLeaveRequestEvent($pdo, $requestId, (int)$actor['id'], 'escalated', $comment);
+            } else {
+                $next = $decision === 'approved' ? 'pending_hr' : 'rejected';
+                $pdo->prepare('UPDATE leave_requests SET status=?, manager_comment=?, manager_action_at=NOW() WHERE id=?')->execute([$next, $comment, $requestId]);
+                if ($next === 'pending_hr') notifyRoles($pdo, ['admin', 'hr'], 'leave', 'طلب إجازة بانتظار HR', 'تمت موافقة المدير على طلب إجازة وهو بانتظار قرار HR.', '/BIC2_Mvp/notifications.php');
+                else addNotification($pdo, (int)$request['user_id'], 'leave', 'تم رفض طلب الإجازة', 'قام المدير برفض طلب الإجازة. ' . $comment, '/BIC2_Mvp/notifications.php');
+                addLeaveRequestEvent($pdo, $requestId, (int)$actor['id'], $decision === 'approved' ? 'manager_approved' : 'manager_rejected', $comment ?: null);
+            }
+        } elseif ($request['status'] === 'pending_hr' && isHRPlatformAdmin($actor)
+            && in_array($decision, ['approved', 'rejected'], true)) {
             $pdo->beginTransaction();
             try {
                 if ($decision === 'approved' && (int)$request['is_paid'] === 1) {
@@ -387,6 +431,7 @@ if ($method === 'POST') {
                 }
                 $pdo->prepare('UPDATE leave_requests SET status=?, hr_id=?, hr_comment=?, hr_action_at=NOW() WHERE id=?')->execute([$decision, (int)$actor['id'], $comment, $requestId]);
                 addNotification($pdo, (int)$request['user_id'], 'leave', $decision === 'approved' ? 'تمت الموافقة على الإجازة' : 'تم رفض طلب الإجازة', ($decision === 'approved' ? 'تمت الموافقة على طلب ' : 'تم رفض طلب ') . $request['leave_type_name'] . '. ' . $comment, '/BIC2_Mvp/notifications.php');
+                addLeaveRequestEvent($pdo, $requestId, (int)$actor['id'], $decision === 'approved' ? 'hr_approved' : 'hr_rejected', $comment ?: null);
                 $pdo->commit();
             } catch (Throwable $e) {
                 $pdo->rollBack();
@@ -397,6 +442,46 @@ if ($method === 'POST') {
         }
         auditHRAction($pdo, (int)$actor['id'], $decision, 'leave_request', $requestId);
         jsonResponse(true, 'تم حفظ قرار الإجازة.');
+    }
+
+    if ($action === 'provide_leave_info') {
+        if (($actor['role'] ?? '') !== 'employee') jsonResponse(false, 'الخدمة متاحة للموظف صاحب الطلب فقط.');
+        $requestId = (int)($body['request_id'] ?? 0);
+        $details = trim((string)($body['details'] ?? ''));
+        $requestKey = trim((string)($body['request_key'] ?? ''));
+        $csrf = (string)($body['chat_csrf'] ?? '');
+        if (empty($_SESSION['employee_chat_csrf']) || !hash_equals($_SESSION['employee_chat_csrf'], $csrf)) {
+            http_response_code(403);
+            jsonResponse(false, 'انتهت صلاحية الجلسة. حدّث الصفحة وحاول مرة أخرى.');
+        }
+        if (!$requestId || $details === '' || mb_strlen($details) > 2000 || !preg_match('/^[A-Za-z0-9_-]{16,64}$/', $requestKey)) {
+            jsonResponse(false, 'تحقق من رقم الطلب والمعلومات المطلوبة.');
+        }
+        $existingEvent = $pdo->prepare('SELECT id FROM leave_request_events WHERE request_key=?');
+        $existingEvent->execute([$requestKey]);
+        if ($existingEvent->fetchColumn()) jsonResponse(true, 'تم إرسال المعلومات بالفعل.');
+        $requestStmt = $pdo->prepare('SELECT id, manager_id, status FROM leave_requests WHERE id=? AND user_id=?');
+        $requestStmt->execute([$requestId, (int)$actor['id']]);
+        $request = $requestStmt->fetch();
+        if (!$request || $request['status'] !== 'needs_employee_info') jsonResponse(false, 'لا يوجد طلب ينتظر هذه المعلومات.');
+        $pdo->beginTransaction();
+        try {
+            $event = $pdo->prepare("INSERT INTO leave_request_events (leave_request_id, actor_id, event_type, details, request_key) VALUES (?, ?, 'employee_info_provided', ?, ?) ON CONFLICT (request_key) WHERE request_key IS NOT NULL DO NOTHING RETURNING id");
+            $event->execute([$requestId, (int)$actor['id'], clean($details), $requestKey]);
+            if (!$event->fetchColumn()) {
+                $pdo->rollBack();
+                jsonResponse(true, 'تم إرسال المعلومات بالفعل.');
+            }
+            $pdo->prepare("UPDATE leave_requests SET status='pending_manager', updated_at=NOW() WHERE id=? AND status='needs_employee_info'")->execute([$requestId]);
+            if (!empty($request['manager_id'])) addNotification($pdo, (int)$request['manager_id'], 'leave', 'وصلت معلومات إضافية', 'أرسل الموظف المعلومات المطلوبة لطلب الإجازة رقم ' . $requestId . '.', '/BIC2_Mvp/leaves.php');
+            auditHRAction($pdo, (int)$actor['id'], 'provide_info', 'leave_request', $requestId);
+            $pdo->commit();
+        } catch (Throwable $error) {
+            $pdo->rollBack();
+            error_log('Employee leave information submission failed: ' . $error->getMessage());
+            jsonResponse(false, 'تعذر إرسال المعلومات. حاول مرة أخرى.');
+        }
+        jsonResponse(true, 'تم إرسال المعلومات إلى مديرك.');
     }
 
     if ($action === 'save_leave_type') {

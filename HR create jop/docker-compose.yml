@@ -71,6 +71,7 @@ services:
     env_file:
       - ../HR manager/.env
     environment:
+      HERA_API_BASE_URL: http://backend:8000/api/v1
       DB_HOST: postgres
       DB_PORT: "5432"
       DB_NAME: ${POSTGRES_DB:-hr_ai_assistant}
