@@ -62,7 +62,7 @@ export default function AISettings() {
   if (error || !settings)
     return <ErrorState message="Unable to load AI settings. Try again." onRetry={load} />;
 
-  const liveProviderActive = settings.provider !== "fake";
+  const activeProvider = settings.provider;
 
   return (
     <section>
@@ -115,11 +115,9 @@ export default function AISettings() {
           </div>
         </div>
 
-        {!liveProviderActive && (
-          <p className="muted-note">
-            No live AI provider is active. System operators can configure OpenRouter, Gemini, Soal, or Ollama in the server environment.
-          </p>
-        )}
+        <p className="muted-note">
+          Active provider: {activeProvider}. System operators manage the provider and its API key in the backend environment.
+        </p>
 
         {(formError || notice) && (
           <div className={formError ? "form-error" : "success-message"}>{formError || notice}</div>

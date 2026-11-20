@@ -78,6 +78,6 @@ class JobProfile(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
 
-    job: Mapped[Job] = relationship(back_populates="profiles")
+    job: Mapped[Job] = relationship(back_populates="profiles", foreign_keys=[job_id])
     approved_by: Mapped[User | None] = relationship(back_populates="approved_job_profiles")
     evaluations: Mapped[list[CandidateEvaluation]] = relationship(back_populates="job_profile")

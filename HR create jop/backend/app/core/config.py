@@ -19,35 +19,39 @@ class Settings(BaseSettings):
         validation_alias="TEST_DATABASE_URL",
     )
     storage_root_dir: str = Field(default="./storage", validation_alias="STORAGE_ROOT_DIR")
-    ai_provider: Literal["fake", "soal", "ollama", "gemini", "openrouter"] = Field(
-        default="ollama", validation_alias="AI_PROVIDER"
+    ai_provider: Literal["fake", "soal", "ollama", "openrouter"] = Field(
+        default="openrouter", validation_alias="AI_PROVIDER"
     )
     soal_api_key: str | None = Field(default=None, validation_alias="SOAL_API_KEY")
     soal_base_url: str = Field(default="https://soal.help/api/v1", validation_alias="SOAL_BASE_URL")
     soal_model: str = Field(default="gemini-3.5-flash", validation_alias="SOAL_MODEL")
-    gemini_api_key: str | None = Field(default=None, validation_alias="GEMINI_API_KEY")
-    gemini_base_url: str = Field(
-        default="https://generativelanguage.googleapis.com/v1beta/openai/",
-        validation_alias="GEMINI_BASE_URL",
-    )
-    gemini_model: str = Field(
-        default="gemini-3.8-flash", validation_alias="GEMINI_MODEL"
-    )
-    openrouter_api_key: str | None = Field(default=None, validation_alias="OPENROUTER_API_KEY")
-    openrouter_base_url: str = Field(
-        default="https://openrouter.ai/api/v1", validation_alias="OPENROUTER_BASE_URL"
-    )
-    openrouter_model: str = Field(
-        default="deepseek/deepseek-v4.1-flash-1017:nitro", validation_alias="OPENROUTER_MODEL"
-    )
-    openrouter_max_tokens: int = Field(
-        default=1024, ge=1, le=65536, validation_alias="OPENROUTER_MAX_TOKENS"
-    )
     ollama_api_key: str | None = Field(default=None, validation_alias="OLLAMA_API_KEY")
     ollama_base_url: str = Field(
         default="https://ollama.com/v1", validation_alias="OLLAMA_BASE_URL"
     )
     ollama_model: str = Field(default="gemma4:31b", validation_alias="OLLAMA_MODEL")
+    openrouter_api_key: str | None = Field(default=None, validation_alias="OPENROUTER_API_KEY")
+    openrouter_base_url: str = Field(
+        default="https://openrouter.ai/api/v1", validation_alias="OPENROUTER_BASE_URL"
+    )
+    openrouter_model: str = Field(default="openrouter/free", validation_alias="OPENROUTER_MODEL")
+    openrouter_max_tokens: int = Field(
+        default=4096, gt=0, le=32768, validation_alias="OPENROUTER_MAX_TOKENS"
+    )
+    ai_free_model_allowlist: str = Field(default="", validation_alias="AI_FREE_MODEL_ALLOWLIST")
+    ai_paid_mode_enabled: bool = Field(default=False, validation_alias="AI_PAID_MODE_ENABLED")
+    ai_paid_budget_usd: float = Field(default=0.0, ge=0, validation_alias="AI_PAID_BUDGET_USD")
+    ai_global_rpm_limit: int = Field(default=15, gt=0, validation_alias="AI_GLOBAL_RPM_LIMIT")
+    ai_global_daily_limit: int = Field(default=40, gt=0, validation_alias="AI_GLOBAL_DAILY_LIMIT")
+    ai_user_rpm_limit: int = Field(default=5, gt=0, validation_alias="AI_USER_RPM_LIMIT")
+    ai_user_daily_limit: int = Field(default=20, gt=0, validation_alias="AI_USER_DAILY_LIMIT")
+    ai_tester_user_ids: str = Field(default="", validation_alias="AI_TESTER_USER_IDS")
+    ai_tester_user_rpm_limit: int = Field(
+        default=10, gt=0, validation_alias="AI_TESTER_USER_RPM_LIMIT"
+    )
+    ai_tester_user_daily_limit: int = Field(
+        default=60, gt=0, validation_alias="AI_TESTER_USER_DAILY_LIMIT"
+    )
     max_upload_bytes: int = Field(default=5 * 1024 * 1024, validation_alias="MAX_UPLOAD_BYTES")
     max_batch_files: int = Field(default=20, validation_alias="MAX_BATCH_FILES")
     max_batch_bytes: int = Field(default=50 * 1024 * 1024, validation_alias="MAX_BATCH_BYTES")
@@ -79,6 +83,32 @@ class Settings(BaseSettings):
     hr_sso_issuer: str = Field(default="hr-manager", validation_alias="HR_SSO_ISSUER")
     allow_local_login: bool = Field(default=False, validation_alias="ALLOW_LOCAL_LOGIN")
     enable_screening_worker: bool = Field(default=True, validation_alias="ENABLE_SCREENING_WORKER")
+    apify_api_token: str | None = Field(default=None, validation_alias="APIFY_API_TOKEN")
+    apify_linkedin_jobs_actor_id: str = Field(
+        default="fetch_cat/linkedin-jobs-scraper",
+        validation_alias="APIFY_LINKEDIN_JOBS_ACTOR_ID",
+    )
+    apify_import_enabled: bool = Field(default=False, validation_alias="APIFY_IMPORT_ENABLED")
+    application_privacy_notice_text: str = Field(
+        default="", validation_alias="APPLICATION_PRIVACY_NOTICE_TEXT"
+    )
+    application_privacy_notice_version: str = Field(
+        default="", validation_alias="APPLICATION_PRIVACY_NOTICE_VERSION"
+    )
+    application_privacy_notice_approved: bool = Field(
+        default=False, validation_alias="APPLICATION_PRIVACY_NOTICE_APPROVED"
+    )
+    turnstile_required: bool = Field(default=False, validation_alias="TURNSTILE_REQUIRED")
+    turnstile_secret_key: str = Field(default="", validation_alias="TURNSTILE_SECRET_KEY")
+    turnstile_expected_hostname: str = Field(
+        default="", validation_alias="TURNSTILE_EXPECTED_HOSTNAME"
+    )
+    public_application_rate_limit: int = Field(
+        default=5, validation_alias="PUBLIC_APPLICATION_RATE_LIMIT"
+    )
+    public_application_rate_window_seconds: int = Field(
+        default=3600, validation_alias="PUBLIC_APPLICATION_RATE_WINDOW_SECONDS"
+    )
     enable_outbox_worker: bool = Field(default=True, validation_alias="ENABLE_OUTBOX_WORKER")
 
     # Google Calendar / OAuth (EPIC 6)

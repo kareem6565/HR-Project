@@ -36,14 +36,6 @@ specifications, and retained PDF/DOCX sources. AI profile proposals include
 source evidence and uncertainty markers, can be edited by HR, and are never
 used for evaluation until approved.
 
-The employee portal includes an HR assistant integrated with the PHP sign-in
-session. It answers only from HR-approved policy sections and can prepare leave actions for
-employee confirmation. HR manages policy content from `HR manager/policies.php`.
-The assistant's OpenRouter provider is configured in the private Compose
-`.env` using `AI_PROVIDER=openrouter`, `OPENROUTER_API_KEY`, and
-`OPENROUTER_MODEL`. The default is `deepseek/deepseek-v4.1-flash-1017:nitro`; OpenRouter
-usage is billed by model and token.
-
 ## Local prerequisites
 
 - Docker Desktop / Docker Engine for PostgreSQL 16, Nginx, and PHP-FPM 8.2
@@ -129,17 +121,17 @@ From `HR create jop/`:
 tools\start_hera.ps1
 ```
 
-This starts PostgreSQL, Nginx + PHP-FPM, the FastAPI backend on `:8001`, and the
-Vite frontend on `:5174`. To start HR Manager, PostgreSQL, and the chatbot backend without the recruitment frontend:
+This starts PostgreSQL, Nginx + PHP-FPM, the FastAPI backend on `:8000`, and the
+Vite frontend on `:5174`. To start only HR Manager and PostgreSQL:
 
 ```powershell
 tools\start_hera.ps1 -InfraOnly
 ```
 
-The HR Manager and chatbot backend can also be started without the recruitment frontend:
+The equivalent infrastructure command is:
 
 ```powershell
-docker compose up -d postgres backend hr_php hr_web
+docker compose up -d postgres hr_php hr_web
 ```
 
 Open `http://localhost/BIC2_Mvp/login.php`. Signing in with an `hr` account

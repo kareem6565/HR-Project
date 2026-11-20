@@ -10,7 +10,13 @@ import {
   uploadJobSourceFile,
   updateJob,
 } from "../../services/jobService";
-import { createJobProfile, extractJobProfile, listJobProfiles } from "../../services/jobProfileService";
+import {
+  buildJobDescription,
+  createJobProfile,
+  extractJobProfile,
+  getLinkedInJobImport,
+  startLinkedInJobImport,
+} from "../../services/jobProfileService";
 import JobForm from "./JobForm";
 
 vi.mock("../../services/jobService", () => ({
@@ -22,8 +28,11 @@ vi.mock("../../services/jobService", () => ({
 }));
 
 vi.mock("../../services/jobProfileService", () => ({
+  buildJobDescription: vi.fn(),
   createJobProfile: vi.fn(),
   extractJobProfile: vi.fn(),
+  getLinkedInJobImport: vi.fn(),
+  startLinkedInJobImport: vi.fn(),
   listJobProfiles: vi.fn(),
 }));
 
@@ -63,6 +72,21 @@ describe("JobForm AI-assisted creation", () => {
     vi.clearAllMocks();
     getJobById.mockResolvedValue(null);
     suggestJobDraft.mockResolvedValue({ ...DEFAULT_SUGGESTION });
+    buildJobDescription.mockResolvedValue({
+      schema_version: "1.4",
+      title: "Backend Engineer",
+      summary: "Build reliable backend services.",
+      requirements: [
+        { text: "Python", category: "must_have", dimension: "skill" },
+        { text: "Kubernetes", category: "nice_to_have", dimension: "skill" },
+      ],
+      needs_confirmation: [],
+      creation_method: "ai_generated",
+    });
+    createJob.mockResolvedValue({ id: "job-1" });
+    createJobProfile.mockResolvedValue({ id: "profile-1" });
+    startLinkedInJobImport.mockReset();
+    getLinkedInJobImport.mockReset();
 
     uploadJobSourceFile.mockResolvedValue({
       sourceFileName: "role.pdf",
@@ -70,6 +94,112 @@ describe("JobForm AI-assisted creation", () => {
       sourceFileError: "",
     });
 
+  });
+
+  test("imports a public LinkedIn listing into the existing editable draft flow", async () => {
+    startLinkedInJobImport.mockResolvedValue({
+      id: "import-1",
+      source_url: "https://www.linkedin.com/jobs/view/1234567890/",
+      status: "succeeded",
+      result: {
+        job_id: "1234567890",
+        job_url: "https://www.linkedin.com/jobs/view/1234567890/",
+        title: "Platform Engineer",
+        company_name: "Example Co",
+        location: "Remote",
+        description: "Build reliable infrastructure.",
+        employment_type: "Full-time",
+        seniority_level: "Mid-Senior level",
+        workplace_type: "Remote",
+      },
+    });
+    renderForm();
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole("button", { name: "Import from LinkedIn" }));
+    await user.type(
+      screen.getByLabelText("Public LinkedIn job URL"),
+      "https://www.linkedin.com/jobs/view/1234567890/"
+    );
+    await user.click(screen.getByRole("button", { name: "Import job" }));
+
+    await waitFor(() => expect(screen.getByLabelText(/Job Title/)).toHaveValue("Platform Engineer"));
+    expect(screen.getByLabelText(/Description/)).toHaveValue("Build reliable infrastructure.");
+    expect(screen.getByLabelText("Source company")).toHaveValue("Example Co");
+    expect(screen.getByLabelText("Source seniority")).toHaveValue("Mid-Senior level");
+
+    await user.click(screen.getByLabelText(/I reviewed these source details/));
+    await user.click(screen.getByRole("button", { name: "Save Draft" }));
+
+    await waitFor(() => expect(createJob).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Platform Engineer", status: "draft" }),
+      "import-1"
+    ));
+    expect(createJobProfile).toHaveBeenCalledWith("job-1", expect.objectContaining({
+      status: "draft",
+      source_metadata: expect.objectContaining({
+        source_type: "linkedin",
+        source_import_id: "import-1",
+        company_name: "Example Co",
+        seniority_level: "Mid-Senior level",
+      }),
+    }));
+  });
+
+  test("keeps long imported listings intact without exceeding the profile summary contract", async () => {
+    const longDescription = "Public listing details. ".repeat(250);
+    startLinkedInJobImport.mockResolvedValue({
+      id: "import-long",
+      source_url: "https://www.linkedin.com/jobs/view/1234567890/",
+      status: "succeeded",
+      result: {
+        job_id: "1234567890",
+        job_url: "https://www.linkedin.com/jobs/view/1234567890/",
+        title: "Platform Engineer",
+        company_name: "Example Co",
+        location: "Remote",
+        description: longDescription,
+      },
+    });
+    renderForm();
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole("button", { name: "Import from LinkedIn" }));
+    await user.type(
+      screen.getByLabelText("Public LinkedIn job URL"),
+      "https://www.linkedin.com/jobs/view/1234567890/"
+    );
+    await user.click(screen.getByRole("button", { name: "Import job" }));
+
+    await waitFor(() => expect(screen.getByLabelText(/Job Title/)).toHaveValue("Platform Engineer"));
+    expect(screen.getByLabelText(/Description/)).toHaveValue(longDescription);
+    expect(screen.getByLabelText("Job overview")).toHaveValue("");
+    expect(screen.getByText(/Add a concise overview/)).toBeInTheDocument();
+
+    await user.click(screen.getByLabelText(/I reviewed these source details/));
+    await user.click(screen.getByRole("button", { name: "Save Draft" }));
+
+    await waitFor(() => expect(createJobProfile).toHaveBeenCalledWith("job-1", expect.objectContaining({
+      profile_data: expect.objectContaining({ summary: "" }),
+      source_original_listing_text: longDescription,
+    })));
+  });
+
+  test("keeps manual paste available when LinkedIn import is unavailable", async () => {
+    startLinkedInJobImport.mockRejectedValue({ response: { data: { detail: "Import disabled" } } });
+    renderForm();
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole("button", { name: "Import from LinkedIn" }));
+    await user.type(
+      screen.getByLabelText("Public LinkedIn job URL"),
+      "https://www.linkedin.com/jobs/view/1234567890/"
+    );
+    await user.click(screen.getByRole("button", { name: "Import job" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Import disabled");
+
+    await user.click(screen.getByRole("button", { name: "Paste existing description" }));
+    expect(screen.getByLabelText("Existing description")).toBeInTheDocument();
   });
 
   test("sends only the raw description to the auto-fill endpoint", async () => {
@@ -266,6 +396,121 @@ describe("JobForm AI-assisted creation", () => {
     );
   });
 
+  test("stores manually authored descriptions with the API's HR-created provenance value", async () => {
+    createJob.mockResolvedValue({ id: "job-manual" });
+    createJobProfile.mockResolvedValue({ id: "profile-manual", status: "draft" });
+    renderForm();
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText(/Job Title/), "Backend Engineer");
+    await user.type(screen.getByLabelText(/Description/), "Build reliable services.");
+    await user.click(screen.getByRole("button", { name: "Review fields as a structured profile" }));
+    await user.click(screen.getByRole("button", { name: "Save Draft" }));
+
+    await waitFor(() => expect(createJobProfile).toHaveBeenCalledWith("job-manual", expect.objectContaining({
+      source: "hr_created",
+      creation_method: "manually_created",
+      raw_input_snapshot: expect.objectContaining({ creation_method: "manually_created" }),
+    })));
+  });
+
+  test("AI draft keeps required and preferred skills distinct and saves an unapproved profile", async () => {
+    createJob.mockResolvedValue({ id: "job-ai" });
+    createJobProfile.mockResolvedValue({ id: "profile-ai", status: "draft" });
+    renderForm();
+    const user = userEvent.setup();
+
+    await user.type(screen.getByLabelText(/Job Title/), "Backend Engineer");
+    await user.type(screen.getByLabelText(/Department/), "Engineering");
+    await user.click(screen.getByRole("button", { name: "Generate with AI" }));
+    await user.click(screen.getByRole("button", { name: "Generate draft with HERA" }));
+    expect(await screen.findByLabelText("Job overview")).toHaveValue("Build reliable backend services.");
+    await user.click(screen.getByRole("button", { name: "Save Draft" }));
+
+    await waitFor(() => expect(createJobProfile).toHaveBeenCalledWith("job-ai", expect.objectContaining({
+      status: "draft",
+      source: "ai_extracted",
+      creation_method: "ai_generated",
+    })));
+    const savedProfile = createJobProfile.mock.calls[0][1].profile_data;
+    expect(savedProfile.requirements.map((item) => item.category)).toEqual(["must_have", "nice_to_have"]);
+    expect(screen.getByTestId("location-path")).toHaveTextContent("/jobs/job-ai");
+  });
+
+  test("pasted descriptions are sent as source text and preserved on the draft", async () => {
+    createJob.mockResolvedValue({ id: "job-pasted" });
+    createJobProfile.mockResolvedValue({ id: "profile-pasted", status: "draft" });
+    buildJobDescription.mockResolvedValueOnce({
+      schema_version: "1.1",
+      title: "Backend Engineer",
+      summary: "Build backend systems.",
+      requirements: [{
+        text: "Preferred: Kubernetes", category: "nice_to_have", dimension: "skill",
+        source: "manual_description", source_quote: "Preferred: Kubernetes",
+      }],
+      needs_confirmation: [],
+      creation_method: "pasted_external",
+    });
+    renderForm();
+    const user = userEvent.setup();
+    const source = "Backend Engineer\nPreferred: Kubernetes";
+
+    await user.click(screen.getByRole("button", { name: "Paste existing description" }));
+    await user.type(screen.getByLabelText("Existing description"), source);
+    await user.click(screen.getByRole("button", { name: "Structure pasted description" }));
+    await user.click(screen.getByRole("button", { name: "Save Draft" }));
+
+    await waitFor(() => expect(buildJobDescription).toHaveBeenCalledWith(expect.objectContaining({
+      operation: "parse", source_text: source,
+    })));
+    await waitFor(() => expect(createJobProfile).toHaveBeenCalledWith("job-pasted", expect.objectContaining({
+      creation_method: "pasted_external", source_original_text: source,
+    })));
+  });
+
+  test("groups the draft into responsibilities, qualifications, and skills and improves a selected item", async () => {
+    buildJobDescription
+      .mockResolvedValueOnce({
+        schema_version: "1.4",
+        title: "Backend Engineer",
+        summary: "Build backend services.",
+        requirements: [
+          { text: "Own service reliability", category: "must_have", dimension: "responsibility" },
+          { text: "Five years of experience", category: "important", dimension: "experience" },
+          { text: "Python", category: "nice_to_have", dimension: "technical_skill" },
+        ],
+        needs_confirmation: [],
+        creation_method: "ai_generated",
+      })
+      .mockResolvedValueOnce({
+        schema_version: "1.4",
+        title: "Backend Engineer",
+        summary: "Lead service reliability and incident response.",
+        requirements: [],
+        needs_confirmation: [],
+        creation_method: "ai_generated",
+      });
+    renderForm();
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText(/Job Title/), "Backend Engineer");
+    await user.type(screen.getByLabelText(/Department/), "Engineering");
+    await user.click(screen.getByRole("button", { name: "Generate with AI" }));
+    await user.click(screen.getByRole("button", { name: "Generate draft with HERA" }));
+
+    expect(await screen.findByRole("region", { name: "Responsibilities" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Qualifications" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Skills" })).toBeInTheDocument();
+    await user.click(screen.getAllByRole("button", { name: "Improve with AI" })[0]);
+
+    expect(await screen.findByText("Lead service reliability and incident response.")).toBeInTheDocument();
+    expect(buildJobDescription).toHaveBeenLastCalledWith(expect.objectContaining({
+      operation: "improve",
+      section_name: "Responsibilities item",
+      selected_section: "Own service reliability",
+    }));
+    await user.click(screen.getByRole("button", { name: "Use suggestion" }));
+    expect(screen.getByLabelText("Responsibility")).toHaveValue("Lead service reliability and incident response.");
+  });
+
   test("job create payload carries only job form fields (no scoring or confidence)", async () => {
     createJob.mockResolvedValue({ id: "job-abc" });
     renderForm();
@@ -288,6 +533,7 @@ describe("JobForm AI-assisted creation", () => {
         "description",
         "requirements",
         "requiredSkills",
+        "workMode",
       ].sort()
     );
     expect(payload).not.toHaveProperty("confidence");

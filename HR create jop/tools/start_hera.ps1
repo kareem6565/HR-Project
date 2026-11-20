@@ -1,11 +1,16 @@
-# Starts HERA without XAMPP, Apache, or MySQL.
-#   tools\start_hera.ps1              # PostgreSQL + backend + Nginx/PHP + frontend
-#   tools\start_hera.ps1 -InfraOnly   # PostgreSQL + backend + HR Manager
-param([switch]$InfraOnly)
+# Starts the complete HERA + HR Manager Docker Compose stack.
+#   tools\start_hera.ps1              # Start all services, using existing images
+#   tools\start_hera.ps1 -Build       # Rebuild application images, then start
+#   tools\start_hera.ps1 -InfraOnly   # Start only PostgreSQL + HR Manager
+param(
+    [switch]$InfraOnly,
+    [switch]$Build
+)
 
 $ErrorActionPreference = "Stop"
 $repo = Split-Path -Parent $PSScriptRoot
 $compose = Join-Path $repo "docker-compose.yml"
+$projectName = "hr-ai-assistant"
 
 $dockerReady = $false
 try {
@@ -35,30 +40,47 @@ if (-not $dockerReady) {
     throw "Docker did not become ready. Open Docker Desktop and retry."
 }
 
-& docker compose -f $compose up -d postgres backend hr_php hr_web
+$services = @("postgres", "hr_php", "hr_web")
+if (-not $InfraOnly) {
+    $services += @("backend", "frontend")
+}
+
+$composeArgs = @("compose", "-p", $projectName, "-f", $compose, "up", "-d")
+if ($Build) {
+    $composeArgs += "--build"
+}
+$composeArgs += $services
+
+& docker @composeArgs
 if ($LASTEXITCODE -ne 0) {
     throw "Failed to start the HERA Docker services."
 }
 
-$hrReady = $false
-for ($attempt = 0; $attempt -lt 12; $attempt++) {
-    try {
-        $response = Invoke-WebRequest -Uri "http://localhost/BIC2_Mvp/login.php" `
-            -UseBasicParsing -TimeoutSec 5
-        if ($response.StatusCode -eq 200) {
-            $hrReady = $true
-            break
-        }
-    } catch {
-        Start-Sleep -Seconds 3
-    }
-}
-if (-not $hrReady) {
-    throw "HR Manager did not become ready. Check: docker compose logs hr_php hr_web"
-}
-Write-Output "HR Manager: http://localhost/BIC2_Mvp/login.php"
+function Wait-ForHttp {
+    param(
+        [Parameter(Mandatory)] [string]$Name,
+        [Parameter(Mandatory)] [string]$Url
+    )
 
-if (-not $InfraOnly) {
-    & (Join-Path $PSScriptRoot "start_frontend.ps1") 5174 http://localhost:8001/api/v1
-    Write-Output "Recruitment frontend: http://127.0.0.1:5174"
+    for ($attempt = 0; $attempt -lt 20; $attempt++) {
+        try {
+            $response = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 5
+            if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 400) {
+                Write-Output "$Name ready: $Url"
+                return
+            }
+        } catch {
+            Start-Sleep -Seconds 2
+        }
+    }
+
+    throw "$Name did not become ready at $Url. Check: docker compose -p $projectName -f `"$compose`" logs $($services -join ' ')"
 }
+
+Wait-ForHttp -Name "HR Manager" -Url "http://localhost/BIC2_Mvp/login.php"
+if (-not $InfraOnly) {
+    Wait-ForHttp -Name "HERA API" -Url "http://localhost:8000/api/v1/health"
+    Wait-ForHttp -Name "HERA frontend" -Url "http://localhost:8080/"
+}
+
+Write-Output "Startup complete. Existing database volumes were left in place."

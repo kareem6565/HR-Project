@@ -34,6 +34,9 @@ class JobSourceMetadata(BaseModel):
     published_at: date | None = None
     application_url: AnyHttpUrl | None = None
     source_import_id: str = Field(min_length=1, max_length=64)
+    source_type: Literal["linkedin"] | None = None
+    company_name: str | None = Field(default=None, max_length=255)
+    seniority_level: str | None = Field(default=None, max_length=100)
     review_confirmed: bool
 
     @field_validator("source_name")
@@ -44,6 +47,7 @@ class JobSourceMetadata(BaseModel):
             raise ValueError("Source name cannot be blank.")
         return normalized
 
+
 class JobProfileCreate(BaseModel):
     status: str
     source: str
@@ -52,6 +56,9 @@ class JobProfileCreate(BaseModel):
     source_original_listing_text: str | None = Field(default=None, max_length=50_000)
     source_metadata: JobSourceMetadata | None = None
     field_origins: dict[str, FieldOrigin] | None = None
+    creation_method: Literal["ai_generated", "pasted_external", "manually_created"] | None = None
+    source_original_text: str | None = Field(default=None, max_length=50_000)
+    needs_confirmation: list[str] = Field(default_factory=list, max_length=30)
 
     @field_validator("field_origins")
     @classmethod

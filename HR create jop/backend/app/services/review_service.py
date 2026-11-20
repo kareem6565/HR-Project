@@ -2,22 +2,24 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import exists, select
+from sqlalchemy import case, exists, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models import (
     Candidate,
-    CandidateProfile,
     CandidateEvaluation,
+    CandidateProfile,
     HRDecision,
     Job,
     JobApplication,
     MatchEvidence,
     Resume,
+    ScreeningBatch,
+    ScreeningBatchItem,
     TalentPoolConsent,
 )
 from app.services.candidate_pool_service import (
@@ -58,6 +60,8 @@ class ApplicationSummaryRow:
     current_evaluation: CandidateEvaluation | None
     group: str
     evidence: list[EvidenceSummaryItem]
+    screening_status: str = "not_started"
+    latest_decision: HRDecision | None = None
 
 
 @dataclass(frozen=True)
@@ -114,6 +118,7 @@ class ReviewBundle:
     current_evaluation: CandidateEvaluation | None
     evidence: list[MatchEvidence]
     latest_decision: HRDecision | None
+    decision_history: list[HRDecision]
     group: str
 
 
@@ -153,7 +158,18 @@ class ReviewService:
         organization_id: uuid.UUID,
         status: str | None = None,
         candidate_id: uuid.UUID | None = None,
-    ) -> list[ApplicationSummaryRow]:
+        job_id: uuid.UUID | None = None,
+        search: str | None = None,
+        source: str | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        processing_status: str | None = None,
+        decision_status: str | None = None,
+        sort_by: str = "created_at",
+        sort_order: str = "desc",
+        page: int | None = None,
+        page_size: int = 25,
+    ) -> list[ApplicationSummaryRow] | tuple[list[ApplicationSummaryRow], int]:
         """Return org-wide application summaries, newest first.
 
         Organization scope is enforced directly; only each application's
@@ -169,8 +185,41 @@ class ReviewService:
         if status is not None and status not in VALID_APPLICATION_STATUSES:
             raise ValidationError(f"Invalid application status filter: {status!r}.")
 
+        latest_item_status = (
+            select(ScreeningBatchItem.status)
+            .join(ScreeningBatch, ScreeningBatch.id == ScreeningBatchItem.batch_id)
+            .where(
+                ScreeningBatchItem.application_id == JobApplication.id,
+                ScreeningBatch.organization_id == organization_id,
+            )
+            .order_by(ScreeningBatchItem.created_at.desc(), ScreeningBatchItem.id.desc())
+            .limit(1)
+            .correlate(JobApplication)
+            .scalar_subquery()
+        )
+        latest_decision_id = self._latest_decision_id_subquery()
+        screening_expr = case(
+            (latest_item_status == "queued", "queued"),
+            (latest_item_status == "running", "processing"),
+            (latest_item_status == "done", "completed"),
+            (latest_item_status == "failed", "failed"),
+            (CandidateEvaluation.status == "completed", "completed"),
+            (CandidateEvaluation.status == "failed", "failed"),
+            (JobApplication.status == "analysis_pending", "queued"),
+            (JobApplication.status == "analyzing", "processing"),
+            (JobApplication.status == "analysis_failed", "failed"),
+            (JobApplication.status == "ready_for_review", "completed"),
+            else_="not_started",
+        )
+        decision_expr = case(
+            (HRDecision.decision == "advance", "advanced"),
+            (HRDecision.decision == "hold", "hold"),
+            (HRDecision.decision == "reject", "rejected"),
+            (JobApplication.status.in_(["advanced", "hold", "rejected"]), JobApplication.status),
+            else_="pending_review",
+        )
         query = (
-            select(JobApplication, Candidate, Job, CandidateEvaluation)
+            select(JobApplication, Candidate, Job, CandidateEvaluation, HRDecision, screening_expr)
             .join(Candidate, Candidate.id == JobApplication.candidate_id)
             .join(Job, Job.id == JobApplication.job_id)
             .outerjoin(
@@ -178,16 +227,69 @@ class ReviewService:
                 (CandidateEvaluation.job_application_id == JobApplication.id)
                 & CandidateEvaluation.is_current.is_(True),
             )
+            .outerjoin(HRDecision, HRDecision.id == latest_decision_id)
             .where(JobApplication.organization_id == organization_id)
-            .order_by(JobApplication.created_at.desc())
         )
         if status is not None:
             query = query.where(JobApplication.status == status)
         if candidate_id is not None:
             query = query.where(JobApplication.candidate_id == candidate_id)
+        if job_id is not None:
+            query = query.where(JobApplication.job_id == job_id)
+        if search:
+            term = f"%{search.strip()}%"
+            query = query.where(
+                or_(
+                    Candidate.full_name.ilike(term),
+                    Candidate.email.ilike(term),
+                    Job.title.ilike(term),
+                )
+            )
+        if source:
+            normalized_source = source.strip().lower()
+            if normalized_source in {"unknown", "unspecified"}:
+                query = query.where(
+                    or_(JobApplication.source.is_(None), func.trim(JobApplication.source) == "")
+                )
+            else:
+                query = query.where(func.lower(JobApplication.source) == normalized_source)
+        if date_from is not None:
+            query = query.where(
+                JobApplication.created_at
+                >= datetime.combine(date_from, datetime.min.time(), tzinfo=UTC)
+            )
+        if date_to is not None:
+            query = query.where(
+                JobApplication.created_at
+                < datetime.combine(
+                    date_to.fromordinal(date_to.toordinal() + 1), datetime.min.time(), tzinfo=UTC
+                )
+            )
+        if processing_status is not None:
+            query = query.where(screening_expr == processing_status)
+        if decision_status is not None:
+            query = query.where(decision_expr == decision_status)
+
+        total = db.scalar(select(func.count()).select_from(query.order_by(None).subquery())) or 0
+        sort_columns = {
+            "created_at": JobApplication.created_at,
+            "score": CandidateEvaluation.score,
+        }
+        sort_column = sort_columns[sort_by]
+        if sort_by == "score":
+            # Keep absent scores after scored applications in either direction.
+            query = query.order_by(CandidateEvaluation.score.is_(None).asc())
+        query = query.order_by(
+            sort_column.asc() if sort_order == "asc" else sort_column.desc(),
+            JobApplication.id.asc(),
+        )
+        if page is not None:
+            query = query.offset((page - 1) * page_size).limit(page_size)
 
         rows = db.execute(query).all()
-        evaluations = [evaluation for _a, _c, _j, evaluation in rows if evaluation is not None]
+        evaluations = [
+            evaluation for _a, _c, _j, evaluation, _d, _s in rows if evaluation is not None
+        ]
 
         evidence_by_evaluation: dict[uuid.UUID, list[tuple[str, dict[str, Any] | None]]] = {}
         if evaluations:
@@ -222,7 +324,7 @@ class ReviewService:
                 breakdown_labels_by_evaluation[evaluation.id] = labels
 
         summaries = []
-        for application, candidate, job, evaluation in rows:
+        for application, candidate, job, evaluation, latest_decision, screening_status in rows:
             raw_evidence = (
                 evidence_by_evaluation.get(evaluation.id, []) if evaluation is not None else []
             )
@@ -260,9 +362,11 @@ class ReviewService:
                         self._as_decimal(evaluation.score if evaluation is not None else None)
                     ),
                     evidence=evidence,
+                    screening_status=screening_status,
+                    latest_decision=latest_decision,
                 )
             )
-        return summaries
+        return (summaries, total) if page is not None else summaries
 
     def list_talent_pool(
         self,
@@ -338,7 +442,9 @@ class ReviewService:
                 )
             ).all()
             for application_id, profile_data in profile_rows:
-                raw_skills = profile_data.get("skills", []) if isinstance(profile_data, dict) else []
+                raw_skills = (
+                    profile_data.get("skills", []) if isinstance(profile_data, dict) else []
+                )
                 if isinstance(raw_skills, list):
                     skills_by_application[application_id] = [
                         skill.strip()
@@ -352,7 +458,9 @@ class ReviewService:
             evaluation_id = (
                 decision.candidate_evaluation_id
                 if decision is not None
-                else evaluation.id if evaluation is not None else None
+                else evaluation.id
+                if evaluation is not None
+                else None
             )
             if evaluation_id is not None:
                 evaluation_ids.add(evaluation_id)
@@ -442,12 +550,14 @@ class ReviewService:
                 )
             )
 
-        latest_decision = db.scalar(
-            select(HRDecision)
-            .where(HRDecision.job_application_id == application.id)
-            .order_by(HRDecision.created_at.desc())
-            .limit(1)
+        decision_history = list(
+            db.scalars(
+                select(HRDecision)
+                .where(HRDecision.job_application_id == application.id)
+                .order_by(HRDecision.created_at.desc(), HRDecision.id.desc())
+            )
         )
+        latest_decision = decision_history[0] if decision_history else None
 
         score = self._as_decimal(current.score if current is not None else None)
         return ReviewBundle(
@@ -458,5 +568,6 @@ class ReviewService:
             current_evaluation=current,
             evidence=evidence,
             latest_decision=latest_decision,
+            decision_history=decision_history,
             group=assign_group(score),
         )

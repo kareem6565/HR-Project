@@ -59,8 +59,7 @@ def read_upload_file_bounded(
         total_bytes += len(chunk)
         if total_bytes > effective_max:
             logger.warning(
-                "Upload size limit exceeded for file: %s (%d bytes > %d bytes limit)",
-                file.filename,
+                "Upload size limit exceeded for incoming file (%d bytes > %d bytes limit)",
                 total_bytes,
                 effective_max,
             )
@@ -134,7 +133,8 @@ def read_batch_bounded(
             effective_max_files,
         )
         raise UploadValidationError(
-            f"Batch file count ({len(files)}) exceeds the maximum allowed limit of {effective_max_files} files.",
+            f"Batch file count ({len(files)}) exceeds the maximum allowed limit of "
+            f"{effective_max_files} files.",
             code=UPLOAD_ERROR_BATCH_LIMIT_EXCEEDED,
         )
 
@@ -175,7 +175,8 @@ def read_batch_bounded(
                     effective_max_file_bytes,
                 )
                 raise UploadValidationError(
-                    f"Uploaded file {filename!r} exceeds the maximum allowed single-file size of {effective_max_file_bytes} bytes.",
+                    f"Uploaded file {filename!r} exceeds the maximum allowed single-file size "
+                    f"of {effective_max_file_bytes} bytes.",
                     code=UPLOAD_ERROR_TOO_LARGE,
                 )
 
@@ -186,7 +187,8 @@ def read_batch_bounded(
                     effective_max_batch_bytes,
                 )
                 raise UploadValidationError(
-                    f"Total batch size exceeds the maximum allowed limit of {effective_max_batch_bytes} bytes.",
+                    f"Total batch size exceeds the maximum allowed limit of "
+                    f"{effective_max_batch_bytes} bytes.",
                     code=UPLOAD_ERROR_BATCH_LIMIT_EXCEEDED,
                 )
 

@@ -31,7 +31,7 @@ $payload = $encode(json_encode([
 $unsigned = $header . '.' . $payload;
 $signature = $encode(hash_hmac('sha256', $unsigned, $secret, true));
 $assertion = $unsigned . '.' . $signature;
-$target = rtrim($frontend, '/') . '/sso/callback#assertion=' . rawurlencode($assertion);
+$target = rtrim($frontend, '/') . '/sso/callback?entry=workspace-recruitment#assertion=' . rawurlencode($assertion);
 header('Cache-Control: no-store, private');
 header('Referrer-Policy: no-referrer');
 header('Location: ' . $target, true, 303);

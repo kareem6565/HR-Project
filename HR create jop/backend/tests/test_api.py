@@ -99,6 +99,64 @@ def bootstrap(client: httpx.Client) -> tuple[dict, dict]:
     return org, user
 
 
+def test_job_extraction_provider_failure_commits_safe_failure_status(
+    client: httpx.Client, db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.ai.providers.errors import ProviderUnavailableError
+
+    org, user = bootstrap(client)
+    headers = auth_headers(org["id"], user["id"])
+    original_description = "Original LinkedIn listing content. " * 250
+    job = client.post(
+        "/api/v1/jobs",
+        json={"title": "Software Engineer", "raw_description": original_description},
+        headers=headers,
+    ).json()
+    profile_response = client.post(
+        f"/api/v1/jobs/{job['id']}/profiles",
+        headers=headers,
+        json={
+            "status": "draft",
+            "source": "ai_extracted",
+            "creation_method": "ai_generated",
+            "raw_input_snapshot": {"original_listing_text": original_description},
+            "profile_data": {"title": "Software Engineer", "summary": "", "requirements": []},
+        },
+    )
+    assert profile_response.status_code == 201, profile_response.text
+    profile_id = uuid.UUID(profile_response.json()["id"])
+
+    def unavailable(*_args, **_kwargs):
+        raise ProviderUnavailableError("sensitive provider response must not be stored")
+
+    monkeypatch.setattr("app.ai.providers.get_provider", unavailable)
+    response = client.post(f"/api/v1/jobs/{job['id']}/extract-profile", headers=headers)
+
+    assert response.status_code == 503
+    assert "currently unavailable" in response.json()["detail"]
+    db_session.expire_all()
+    persisted = db_session.get(models.JobProfile, profile_id)
+    assert persisted.provenance["ai_extraction"]["status"] == "failed"
+    assert persisted.provenance["ai_extraction"]["error_code"] == "ProviderUnavailableError"
+    assert persisted.raw_input_snapshot["original_listing_text"] == original_description
+    assert len(persisted.raw_input_snapshot["original_listing_text"]) > 8_000
+    assert "sensitive provider response" not in str(persisted.provenance)
+    runs = db_session.scalars(
+        select(models.WorkflowRun).where(
+            models.WorkflowRun.related_entity_id == uuid.UUID(job["id"])
+        )
+    ).all()
+    assert len(runs) == 1
+    assert runs[0].status == "failed"
+    step = db_session.scalar(
+        select(models.WorkflowStepTrace).where(
+            models.WorkflowStepTrace.workflow_run_id == runs[0].id
+        )
+    )
+    assert step.error_message == "AI provider could not be initialized."
+    assert "sensitive provider response" not in (step.error_message or "")
+
+
 # ---------------------------------------------------------------------------
 # Health
 # ---------------------------------------------------------------------------
@@ -109,6 +167,134 @@ class TestHealth:
         resp = client.get("/api/v1/health")
         assert resp.status_code == 200
         assert resp.json() == {"status": "ok"}
+
+
+class TestLinkedInJobImports:
+    def test_import_requires_enabled_integration_and_valid_public_job_url(
+        self, client: httpx.Client, monkeypatch
+    ) -> None:
+        from app.core.config import settings
+
+        org, user = bootstrap(client)
+        monkeypatch.setattr(settings, "apify_import_enabled", False)
+        monkeypatch.setattr(settings, "apify_api_token", None)
+        headers = auth_headers(org["id"], user["id"])
+        disabled = client.post(
+            "/api/v1/jobs/linkedin-imports",
+            headers=headers,
+            json={"source_url": "https://www.linkedin.com/jobs/view/1234567890/"},
+        )
+        assert disabled.status_code == 503
+
+        monkeypatch.setattr(settings, "apify_import_enabled", True)
+        monkeypatch.setattr(settings, "apify_api_token", "test-only-token")
+        invalid = client.post(
+            "/api/v1/jobs/linkedin-imports",
+            headers=headers,
+            json={"source_url": "https://example.com/jobs/view/1234567890/"},
+        )
+        assert invalid.status_code == 422
+
+    def test_import_is_idempotent_and_organization_scoped(
+        self, client: httpx.Client, monkeypatch
+    ) -> None:
+        from app.core.config import settings
+        from app.services.linkedin_job_import_service import LinkedInJobImportService
+
+        org, user = bootstrap(client)
+        other_org, other_user = bootstrap(client)
+        monkeypatch.setattr(settings, "apify_import_enabled", True)
+        monkeypatch.setattr(settings, "apify_api_token", "test-only-token")
+        starts = []
+
+        async def fake_start(self, record):
+            starts.append(record.id)
+            record.actor_id = "fetch_cat/linkedin-jobs-scraper"
+            record.actor_run_id = "mock-run"
+            record.status = "running"
+
+        async def fake_refresh(self, record):
+            return None
+
+        monkeypatch.setattr(LinkedInJobImportService, "start_actor", fake_start)
+        monkeypatch.setattr(LinkedInJobImportService, "refresh", fake_refresh)
+        body = {"source_url": "https://linkedin.com/jobs/view/1234567890?trk=test"}
+        created = client.post(
+            "/api/v1/jobs/linkedin-imports", headers=auth_headers(org["id"], user["id"]), json=body
+        )
+        assert created.status_code == 202
+        repeated = client.post(
+            "/api/v1/jobs/linkedin-imports", headers=auth_headers(org["id"], user["id"]), json=body
+        )
+        assert repeated.status_code == 202
+        assert repeated.json()["id"] == created.json()["id"]
+        assert len(starts) == 1
+
+        hidden = client.get(
+            f"/api/v1/jobs/linkedin-imports/{created.json()['id']}",
+            headers=auth_headers(other_org["id"], other_user["id"]),
+        )
+        assert hidden.status_code == 404
+
+    def test_successful_import_provenance_attaches_to_reviewable_job_profile(
+        self, client: httpx.Client
+    ) -> None:
+        from datetime import UTC, datetime
+
+        org, user = bootstrap(client)
+        headers = auth_headers(org["id"], user["id"])
+        listing_url = "https://www.linkedin.com/jobs/view/1234567890/"
+        job = client.post(
+            "/api/v1/jobs", headers=headers, json={"title": "Platform Engineer", "status": "draft"}
+        )
+        assert job.status_code == 201
+        import_record = models.LinkedInJobImport(
+            organization_id=uuid.UUID(org["id"]),
+            requested_by_user_id=uuid.UUID(user["id"]),
+            job_id=None,
+            source_url=listing_url,
+            source_job_id="1234567890",
+            actor_id="fetch_cat/linkedin-jobs-scraper",
+            actor_run_id="mock-run",
+            status="succeeded",
+            result_data={"title": "Platform Engineer", "description": "Build platform services."},
+            finished_at=datetime.now(UTC),
+        )
+        db = next(client.app.dependency_overrides[get_db]())
+        db.add(import_record)
+        db.flush()
+        body = {
+            "status": "draft",
+            "source": "ai_extracted",
+            "creation_method": "pasted_external",
+            "source_original_text": "Build platform services.",
+            "source_original_listing_text": "Build platform services.",
+            "source_metadata": {
+                "source_name": "LinkedIn",
+                "source_url": listing_url,
+                "source_import_id": str(import_record.id),
+                "source_type": "linkedin",
+                "company_name": "Example Co",
+                "seniority_level": "Mid-Senior level",
+                "review_confirmed": True,
+            },
+            "profile_data": {
+                "schema_version": "1.4",
+                "title": "Platform Engineer",
+                "summary": "Build platform services.",
+                "requirements": [],
+            },
+        }
+        response = client.post(
+            f"/api/v1/jobs/{job.json()['id']}/profiles", headers=headers, json=body
+        )
+
+        assert response.status_code == 201
+        data = response.json()
+        assert data["status"] == "draft"
+        assert data["provenance"]["source"]["company_name"] == "Example Co"
+        assert data["provenance"]["linkedin_import"]["source_job_id"] == "1234567890"
+        assert str(import_record.job_id) == job.json()["id"]
 
 
 class TestAIActivityAuthorization:
@@ -195,6 +381,71 @@ class TestHeaders:
 
 
 class TestJobs:
+    def _job_with_approved_profile(self, client, headers):
+        from app.models import JobProfile
+
+        job = client.post(
+            "/api/v1/jobs",
+            json={
+                "title": "Platform Engineer",
+                "description_text": "Build platform services.",
+                "job_type": "Full-time",
+                "experience": "3 years",
+                "requirements": ["Python"],
+                "work_mode": "remote",
+            },
+            headers=headers,
+        ).json()
+        db = next(client.app.dependency_overrides[get_db]())
+        user = db.get(models.User, uuid.UUID(headers["X-User-Id"]))
+        profile = JobProfile(
+            job_id=uuid.UUID(job["id"]),
+            version_number=1,
+            status="approved",
+            source="hr_created",
+            profile_data={
+                "requirements": [{"text": "Python", "category": "must_have", "dimension": "skill"}]
+            },
+            approved_by_user_id=user.id,
+            approved_at=datetime.now(UTC),
+            is_current=True,
+        )
+        db.add(profile)
+        db.flush()
+        activated = client.patch(
+            f"/api/v1/jobs/{job['id']}", json={"status": "active"}, headers=headers
+        )
+        assert activated.status_code == 200
+        return activated.json()
+
+    def test_public_job_publish_and_close_endpoints(self, client) -> None:
+        org, user = bootstrap(client)
+        headers = auth_headers(org["id"], user["id"])
+        job = self._job_with_approved_profile(client, headers)
+        first = client.post(f"/api/v1/jobs/{job['id']}/publish", headers=headers)
+        retry = client.post(f"/api/v1/jobs/{job['id']}/publish", headers=headers)
+        assert first.status_code == retry.status_code == 200
+        assert first.json()["public_id"] == retry.json()["public_id"]
+        public = client.get(f"/api/v1/public/jobs/{first.json()['public_id']}")
+        assert public.status_code == 200
+        assert public.json()["accepting_applications"] is True
+        assert "organization_id" not in public.json() and "id" not in public.json()
+        closed = client.post(f"/api/v1/jobs/{job['id']}/close", headers=headers)
+        assert closed.status_code == 200
+        assert closed.json()["status"] == job["status"]
+        response = client.get(f"/api/v1/public/jobs/{first.json()['public_id']}")
+        assert response.json()["accepting_applications"] is False
+
+    def test_public_job_publish_enforces_tenant_and_unpublished_is_hidden(self, client) -> None:
+        org, user = bootstrap(client)
+        other_org, other_user = bootstrap(client)
+        own = auth_headers(org["id"], user["id"])
+        other = auth_headers(other_org["id"], other_user["id"])
+        job = self._job_with_approved_profile(client, own)
+        assert client.get(f"/api/v1/public/jobs/{job['public_id']}").status_code == 404
+        assert client.post(f"/api/v1/jobs/{job['id']}/publish", headers=other).status_code == 404
+        assert client.post(f"/api/v1/jobs/{job['id']}/publish", headers=own).status_code == 200
+
     def test_create_and_get_job(self, client: httpx.Client) -> None:
         org, user = bootstrap(client)
         h = auth_headers(org["id"], user["id"])
@@ -394,9 +645,7 @@ class TestCandidates:
     ) -> None:
         org, user = bootstrap(client)
         h = auth_headers(org["id"], user["id"])
-        cand = client.post(
-            "/api/v1/candidates", json={"full_name": "Archive Me"}, headers=h
-        ).json()
+        cand = client.post("/api/v1/candidates", json={"full_name": "Archive Me"}, headers=h).json()
         from app.services.resume_service import ResumeService
 
         db = next(client.app.dependency_overrides[get_db]())
@@ -440,9 +689,7 @@ class TestCandidates:
         response = client.post(f"/api/v1/candidates/{cand['id']}/archive", headers=h2)
 
         assert response.status_code == 404
-        still_active = client.get(
-            f"/api/v1/candidates/{cand['id']}", headers=h1
-        )
+        still_active = client.get(f"/api/v1/candidates/{cand['id']}", headers=h1)
         assert still_active.status_code == 200
         assert still_active.json()["status"] == "active"
 
@@ -1835,6 +2082,126 @@ def _approve_job_profile(client: httpx.Client, headers: dict, job_id: str) -> st
 
 
 class TestApplicationList:
+    def test_paginated_application_filters_keep_screening_separate_from_decisions(
+        self, client: httpx.Client, db_session: Session
+    ) -> None:
+        org, user = bootstrap(client)
+        headers = auth_headers(org["id"], user["id"])
+        organization = db_session.get(models.Organization, uuid.UUID(org["id"]))
+        user_obj = db_session.get(models.User, uuid.UUID(user["id"]))
+        first, job, candidate, _resume = _seed_application_records(
+            db_session, organization, user_obj
+        )
+        first.status = "analysis_pending"
+        first.source = "LinkedIn"
+        first.source_medium = "social"
+
+        second_resume = models.Resume(
+            candidate_id=candidate.id, file_uri="local://read-model-2.pdf"
+        )
+        db_session.add(second_resume)
+        db_session.flush()
+        second = models.JobApplication(
+            organization_id=organization.id,
+            job_id=job.id,
+            candidate_id=candidate.id,
+            resume_id=second_resume.id,
+            status="rejected",
+            source="Referral",
+        )
+        db_session.add(second)
+        db_session.flush()
+        db_session.add(
+            models.HRDecision(
+                job_application_id=second.id,
+                user_id=user_obj.id,
+                decision="reject",
+                reason="Recorded by HR",
+            )
+        )
+        db_session.flush()
+        failed_resume = models.Resume(
+            candidate_id=candidate.id, file_uri="local://read-model-failed.pdf"
+        )
+        db_session.add(failed_resume)
+        db_session.flush()
+        failed_application = models.JobApplication(
+            organization_id=organization.id,
+            job_id=job.id,
+            candidate_id=candidate.id,
+            resume_id=failed_resume.id,
+            status="analysis_failed",
+        )
+        db_session.add(failed_application)
+        db_session.flush()
+
+        paged = client.get(
+            "/api/v1/job-applications",
+            params={"page": 1, "page_size": 1, "sort_by": "created_at", "sort_order": "asc"},
+            headers=headers,
+        )
+        assert paged.status_code == 200, paged.text
+        assert paged.json()["total"] == 3
+        assert paged.json()["pages"] == 3
+        assert len(paged.json()["items"]) == 1
+
+        date_filtered = client.get(
+            "/api/v1/job-applications",
+            params={"page": 1, "page_size": 10, "job_id": str(job.id), "date_from": "2099-01-01"},
+            headers=headers,
+        )
+        assert date_filtered.status_code == 200
+        assert date_filtered.json()["total"] == 0
+        invalid_range = client.get(
+            "/api/v1/job-applications",
+            params={"date_from": "2026-12-01", "date_to": "2026-11-01"},
+            headers=headers,
+        )
+        assert invalid_range.status_code == 422
+
+        processing = client.get(
+            "/api/v1/job-applications",
+            params={"processing_status": "queued", "decision_status": "pending_review"},
+            headers=headers,
+        )
+        assert processing.status_code == 200, processing.text
+        assert [row["id"] for row in processing.json()] == [str(first.id)]
+        assert processing.json()[0]["screening_status"] == "queued"
+        assert processing.json()[0]["decision_status"] == "pending_review"
+        assert processing.json()[0]["source_medium"] == "social"
+
+        rejected = client.get(
+            "/api/v1/job-applications",
+            params={"processing_status": "failed", "decision_status": "rejected"},
+            headers=headers,
+        )
+        assert rejected.status_code == 200, rejected.text
+        assert rejected.json() == []  # a recorded rejection is not a failed screening
+
+        failed = client.get(
+            "/api/v1/job-applications",
+            params={"processing_status": "failed", "decision_status": "pending_review"},
+            headers=headers,
+        )
+        assert failed.status_code == 200, failed.text
+        assert [row["id"] for row in failed.json()] == [str(failed_application.id)]
+        assert failed.json()[0]["screening_status"] == "failed"
+        assert failed.json()[0]["decision_status"] == "pending_review"
+
+        failed_legacy = client.get(
+            "/api/v1/job-applications",
+            params={
+                "decision_status": "rejected",
+                "search": "read-model@example.com",
+                "source": "Referral",
+            },
+            headers=headers,
+        )
+        assert failed_legacy.status_code == 200, failed_legacy.text
+        assert [row["id"] for row in failed_legacy.json()] == [str(second.id)]
+        assert failed_legacy.json()[0]["screening_status"] == "not_started"
+        assert failed_legacy.json()[0]["decision_status"] == "rejected"
+
     def test_list_applications_org_scoped_with_summary_fields(
         self, client: httpx.Client, db_session: Session
     ) -> None:
@@ -1866,6 +2233,13 @@ class TestApplicationList:
         assert row["status"] == "created"
         assert row["group"] == "must_review"
         assert row["evidence"] == []
+
+        paged = client.get(
+            "/api/v1/job-applications", params={"page": 1, "page_size": 5}, headers=h
+        )
+        assert paged.status_code == 200
+        assert paged.json()["total"] == 1
+        assert [item["id"] for item in paged.json()["items"]] == [str(application.id)]
 
     def test_list_applications_includes_group_and_evidence(
         self, client: httpx.Client, db_session: Session
@@ -2350,6 +2724,8 @@ class TestReviewBundle:
         assert pool_row["score"] == "95.000"
         assert pool_row["decision"] == "hold"
         assert pool_row["decision_created_at"] is not None
+        assert len(data["decision_history"]) == 1
+        assert data["decision_history"][0]["reason"] == "Second opinion."
 
     def test_review_bundle_without_evaluation(
         self, client: httpx.Client, db_session: Session
@@ -2632,7 +3008,9 @@ class TestTalentPool:
         rejected_resp = client.get("/api/v1/talent-pool?include_rejected=true", headers=h)
         assert rejected_resp.status_code == 200
         assert {row["application_id"] for row in rejected_resp.json()} == {
-            str(hold_app.id), str(advanced_app.id), str(rejected_app.id)
+            str(hold_app.id),
+            str(advanced_app.id),
+            str(rejected_app.id),
         }
         rejected_row = next(
             row for row in rejected_resp.json() if row["application_id"] == str(rejected_app.id)

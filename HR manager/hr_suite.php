@@ -42,8 +42,24 @@ if ($hrSuitePage === 'reports' && !$isHr) { http_response_code(403); exit('غي�
     body[data-page="payroll"] [data-module]:not([data-module="payroll"]),
     body[data-page="notifications"] [data-module]:not([data-module="notifications"]),
     body[data-page="reports"] [data-module]:not([data-module="reports"]) { display:none !important; }
+    html[data-workspace-entry="hr"] body > header { animation: hera-hr-header-enter 420ms cubic-bezier(.2,.7,.25,1) both; }
+    html[data-workspace-entry="hr"] body > main { animation: hera-hr-content-enter 600ms 70ms cubic-bezier(.2,.7,.25,1) both; }
+    @keyframes hera-hr-header-enter { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
+    @keyframes hera-hr-content-enter { from { opacity: 0; transform: translateY(16px); clip-path: inset(0 0 5% 0); } to { opacity: 1; transform: none; clip-path: inset(0); } }
+    @media (prefers-reduced-motion: reduce) {
+      html[data-workspace-entry="hr"] body > header,
+      html[data-workspace-entry="hr"] body > main { animation: none !important; }
+    }
   </style>
-  <link rel="stylesheet" href="/BIC2_Mvp/assets/hera-brand.css?v=hera-unified-20261030-7" />
+  <script>
+    try {
+      if (sessionStorage.getItem('hera-workspace-entry-motion') === 'hr') {
+        sessionStorage.removeItem('hera-workspace-entry-motion');
+        document.documentElement.dataset.workspaceEntry = 'hr';
+      }
+    } catch (_) { /* The page remains usable when storage is unavailable. */ }
+  </script>
+  <link rel="stylesheet" href="/BIC2_Mvp/assets/hera-brand.css?v=hera-motion-20261116-1" />
   <script src="/BIC2_Mvp/assets/hera-language.js" defer></script>
 </head>
 <body class="hera-theme min-h-screen" data-page="<?= htmlspecialchars($hrSuitePage, ENT_QUOTES, 'UTF-8') ?>">

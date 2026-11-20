@@ -16,11 +16,13 @@ export const ApiKeySource = Object.freeze({
 
 /**
  * The active AI provider resolution.
- * @typedef {"soal" | "fake"} AiProviderValue
+ * @typedef {"soal" | "ollama" | "openrouter" | "fake"} AiProviderValue
  */
 
 export const AiProvider = Object.freeze({
   SOAL: "soal",
+  OLLAMA: "ollama",
+  OPENROUTER: "openrouter",
   FAKE: "fake",
 });
 

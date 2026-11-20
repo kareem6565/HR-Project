@@ -261,7 +261,7 @@ $cntAbsentCalc   = $totalEmp - $cntPresentToday;
     @keyframes spin { to { transform: rotate(360deg); } }
   </style>
   </style>
-  <link rel="stylesheet" href="/BIC2_Mvp/assets/hera-brand.css?v=hera-unified-20261030-7" />
+  <link rel="stylesheet" href="/BIC2_Mvp/assets/hera-brand.css?v=hera-motion-20261116-1" />
   <script src="/BIC2_Mvp/assets/hera-language.js" defer></script>
 </head>
 <body class="hera-theme min-h-screen flex">

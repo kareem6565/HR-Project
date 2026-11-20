@@ -4,7 +4,8 @@ import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YA
 import HeraAssistantMark from "../../components/common/HeraAssistantMark";
 import LoadingSpinner from "../../components/common/LoadingSpinner";
 import ErrorState from "../../components/common/ErrorState";
-import { getAnalyticsSnapshot, getCandidateSources } from "../../services/analyticsService";
+import { getAnalyticsSnapshot } from "../../services/analyticsService";
+import { getJobDistributionAnalytics } from "../../services/jobDistributionService";
 
 const DATE_RANGES = [
   { value: "30d", label: "30 days" },
@@ -15,7 +16,7 @@ export default function AnalyticsPage() {
   const [range, setRange] = useState("30d");
   const [retryCount, setRetryCount] = useState(0);
   const [snapshot, setSnapshot] = useState(null);
-  const [sources, setSources] = useState(null);
+  const [distribution, setDistribution] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
@@ -23,11 +24,12 @@ export default function AnalyticsPage() {
     let active = true;
     setLoading(true);
     setError(false);
-    Promise.all([getAnalyticsSnapshot(range), getCandidateSources()])
-      .then(([nextSnapshot, nextSources]) => {
+    const rangeDays = range === "30d" ? 30 : 90;
+    Promise.all([getAnalyticsSnapshot(range), getJobDistributionAnalytics(rangeDays)])
+      .then(([nextSnapshot, nextDistribution]) => {
         if (!active) return;
         setSnapshot(nextSnapshot);
-        setSources(nextSources);
+        setDistribution(nextDistribution);
         setLoading(false);
       })
       .catch(() => {
@@ -148,20 +150,30 @@ export default function AnalyticsPage() {
         <section className="panel analytics-sources" aria-labelledby="sources-title">
           <div className="analytics-panel-heading">
             <div>
-              <h3 id="sources-title">Candidate sources</h3>
-              <p>Source attribution is separate from application status.</p>
+              <h3 id="sources-title">Recruitment distribution</h3>
+              <p>Tracked HERA page visits and submitted applications · {periodLabel}.</p>
             </div>
-            <span className={`analytics-unavailable-badge${sources === null ? "" : " is-available"}`}>
-              {sources === null ? "Not collected" : "Available"}
-            </span>
+            <span className="analytics-unavailable-badge is-available">UTM tracking</span>
           </div>
-          {sources === null ? (
-            <p className="analytics-source-note">HERA does not currently collect candidate-source data, so no source totals can be reported.</p>
-          ) : sources.length === 0 ? (
-            <p className="analytics-source-note">No candidate-source records are available for this workspace.</p>
-          ) : (
-            <p className="analytics-source-note">Candidate-source data is available.</p>
-          )}
+          {distribution?.campaigns?.length ? <div className="analytics-campaign-table-wrap">
+            <table className="analytics-campaign-table">
+              <thead><tr><th>Campaign</th><th>Channel</th><th>Page visits</th><th>Applications</th><th>Visit to application</th></tr></thead>
+              <tbody>{distribution.campaigns.map((campaign) => <tr key={campaign.distribution_id}>
+                <td><strong>{campaign.campaign_name}</strong><small>{campaign.job_title} · {campaign.status === "shared" ? "Marked shared" : "Draft"}</small></td>
+                <td>{campaign.channel}</td>
+                <td>{campaign.views}</td>
+                <td>{campaign.applications}</td>
+                <td>{campaign.conversion_percent === null ? "—" : `${campaign.conversion_percent}%`}</td>
+              </tr>)}</tbody>
+            </table>
+          </div> : <p className="analytics-source-note">No tracked campaign visits were recorded in the {periodLabel}.</p>}
+          <div className="analytics-source-breakdown">
+            <h4>Applications by source</h4>
+            {distribution?.sources?.length ? <ul>{distribution.sources.map((source) => <li key={`${source.source}-${source.medium || "none"}`}>
+              <span>{source.source}{source.medium ? ` · ${source.medium}` : ""}</span><strong>{source.applications}</strong>
+            </li>)}</ul> : <p className="analytics-source-note">No source-tagged applications were recorded in the {periodLabel}.</p>}
+          </div>
+          <p className="analytics-source-note">Visits count tracked page requests, not unique people. Applications are counted only after submission through HERA.</p>
         </section>
       </div>
     </section>

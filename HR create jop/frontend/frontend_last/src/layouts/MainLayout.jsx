@@ -4,12 +4,25 @@ import Sidebar from "../components/layout/Sidebar";
 import Navbar from "../components/layout/Navbar";
 import HERAChatbot from "../components/chatbot/HERAChatbot";
 
+function takeWorkspaceEntryMotion(pathname) {
+  if (pathname !== "/dashboard") return "";
+  try {
+    const entryMotion = sessionStorage.getItem("hera-workspace-entry-motion");
+    if (entryMotion === "recruitment") sessionStorage.removeItem("hera-workspace-entry-motion");
+    return entryMotion === "recruitment" ? entryMotion : "";
+  } catch (_) {
+    return "";
+  }
+}
+
 export default function MainLayout() {
   const { pathname } = useLocation();
   const [isNavigationOpen, setIsNavigationOpen] = useState(false);
+  const [workspaceEntryMotion, setWorkspaceEntryMotion] = useState(() => takeWorkspaceEntryMotion(pathname));
 
   useEffect(() => {
     setIsNavigationOpen(false);
+    if (pathname !== "/dashboard") setWorkspaceEntryMotion("");
   }, [pathname]);
 
   useEffect(() => {
@@ -49,7 +62,9 @@ export default function MainLayout() {
           onMenuToggle={() => setIsNavigationOpen((open) => !open)}
         />
         <main className="page-content" id="main-content" tabIndex={-1}>
-          <Outlet />
+          <div key={pathname} className={`page-transition${workspaceEntryMotion ? ` page-transition--workspace-${workspaceEntryMotion}` : ""}`}>
+            <Outlet />
+          </div>
         </main>
         {isSchedulingPage && <HERAChatbot inline />}
       </div>

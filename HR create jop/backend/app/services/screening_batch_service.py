@@ -10,15 +10,14 @@ Manages:
 
 from __future__ import annotations
 
+import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-import uuid
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import (
-    CandidateEvaluation,
     Job,
     JobApplication,
     JobProfile,
@@ -27,17 +26,48 @@ from app.models import (
     ScreeningBatchItem,
 )
 from app.services.errors import (
+    UPLOAD_ERROR_UNSUPPORTED_TYPE,
     InvalidStateError,
     NotFoundError,
-    UPLOAD_ERROR_UNSUPPORTED_TYPE,
     ValidationError,
 )
-from app.services.storage_service import LocalFileSystemStorage, StorageProvider
+from app.services.storage_service import StorageProvider
 from app.services.upload_stream_service import BoundedFilePayload
 
 
 class ScreeningBatchService:
     """Operations for managing asynchronous screening batches and items."""
+
+    def schedule_public_application(
+        self, db: Session, *, application: JobApplication, job: Job, resume: Resume
+    ) -> ScreeningBatchItem:
+        """Durably enqueue a public application using the existing screening worker."""
+        existing = db.scalar(select(ScreeningBatchItem).where(
+            ScreeningBatchItem.source == "public_application",
+            ScreeningBatchItem.application_id == application.id,
+        ))
+        if existing is not None:
+            return existing
+        profile_id = job.published_job_profile_id
+        profile = db.get(JobProfile, profile_id) if profile_id else None
+        if profile is None or profile.job_id != job.id or profile.status != "approved":
+            raise ValidationError("The published approved JobProfile is unavailable for screening.")
+        batch = ScreeningBatch(
+            organization_id=job.organization_id, job_id=job.id, created_by_user_id=None,
+            status="queued", total_files=1, completed_files=0, failed_files=0,
+        )
+        db.add(batch)
+        db.flush()
+        item = ScreeningBatchItem(
+            batch_id=batch.id, filename=resume.original_filename or "resume",
+            storage_key=resume.file_uri, sha256=resume.checksum or "",
+            status="queued", stage="queued", source="public_application",
+            job_profile_id=profile.id, candidate_id=application.candidate_id,
+            resume_id=resume.id, application_id=application.id, max_attempts=3,
+        )
+        db.add(item)
+        db.flush()
+        return item
 
     def create_batch(
         self,

@@ -8,19 +8,19 @@ backoff for transient failures, and safe storage cleanup.
 from __future__ import annotations
 
 import argparse
-from datetime import UTC, datetime, timedelta
+import hashlib
 import logging
-from pathlib import Path
 import re
 import signal
-import sys
 import threading
-import time
 import traceback
 import uuid
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from typing import Any
 
 from pydantic import ValidationError as PydanticValidationError
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.ai.providers import get_provider
@@ -29,12 +29,10 @@ from app.core.config import settings
 from app.core.database import SessionLocal
 from app.models import (
     Candidate,
-    CandidateEvaluation,
     Job,
     JobApplication,
     JobProfile,
     Resume,
-    ScreeningBatch,
     ScreeningBatchItem,
 )
 from app.services.candidate_service import CandidateService
@@ -124,6 +122,7 @@ class ScreeningWorker:
         self.session_factory = session_factory or SessionLocal
         self.should_stop = False
         self.stop_event = threading.Event()
+        self._prefer_github_analysis = True
 
     def request_shutdown(self, signum=None, frame=None) -> None:
         logger.info("Worker shutdown signal received. Finishing active item and stopping...")
@@ -227,14 +226,19 @@ class ScreeningWorker:
                 item_id, claim_token, "JOB_NOT_FOUND", "Associated job does not exist.", db=db
             )
             return False
+        item_source = getattr(item, "source", "manual_upload")
+        pinned_profile_id = getattr(item, "job_profile_id", None)
+        approved_profile = db.get(JobProfile, pinned_profile_id) if pinned_profile_id else None
+        if approved_profile is None and item_source == "manual_upload":
+            approved_profile = next((p for p in job.profiles if p.status == "approved"), None)
 
-        approved_profile = None
-        for p in job.profiles:
-            if p.status == "approved":
-                approved_profile = p
-                break
-
-        if approved_profile is None:
+        valid_profile_statuses = (
+            {"approved", "superseded"}
+            if item_source == "public_application"
+            else {"approved"}
+        )
+        if (approved_profile is None or getattr(approved_profile, "job_id", job.id) != job.id
+                or approved_profile.status not in valid_profile_statuses):
             self._record_permanent_failure(
                 item_id,
                 claim_token,
@@ -244,13 +248,40 @@ class ScreeningWorker:
             )
             return False
 
-        # Read stored batch file
+        # Public applications already own a private Resume file; manual batches own a batch copy.
+        if item_source == "public_application":
+            app = db.get(JobApplication, item.application_id) if item.application_id else None
+            resume_record = db.get(Resume, item.resume_id) if item.resume_id else None
+            candidate_record = db.get(Candidate, item.candidate_id) if item.candidate_id else None
+            if (app is None or resume_record is None or candidate_record is None
+                    or app.organization_id != org_id or app.job_id != job.id
+                    or candidate_record.organization_id != org_id
+                    or app.resume_id != resume_record.id or app.candidate_id != candidate_record.id
+                    or resume_record.candidate_id != candidate_record.id):
+                self._record_permanent_failure(item_id, claim_token, "APPLICATION_CONTEXT_INVALID",
+                    "Public application screening context is invalid.", db=db)
+                return False
+            if resume_record.file_uri != item.storage_key:
+                self._record_permanent_failure(item_id, claim_token, "RESUME_STORAGE_MISMATCH",
+                    "Stored resume reference does not match the application.", db=db)
+                return False
+
+        # Read stored file
         try:
             raw_bytes = self.storage.read(file_uri=item.storage_key)
         except Exception as exc:
             self._log_item_failure(item, "storage_read", exc)
             self._record_permanent_failure(
                 item_id, claim_token, "STORAGE_READ_FAILED", "Failed to read stored CV file.", db=db
+            )
+            return False
+        if (
+            item_source == "public_application"
+            and hashlib.sha256(raw_bytes).hexdigest() != item.sha256
+        ):
+            self._record_permanent_failure(
+                item_id, claim_token, "RESUME_CHECKSUM_MISMATCH",
+                "Stored resume integrity check failed.", db=db
             )
             return False
 
@@ -276,7 +307,7 @@ class ScreeningWorker:
             )
             return False
 
-        # Execute candidate creation, profile extraction, and evaluation pipeline
+        # Execute candidate profile extraction and evaluation pipeline
         created_resume_uri = None
         processing_stage = "candidate_creation"
         try:
@@ -285,37 +316,31 @@ class ScreeningWorker:
                 if item.claim_token != claim_token:
                     raise RuntimeError("Claim token preempted during processing.")
 
-                # 1. Candidate
-                candidate_name = self._candidate_name_from_filename(item.filename)
-                candidate = CandidateService().create(
-                    db,
-                    organization_id=org_id,
-                    full_name=candidate_name,
-                )
-
-                # 2. Permanent resume storage
-                processing_stage = "resume_storage"
-                resume_id = uuid.uuid4()
-                extension = Path(item.filename).suffix.lower().lstrip(".")
-                created_resume_uri = self.storage.save(
-                    organization_id=org_id,
-                    resume_id=resume_id,
-                    extension=extension,
-                    stream=lambda: raw_bytes,
-                )
-                resume = Resume(
-                    id=resume_id,
-                    candidate_id=candidate.id,
-                    file_uri=created_resume_uri,
-                    original_filename=item.filename,
-                    content_type="application/pdf" if extension == "pdf" else "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    file_size_bytes=len(raw_bytes),
-                    checksum=item.sha256,
-                    extracted_text=text,
-                    status="text_extracted",
-                )
-                db.add(resume)
-                db.flush()
+                if item_source == "public_application":
+                    candidate = db.get(Candidate, item.candidate_id)
+                    resume = db.get(Resume, item.resume_id)
+                    application = db.get(JobApplication, item.application_id)
+                else:
+                    candidate_name = self._candidate_name_from_filename(item.filename)
+                    candidate = CandidateService().create(
+                        db, organization_id=org_id, full_name=candidate_name
+                    )
+                    processing_stage = "resume_storage"
+                    resume_id = uuid.uuid4()
+                    extension = Path(item.filename).suffix.lower().lstrip(".")
+                    created_resume_uri = self.storage.save(
+                        organization_id=org_id, resume_id=resume_id, extension=extension,
+                        stream=lambda: raw_bytes,
+                    )
+                    resume = Resume(
+                        id=resume_id, candidate_id=candidate.id, file_uri=created_resume_uri,
+                        original_filename=item.filename,
+                        content_type="application/pdf" if extension == "pdf" else "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        file_size_bytes=len(raw_bytes), checksum=item.sha256,
+                        extracted_text=text, status="text_extracted",
+                    )
+                    db.add(resume)
+                    db.flush()
 
                 # 3. Profile extraction
                 processing_stage = "candidate_profile_extraction"
@@ -336,15 +361,13 @@ class ScreeningWorker:
                     resume_text=resume.extracted_text,
                 )
 
-                # 4. Job application
-                processing_stage = "application_creation"
-                application = JobApplicationService().create(
-                    db,
-                    organization_id=org_id,
-                    job_id=job.id,
-                    candidate_id=candidate.id,
-                    resume_id=resume.id,
-                )
+                # Manual upload creates its application here; public applications already have one.
+                if item_source == "manual_upload":
+                    processing_stage = "application_creation"
+                    application = JobApplicationService().create(
+                        db, organization_id=org_id, job_id=job.id,
+                        candidate_id=candidate.id, resume_id=resume.id,
+                    )
 
                 # 5. Candidate evaluation
                 processing_stage = "candidate_evaluation"
@@ -361,6 +384,7 @@ class ScreeningWorker:
                     db,
                     job_application_id=application.id,
                     organization_id=org_id,
+                    job_profile_id=approved_profile.id,
                 )
 
                 # Re-verify claim token before finalizing item state
@@ -383,7 +407,9 @@ class ScreeningWorker:
                 ScreeningBatchService._update_batch_state(batch)
 
             db.commit()
-            logger.info("Successfully processed batch item %s for candidate %s", item_id, candidate.id)
+            logger.info(
+                "Successfully processed batch item %s for candidate %s", item_id, candidate.id
+            )
             return True
 
         except Exception as exc:
@@ -438,7 +464,6 @@ class ScreeningWorker:
                 "exception_class": type(error).__name__,
                 **_safe_exception_diagnostics(error),
             },
-            exc_info=(type(error), error, error.__traceback__),
         )
 
     def _record_permanent_failure(
@@ -528,14 +553,35 @@ class ScreeningWorker:
         """Execute one processing cycle: recover leases then process one item."""
         with self.session_factory() as db:
             self.recover_stale_leases(db)
+            from app.services.github_evidence_service import GitHubEvidenceService
+
+            GitHubEvidenceService.recover_stale(db)
+            analysis_id = (
+                GitHubEvidenceService().claim_next(db)
+                if self._prefer_github_analysis
+                else None
+            )
+            if analysis_id is not None:
+                self._prefer_github_analysis = False
+                GitHubEvidenceService().process_claimed(db, analysis_id)
+                return True
             claimed = self.claim_next_item(db)
 
-        if claimed is None:
-            return False
+        if claimed is not None:
+            item_id, claim_token = claimed
+            with self.session_factory() as db:
+                self.process_item(db, item_id, claim_token)
+            self._prefer_github_analysis = True
+            return True
 
-        item_id, claim_token = claimed
         with self.session_factory() as db:
-            self.process_item(db, item_id, claim_token)
+            from app.services.github_evidence_service import GitHubEvidenceService
+
+            analysis_id = GitHubEvidenceService().claim_next(db)
+            if analysis_id is None:
+                return False
+            GitHubEvidenceService().process_claimed(db, analysis_id)
+        self._prefer_github_analysis = False
         return True
 
     def run_loop(self, poll_interval_seconds: float = 2.0) -> None:
@@ -547,7 +593,7 @@ class ScreeningWorker:
                 if not processed:
                     self.stop_event.wait(timeout=poll_interval_seconds)
             except Exception as exc:
-                logger.error("Unhandled error in worker loop: %s", type(exc).__name__, exc_info=True)
+                logger.error("Unhandled error in worker loop: %s", type(exc).__name__)
                 self.stop_event.wait(timeout=poll_interval_seconds)
 
         logger.info("Screening worker loop exited cleanly.")

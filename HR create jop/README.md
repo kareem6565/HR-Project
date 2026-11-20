@@ -117,16 +117,10 @@ Copy-Item .env.example .env
 docker compose up --build -d
 ```
 
-Open <http://localhost/BIC2_Mvp/login.php> for HR Manager,
-<http://localhost:8080> for recruitment, and <http://localhost:8001/docs> for
-the API. Compose defaults to `AI_PROVIDER=fake` so it can run without cloud
-credentials. For AI-powered employee chat with OpenRouter, set
-`AI_PROVIDER=openrouter`, `OPENROUTER_API_KEY`, and `OPENROUTER_MODEL` in the
-root `.env`; Compose passes these settings to the backend. Never commit either
-`.env` file.
-HR can add and approve policy
-sections from the **سياسات الشركة** page; the assistant does not invent answers
-when no approved section matches.
+Open <http://localhost:8080> and <http://localhost:8000/docs>. Compose defaults
+to `AI_PROVIDER=fake` so it can run without cloud credentials. To use Ollama,
+set `AI_PROVIDER=ollama` and `OLLAMA_API_KEY` in the root `.env`; Compose passes
+the provider settings to the backend. Never commit either `.env` file.
 
 ## Configuration
 
@@ -138,11 +132,9 @@ settings are supplied by the root `.env` and `docker-compose.yml`.
 | `DATABASE_URL` | Application PostgreSQL connection. |
 | `TEST_DATABASE_URL` | Separate disposable test database; test setup recreates its tables. |
 | `STORAGE_ROOT_DIR` | Backend file storage root (default: `backend/storage`). |
-| `AI_PROVIDER` | `openrouter`, `gemini`, `ollama`, `soal`, or `fake`. |
+| `AI_PROVIDER` | `ollama`, `soal`, or `fake`. |
 | `OLLAMA_API_KEY`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL` | Ollama Cloud access and model; default model is `gemma4:31b`. |
 | `SOAL_API_KEY`, `SOAL_BASE_URL`, `SOAL_MODEL` | Optional Soal-compatible provider configuration. |
-| `GEMINI_API_KEY`, `GEMINI_BASE_URL`, `GEMINI_MODEL` | Google Gemini API access through Google's OpenAI-compatible endpoint; `gemini-3.8-flash` is the configured free-tier model. |
-| `OPENROUTER_API_KEY`, `OPENROUTER_BASE_URL`, `OPENROUTER_MODEL`, `OPENROUTER_MAX_TOKENS` | OpenRouter credentials, endpoint, model, and output-token ceiling; defaults to `https://openrouter.ai/api/v1`, `deepseek/deepseek-v4.1-flash-1017:nitro`, and 1024 tokens. |
 | `JWT_SECRET_KEY` | Required signing secret; use a unique high-entropy value outside tests. |
 | `ENABLE_SCREENING_WORKER` | Enables the embedded batch worker; defaults to `true`. |
 | `VITE_API_BASE_URL` | Frontend API base, including `/api/v1`; local proxy default is `/api/v1`. |

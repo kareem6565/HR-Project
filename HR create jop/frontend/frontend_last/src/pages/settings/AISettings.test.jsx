@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import AISettings from "./AISettings";
 import { ThemeProvider } from "../../context/ThemeContext";
 import { MemoryRouter } from "react-router-dom";
+import { getAISettings } from "../../services/aiSettingsService";
 
 vi.mock("../../services/aiSettingsService", () => ({
   getAISettings: vi.fn().mockResolvedValue({
@@ -54,5 +55,25 @@ describe("AI settings appearance", () => {
 
     expect(await screen.findByRole("button", { name: "Dark" })).toHaveAttribute("aria-pressed", "true");
     await waitFor(() => expect(document.documentElement).toHaveAttribute("data-theme", "dark"));
+  });
+
+  it("shows OpenRouter as the active provider and reports a missing key safely", async () => {
+    vi.mocked(getAISettings).mockResolvedValueOnce({
+      provider: "openrouter",
+      model: "openai/gpt-4o-mini",
+      has_api_key: false,
+      api_key_source: "none",
+    });
+
+    render(
+      <ThemeProvider>
+        <MemoryRouter><AISettings /></MemoryRouter>
+      </ThemeProvider>,
+    );
+
+    expect(await screen.findByText("openrouter")).toBeInTheDocument();
+    expect(screen.getByText("openai/gpt-4o-mini")).toBeInTheDocument();
+    expect(screen.getByText("Missing")).toBeInTheDocument();
+    expect(screen.getByText(/manage the provider and its API key in the backend environment/i)).toBeInTheDocument();
   });
 });

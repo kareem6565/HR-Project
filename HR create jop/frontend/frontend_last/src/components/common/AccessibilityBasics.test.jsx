@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import React, { useState } from "react";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import React from "react";
+import { act, render, screen, fireEvent } from "@testing-library/react";
 import fs from "fs";
 import path from "path";
 import Modal from "./Modal";
@@ -22,6 +22,8 @@ describe("HERA UI-01: Accessibility Basics and Interactive Controls", () => {
     // Prefers reduced motion
     expect(cssContent).toContain("@media (prefers-reduced-motion: reduce)");
     expect(cssContent).toContain("animation: none !important");
+    expect(cssContent).toContain(".page-transition");
+    expect(cssContent).toContain("@keyframes hera-page-enter");
 
     // Skip to content
     expect(cssContent).toContain(".skip-to-content");
@@ -104,6 +106,52 @@ describe("HERA UI-01: Accessibility Basics and Interactive Controls", () => {
       unmount();
       expect(document.activeElement).toBe(button);
       document.body.removeChild(button);
+    });
+
+    it("keeps the dialog mounted during its exit motion and restores focus afterward", () => {
+      vi.useFakeTimers();
+      const trigger = document.createElement("button");
+      document.body.appendChild(trigger);
+      trigger.focus();
+
+      const { rerender } = render(
+        <Modal open={true} title="Animated Close" onClose={vi.fn()}>
+          <p>Dialog content</p>
+        </Modal>
+      );
+
+      rerender(
+        <Modal open={false} title="Animated Close" onClose={vi.fn()}>
+          <p>Dialog content</p>
+        </Modal>
+      );
+
+      expect(screen.getByRole("dialog").parentElement).toHaveClass("is-closing");
+      act(() => vi.advanceTimersByTime(160));
+
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(trigger).toHaveFocus();
+      document.body.removeChild(trigger);
+      vi.useRealTimers();
+    });
+
+    it("skips modal exit delay when reduced motion is enabled", () => {
+      const originalMatchMedia = window.matchMedia;
+      window.matchMedia = vi.fn().mockReturnValue({ matches: true });
+      const { rerender } = render(
+        <Modal open={true} title="Reduced Motion" onClose={vi.fn()}>
+          <p>Dialog content</p>
+        </Modal>
+      );
+
+      rerender(
+        <Modal open={false} title="Reduced Motion" onClose={vi.fn()}>
+          <p>Dialog content</p>
+        </Modal>
+      );
+
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      window.matchMedia = originalMatchMedia;
     });
   });
 

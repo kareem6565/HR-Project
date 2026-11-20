@@ -24,9 +24,9 @@ from app.ai.contracts import (
     requirement_key,
     validate_candidate_profile_extraction,
     validate_evaluation_explanation,
+    validate_interview_question_set,
     validate_job_profile_extraction,
     validate_match_evidence_list,
-    validate_interview_question_set,
 )
 from app.services.errors import ApplicationError, ValidationError
 
@@ -241,6 +241,8 @@ def test_requirement_category_and_dimension_enums_are_locked() -> None:
     assert REQUIREMENT_CATEGORIES == ("must_have", "important", "nice_to_have")
     assert REQUIREMENT_DIMENSIONS == (
         "skill",
+        "technical_skill",
+        "soft_skill",
         "experience",
         "education",
         "certification",

@@ -1,13 +1,12 @@
 # AGENTS.md
 
 Repository for the AI HR Recruitment Assistant. Candidate review loop is
-implemented end-to-end; the backend supports Google Gemini, Soal, and Ollama;
-`FakeAIProvider` remains the deterministic code default when `AI_PROVIDER` is
-unset. Work is in `backend/`, `frontend/frontend_last/`,
-and the employee portal at `../HR manager/`.
+implemented end-to-end; the local backend currently runs the **real Soal AI
+provider** (`AI_PROVIDER=soal` in `backend/.env`, gateway `soal.help`, model
+`gemini-3.5-flash`) — `FakeAIProvider` remains the deterministic code default
+when `AI_PROVIDER` is unset. Work is in `backend/` and `frontend/frontend_last/`.
 See [`docs/roadmap.md`](docs/roadmap.md) for phase status. This is a
-**pre-production MVP**: the Docker Compose stack includes the HR Manager,
-PostgreSQL, FastAPI backend, and recruitment frontend.
+**pre-production MVP**: no production auth and no Docker app deployment yet.
 The HERA chat/matching, interviews, interview questions, and AI-activity
 observability features are implemented against real backend endpoints.
 
@@ -93,7 +92,7 @@ the helper scripts in `tools/` over raw commands:
 
 ```powershell
 tools\start_hera.ps1                             # PostgreSQL + Nginx/PHP + backend + frontend
-tools\start_hera.ps1 -InfraOnly                  # HR Manager on :80 + PostgreSQL + chatbot backend
+tools\start_hera.ps1 -InfraOnly                  # HR Manager on :80 + PostgreSQL only
 tools\start_backend.ps1                          # postgres not included; backend on :8000
 tools\start_frontend.ps1                         # frontend_last Vite on :5174
 tools\start_frontend.ps1 5174 http://localhost:8000/api/v1   # dev against local backend
@@ -109,11 +108,10 @@ backend\.venv\Scripts\python.exe tools\e2e_screening_flow.py   # live E2E (needs
   (soal.help rejects it with a 401).
 - Backend logs: `%TEMP%\opencode\backend.log` / `backend.err.log`; frontend:
   `%TEMP%\opencode\frontend_last.log`.
-- Ports: HR Manager Nginx `:80`; Docker FastAPI `:8001` (manual local FastAPI `:8000`);
-  frontend_last dev `:5174`;
+- Ports: HR Manager Nginx `:80`; FastAPI `:8000`; frontend_last dev `:5174`;
   Postgres `:5432` via `docker compose up -d postgres` (tests need it; the test
   DB is created fresh per run). CORS already allows 5173/5174/5175 +
-  localhost:8000 (`backend/.env`) and localhost:8001 for the Docker backend.
+  localhost:8000 (`backend/.env`).
 - Frontend API base defaults to `https://soal.help/api/v1`; override with
   `VITE_API_BASE_URL` (e.g. `http://localhost:8000/api/v1`) for local work.
 - E2E scores vary run to run with the live LLM; the harness only asserts

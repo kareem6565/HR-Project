@@ -400,7 +400,8 @@ class TestJobSourceProvenance:
         assert provenance["field_origins"]["title"] == "hr_edited_after_hera_suggestion"
         assert response.json()["profile_data"]["title"] == "HR edited title"
         assert response.json()["raw_input_snapshot"]["original_listing_text"] == listing
-        assert client.get(f"/api/v1/jobs/{job['id']}", headers=headers).json()["raw_description"] == listing
+        persisted_job = client.get(f"/api/v1/jobs/{job['id']}", headers=headers).json()
+        assert persisted_job["raw_description"] == listing
 
     def test_unreviewed_or_malformed_source_is_rejected(
         self, client: httpx.Client, db_session: Session
@@ -421,7 +422,6 @@ class TestJobSourceProvenance:
         }
         response = client.post(f"/api/v1/jobs/{job['id']}/profiles", headers=headers, json=body)
         assert response.status_code == 422
-
         body["source_metadata"]["source_url"] = "https://example.test/job"
         body["source_metadata"]["review_confirmed"] = False
         response = client.post(f"/api/v1/jobs/{job['id']}/profiles", headers=headers, json=body)
@@ -436,3 +436,214 @@ class TestJobSourceProvenance:
         body["source_metadata"]["review_confirmed"] = True
         response = client.post(f"/api/v1/jobs/{job['id']}/profiles", headers=headers, json=body)
         assert response.status_code == 422
+
+
+class TestJobDescriptionBuilder:
+    def test_saves_builder_origin_and_original_pasted_text(self, client, db_session):
+        organization, user = seed_org_user(db_session)
+        headers = auth_headers(str(organization.id), str(user.id))
+        job = create_job(client, headers)
+        source_text = "Backend Engineer\nPreferred: Redis"
+        response = client.post(
+            f"/api/v1/jobs/{job['id']}/profiles",
+            headers=headers,
+            json={
+                "status": "draft",
+                "source": "ai_extracted",
+                "creation_method": "pasted_external",
+                "source_original_text": source_text,
+                "needs_confirmation": ["Seniority needs HR review"],
+                "profile_data": {
+                    "schema_version": "1.1",
+                    "title": "Backend Engineer",
+                    "summary": "Build services",
+                    "requirements": [
+                        {
+                            "text": "Redis",
+                            "category": "nice_to_have",
+                            "dimension": "skill",
+                            "source": "manual_description",
+                            "source_quote": "Redis is mandatory",
+                        }
+                    ],
+                },
+            },
+        )
+        assert response.status_code == 201
+        body = response.json()
+        assert body["status"] == "draft"
+        assert body["provenance"]["creation_method"] == "pasted_external"
+        assert body["raw_input_snapshot"]["original_listing_text"] == source_text
+        assert body["raw_input_snapshot"]["needs_confirmation"] == [
+            "Seniority needs HR review",
+            "Redis",
+        ]
+        assert body["profile_data"]["requirements"][0]["category"] == "important"
+        assert body["profile_data"]["requirements"][0].get("source_quote") is None
+        assert "Redis" in body["raw_input_snapshot"]["needs_confirmation"]
+
+    def test_generate_returns_editable_structured_draft(self, client, db_session):
+        organization, user = seed_org_user(db_session)
+        response = client.post(
+            "/api/v1/jobs/ai/build-description",
+            headers=auth_headers(str(organization.id), str(user.id)),
+            json={
+                "operation": "generate",
+                "title": "Backend Engineer",
+                "department": "Engineering",
+                "role_context": "Build reliable recruitment services.",
+                "additional_requirements": "Required skills:\nPython, FastAPI",
+            },
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["creation_method"] == "ai_generated"
+        assert body["title"] == "Backend Engineer"
+        assert {item["category"] for item in body["requirements"]} == {"must_have"}
+        assert all(item["dimension"] == "technical_skill" for item in body["requirements"])
+
+    def test_parse_marks_unquoted_requirements_uncertain(self, client, db_session, monkeypatch):
+        from app.api.v1.routes import job_drafts
+
+        organization, user = seed_org_user(db_session)
+        payload = {
+            "schema_version": "1.1",
+            "title": "Backend Engineer",
+            "summary": "Build backend systems",
+            "requirements": [
+                {
+                    "text": "Python required",
+                    "category": "must_have",
+                    "dimension": "skill",
+                    "source": "manual_description",
+                    "source_quote": "Python required",
+                },
+                {
+                    "text": "Invented certification",
+                    "category": "must_have",
+                    "dimension": "certification",
+                    "source": "manual_description",
+                    "source_quote": "not present in source",
+                },
+                {
+                    "text": "React",
+                    "category": "must_have",
+                    "dimension": "skill",
+                    "source": "manual_description",
+                    "source_quote": "React",
+                },
+            ],
+            "needs_confirmation": [],
+        }
+        monkeypatch.setattr(job_drafts, "_derive_description_payload", lambda _body: payload)
+        response = client.post(
+            "/api/v1/jobs/ai/build-description",
+            headers=auth_headers(str(organization.id), str(user.id)),
+            json={"operation": "parse", "source_text": "Python required"},
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["creation_method"] == "pasted_external"
+        assert body["requirements"][0]["category"] == "must_have"
+        assert body["requirements"][1]["category"] == "important"
+        assert body["requirements"][1]["source_quote"] is None
+        assert "Invented certification" in body["needs_confirmation"]
+        assert body["requirements"][2]["category"] == "important"
+        assert "React" in body["needs_confirmation"]
+
+    def test_requires_hr_auth_and_required_generation_fields(self, client, db_session):
+        organization, user = seed_org_user(db_session)
+        unauthenticated = client.post(
+            "/api/v1/jobs/ai/build-description",
+            json={"operation": "generate", "title": "Engineer", "department": "Engineering"},
+        )
+        assert unauthenticated.status_code == 401
+        invalid = client.post(
+            "/api/v1/jobs/ai/build-description",
+            headers=auth_headers(str(organization.id), str(user.id)),
+            json={"operation": "generate", "title": "Engineer"},
+        )
+        assert invalid.status_code == 422
+
+    def test_builder_limits_pasted_input(self, client, db_session):
+        organization, user = seed_org_user(db_session)
+        response = client.post(
+            "/api/v1/jobs/ai/build-description",
+            headers=auth_headers(str(organization.id), str(user.id)),
+            json={"operation": "parse", "source_text": "x" * 50_001},
+        )
+        assert response.status_code == 422
+
+    def test_improve_operation_returns_only_the_selected_section(
+        self, client, db_session, monkeypatch
+    ):
+        from app.api.v1.routes import job_drafts
+
+        organization, user = seed_org_user(db_session)
+        monkeypatch.setattr(
+            job_drafts,
+            "_derive_description_payload",
+            lambda _body: {
+                "schema_version": "1.4",
+                "title": "Engineer",
+                "summary": "Lead service reliability and incident response.",
+                "requirements": [
+                    {"text": "Unrelated skill", "category": "must_have", "dimension": "skill"}
+                ],
+                "needs_confirmation": ["Unrelated field"],
+            },
+        )
+        response = client.post(
+            "/api/v1/jobs/ai/build-description",
+            headers=auth_headers(str(organization.id), str(user.id)),
+            json={
+                "operation": "improve",
+                "title": "Engineer",
+                "department": "Engineering",
+                "section_name": "Responsibilities item",
+                "selected_section": "Own service reliability.",
+            },
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["summary"] == "Lead service reliability and incident response."
+        assert body["requirements"] == []
+        assert body["needs_confirmation"] == []
+
+    def test_malformed_provider_output_is_rejected(self, client, db_session, monkeypatch):
+        from app.api.v1.routes import job_drafts
+
+        organization, user = seed_org_user(db_session)
+        monkeypatch.setattr(
+            job_drafts,
+            "_derive_description_payload",
+            lambda _body: {"title": "Engineer", "confidence": 0.9},
+        )
+        response = client.post(
+            "/api/v1/jobs/ai/build-description",
+            headers=auth_headers(str(organization.id), str(user.id)),
+            json={"operation": "generate", "title": "Engineer", "department": "Engineering"},
+        )
+        assert response.status_code == 422
+        assert "Invalid AI output contract" in response.json()["detail"]
+
+    def test_provider_timeout_is_returned_as_a_retryable_error(
+        self, client, db_session, monkeypatch
+    ):
+        from app.ai import providers
+        from app.ai.providers import FakeAIProvider
+
+        organization, user = seed_org_user(db_session)
+        monkeypatch.setattr(
+            providers,
+            "get_provider",
+            lambda *_args, **_kwargs: FakeAIProvider(failure_kind="timeout"),
+        )
+        response = client.post(
+            "/api/v1/jobs/ai/build-description",
+            headers=auth_headers(str(organization.id), str(user.id)),
+            json={"operation": "generate", "title": "Engineer", "department": "Engineering"},
+        )
+        assert response.status_code == 503
+        assert response.json()["error_type"] == "timeout"

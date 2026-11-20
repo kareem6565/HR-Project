@@ -14,6 +14,8 @@ import Dashboard from "./pages/dashboard/Dashboard";
 import JobsList from "./pages/jobs/JobsList";
 import JobDetails from "./pages/jobs/JobDetails";
 import JobForm from "./pages/jobs/JobForm";
+import PublicJobDetails from "./pages/jobs/PublicJobDetails";
+import PublicJobApplication from "./pages/jobs/PublicJobApplication";
 import CandidatesList from "./pages/candidates/CandidatesList";
 import CandidateDetails from "./pages/candidates/CandidateDetails";
 import ScreenCandidates from "./pages/candidates/ScreenCandidates";
@@ -22,6 +24,7 @@ import ApplicationsList from "./pages/applications/ApplicationsList";
 import ApplicationReview from "./pages/review/ApplicationReview";
 import TalentPoolList from "./pages/talent-pool/TalentPoolList";
 import TalentPoolConsent from "./pages/talent-pool/TalentPoolConsent";
+import GitHubEvidenceConsent from "./pages/github-evidence/GitHubEvidenceConsent";
 import MatchingResults from "./pages/matching/MatchingResults";
 import AnalyticsPage from "./pages/analytics/AnalyticsPage";
 import AISettings from "./pages/settings/AISettings";
@@ -50,6 +53,7 @@ function AuthenticatedRoutes() {
         {/* Legacy identity route redirected */}
         <Route path="/identity" element={<Navigate to="/dashboard" replace />} />
         <Route path="/talent-pool/consent" element={<TalentPoolConsent />} />
+        <Route path="/github-evidence/consent" element={<GitHubEvidenceConsent />} />
 
         {/* Protected app routes */}
         <Route
@@ -120,6 +124,9 @@ export default function App() {
           {/* Public capability page is outside AuthProvider and the application shell. */}
           <Route path="/interview/schedule" element={<CandidateInterviewPortal />} />
           <Route path="/talent-pool/consent" element={<TalentPoolConsent />} />
+          <Route path="/github-evidence/consent" element={<GitHubEvidenceConsent />} />
+          <Route path="/careers/:publicId" element={<PublicJobDetails />} />
+          <Route path="/careers/:publicId/apply" element={<PublicJobApplication />} />
           <Route path="*" element={<AuthenticatedRoutes />} />
         </Routes>
       </BrowserRouter>

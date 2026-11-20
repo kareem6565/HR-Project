@@ -16,6 +16,7 @@ import jwt
 from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.ai.actor_context import ai_actor_context
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import decode_access_token
@@ -124,6 +125,7 @@ async def get_request_context(
                 },
             )
 
+        ai_actor_context.set((user.id, user.organization_id))
         return RequestContext(
             user_id=user.id,
             organization_id=user.organization_id,
@@ -187,6 +189,7 @@ async def get_request_context(
     if not user.is_active or user.status != "active":
         raise HTTPException(status_code=403, detail="User is not active.")
 
+    ai_actor_context.set((user.id, user.organization_id))
     return RequestContext(
         user_id=user.id,
         organization_id=user.organization_id,
