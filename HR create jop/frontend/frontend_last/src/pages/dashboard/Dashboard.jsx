@@ -150,7 +150,7 @@ export default function Dashboard() {
                       <XAxis
                         type="number"
                         allowDecimals={false}
-                        tick={{ fill: "var(--hera-muted)", fontSize: 11 }}
+                        tick={{ fill: "var(--hera-muted)", fontSize: 13 }}
                         axisLine={false}
                         tickLine={false}
                       />
@@ -158,7 +158,7 @@ export default function Dashboard() {
                         type="category"
                         dataKey="job"
                         width={170}
-                        tick={{ fill: "var(--hera-ink)", fontSize: 12 }}
+                        tick={{ fill: "var(--hera-ink)", fontSize: 13 }}
                         tickFormatter={formatJobTick}
                         axisLine={false}
                         tickLine={false}
