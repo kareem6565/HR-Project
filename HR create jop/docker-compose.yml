@@ -44,8 +44,6 @@ services:
       OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
       OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openrouter/free}
       OPENROUTER_MAX_TOKENS: ${OPENROUTER_MAX_TOKENS:-1024}
-      HR_SSO_SHARED_SECRET: ${HR_SSO_SHARED_SECRET:-}
-      HR_SSO_ISSUER: ${HR_SSO_ISSUER:-hr-manager}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-hera-dev-jwt-secret-key-explicitly-configured-32bytes}
     depends_on:
       postgres:
