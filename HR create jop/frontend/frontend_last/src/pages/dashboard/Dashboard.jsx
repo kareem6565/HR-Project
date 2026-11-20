@@ -146,11 +146,11 @@ export default function Dashboard() {
                       margin={{ top: 8, right: 18, left: 8, bottom: 8 }}
                       barCategoryGap="34%"
                     >
-                      <CartesianGrid stroke="var(--hera-border)" horizontal={false} />
+                      <CartesianGrid stroke="var(--color-border)" horizontal={false} />
                       <XAxis
                         type="number"
                         allowDecimals={false}
-                        tick={{ fill: "var(--hera-muted)", fontSize: 13 }}
+                        tick={{ fill: "var(--color-muted)", fontSize: 13 }}
                         axisLine={false}
                         tickLine={false}
                       />
@@ -158,17 +158,17 @@ export default function Dashboard() {
                         type="category"
                         dataKey="job"
                         width={170}
-                        tick={{ fill: "var(--hera-ink)", fontSize: 13 }}
+                        tick={{ fill: "var(--color-text)", fontSize: 13 }}
                         tickFormatter={formatJobTick}
                         axisLine={false}
                         tickLine={false}
                         interval={0}
                       />
                       <Tooltip
-                        cursor={{ fill: "rgba(27, 58, 58, 0.05)" }}
-                        contentStyle={{ border: "1px solid var(--hera-border)", borderRadius: 10, boxShadow: "0 8px 24px rgba(16, 38, 35, .12)" }}
+                        cursor={{ fill: "var(--dashboard-chart-cursor)" }}
+                        contentStyle={{ border: "1px solid var(--color-border)", borderRadius: 10, background: "var(--color-surface)", color: "var(--color-text)", boxShadow: "0 8px 24px rgba(16, 38, 35, .12)" }}
                       />
-                      <Bar dataKey="applications" name="Applications" fill="var(--hera-teal)" radius={[0, 5, 5, 0]} maxBarSize={28} />
+                      <Bar dataKey="applications" name="Applications" fill="var(--dashboard-chart-bar)" radius={[0, 5, 5, 0]} maxBarSize={28} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
