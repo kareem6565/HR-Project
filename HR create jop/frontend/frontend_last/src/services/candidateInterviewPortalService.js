@@ -26,3 +26,12 @@ export function bookCandidateInterview({ token, availabilityId, scheduledTime })
     scheduled_time: scheduledTime,
   });
 }
+
+export function rescheduleCandidateInterview({ token, interviewId, availabilityId, scheduledTime }) {
+  return post("/candidate-portal/interview/reschedule", {
+    token,
+    interview_id: interviewId,
+    availability_id: availabilityId,
+    scheduled_time: scheduledTime,
+  });
+}

@@ -11,7 +11,17 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.main import app
-from app.models import Candidate, Job, JobApplication, Organization, Resume, User
+from app.models import (
+    CalendarSyncOutbox,
+    Candidate,
+    Interview,
+    InterviewAvailability,
+    Job,
+    JobApplication,
+    Organization,
+    Resume,
+    User,
+)
 from app.services.decision_service import DecisionService
 from app.services.scheduling_workflow_service import SchedulingWorkflowService
 
@@ -105,6 +115,57 @@ def test_api_advance_gate_denies_interview_scheduling_before_decision(client: ht
     )
     assert resp.status_code == 422
     assert "Interview scheduling denied" in resp.json()["detail"]
+    assert db_session.query(CalendarSyncOutbox).count() == 0
+
+
+def test_api_hr_schedule_commits_exactly_one_calendar_outbox_row(
+    client: httpx.Client, db_session: Session
+) -> None:
+    org, user, interviewer, job, candidate, application = seed_entities(db_session)
+    headers = auth_headers(str(org.id), str(user.id))
+
+    decision_response = client.post(
+        f"/api/v1/job-applications/{application.id}/decisions",
+        headers=headers,
+        json={"decision": "advance"},
+    )
+    assert decision_response.status_code == 201
+
+    db_session.add(
+        InterviewAvailability(
+            organization_id=org.id,
+            interviewer_user_id=interviewer.id,
+            scheduled_date=date(2026, 11, 20),
+            start_time="09:00",
+            end_time="12:00",
+            duration_minutes=30,
+            timezone="UTC",
+            status="available",
+        )
+    )
+    db_session.commit()
+
+    response = client.post(
+        "/api/v1/interviews",
+        headers=headers,
+        json={
+            "candidate_id": str(candidate.id),
+            "job_id": str(job.id),
+            "interview_type": "technical",
+            "scheduled_date": "2026-11-20",
+            "scheduled_time": "10:00 AM",
+            "interviewer_user_id": str(interviewer.id),
+            "scheduled_duration_minutes": 30,
+        },
+    )
+    assert response.status_code == 201
+    interview_id = response.json()["id"]
+    rows = db_session.query(CalendarSyncOutbox).filter(
+        CalendarSyncOutbox.interview_id == interview_id
+    ).all()
+    assert len(rows) == 1
+    assert rows[0].operation == "upsert_interview"
+    assert rows[0].status == "pending"
 
 
 def test_api_hr_decision_is_consistent_in_application_list_and_review_bundle(
@@ -224,8 +285,14 @@ def test_api_invitation_creation_and_candidate_portal_booking(client: httpx.Clie
     assert book_resp.json()["status"] == "scheduled"
     assert book_resp.json()["scheduled_time"] == "10:00"
     assert book_resp.json()["timezone"] == "UTC"
+    assert book_resp.json().get("rescheduled") is False
 
-    # 7. A used invitation no longer exposes slots or permits rescheduling.
+    # 7. A booked invitation no longer exposes slots or permits rescheduling when ineligible.
+    interview = db_session.get(Interview, uuid.UUID(book_resp.json()["interview_id"]))
+    assert interview is not None
+    interview.status = "completed"
+    db_session.commit()
+
     remaining_resp = client.post(
         "/api/v1/candidate-portal/interview/slots",
         json={"token": token, "month": "2026-11-01"},

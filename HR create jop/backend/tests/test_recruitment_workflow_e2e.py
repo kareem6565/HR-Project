@@ -495,13 +495,14 @@ def test_candidate_books_available_slot_and_prevents_double_booking(
     db_session.refresh(issue.invitation)
     assert issue.invitation.status == "booked"
 
-    # A used invitation cannot be reused to inspect or book another slot.
+    # A booked invitation may remain eligible for rescheduling via the same token:
+    # it can expose appropriate alternative slots for that same interview.
     remaining_slots = workflow.list_available_slots_for_invitation(
         db_session,
         token=issue.token,
         month=date(2026, 11, 1),
     )
-    assert remaining_slots == []
+    assert any(slot["start_time"] == "10:00" for slot in remaining_slots)
 
     # 6. Attempting to book the occupied 09:00 slot fails with ConflictError (409)
     # Create another candidate & invitation
@@ -538,8 +539,10 @@ def test_candidate_books_available_slot_and_prevents_double_booking(
         )
 
 
-def test_candidate_invitation_is_single_booking_and_requires_hr_reissue_to_reschedule(db_session: Session) -> None:
-    """Stage I: HR must cancel a booked interview before issuing a replacement link."""
+def test_candidate_reschedule_preserves_interview_and_requires_cancel_for_replacement_invite(
+    db_session: Session,
+) -> None:
+    """Stage I (approved EPIC 6): candidate reschedules via same token/interview; HR must cancel before reissuing."""
     org, recruiter, interviewer, job, candidate, application = seed_test_pipeline(db_session)
     workflow = SchedulingWorkflowService()
 
@@ -570,6 +573,8 @@ def test_candidate_invitation_is_single_booking_and_requires_hr_reissue_to_resch
     slots = workflow.list_available_slots_for_invitation(
         db_session, token=issue.token, month=date(2026, 11, 1)
     )
+    assert {s["start_time"] for s in slots} == {"13:00", "14:00"}
+
     # Book 13:00
     interview = workflow.candidate_book_slot(
         db_session,
@@ -579,17 +584,34 @@ def test_candidate_invitation_is_single_booking_and_requires_hr_reissue_to_resch
     )
     db_session.commit()
     assert interview.status == "scheduled"
+    original_id = interview.id
 
-    # The same public link cannot cancel or move the booked interview.
-    with pytest.raises(ValidationError, match="already been used"):
-        workflow.candidate_book_slot(
+    # The same public link can reschedule the booked interview when eligible (same interview preserved).
+    rescheduled = workflow.candidate_reschedule(
+        db_session,
+        token=issue.token,
+        interview_id=interview.id,
+        availability_id=slots[1]["availability_id"],
+        scheduled_time="14:00",
+    )
+    db_session.commit()
+    assert rescheduled.id == original_id
+    assert rescheduled.status == "scheduled"
+    assert rescheduled.scheduled_time == "14:00"
+    view = workflow.get_candidate_view(db_session, token=issue.token)
+    assert view["interview_id"] == original_id
+    assert view["scheduled_time"] == "14:00"
+    assert view["can_reschedule"] is True
+
+    # Cannot reschedule a different interview id with this token.
+    with pytest.raises(ValidationError):
+        workflow.candidate_reschedule(
             db_session,
             token=issue.token,
-            availability_id=slots[1]["availability_id"],
-            scheduled_time="14:00",
+            interview_id=uuid.uuid4(),
+            availability_id=slots[0]["availability_id"],
+            scheduled_time="13:00",
         )
-    view = workflow.get_candidate_view(db_session, token=issue.token)
-    assert view["scheduled_time"] == interview.scheduled_time
 
     with pytest.raises(ConflictError, match="Cancel it before issuing a replacement link"):
         workflow.create_invitation(

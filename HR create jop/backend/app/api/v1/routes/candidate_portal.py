@@ -13,6 +13,7 @@ from app.api.v1.schemas.candidate_portal import (
     CandidatePortalMonthSlotsRequest,
     CandidatePortalTokenRequest,
     CandidatePortalViewResponse,
+    CandidateRescheduleRequest,
     InvitationCreateRequest,
     InvitationResponse,
 )
@@ -101,10 +102,7 @@ def candidate_book_interview(
     body: CandidateBookSlotRequest,
     db: Session = Depends(get_db),
 ):
-    """Candidate selects and books an offered interview slot.
-
-    Protected by database row locking to prevent concurrent double-booking.
-    """
+    """Candidate selects and books an offered interview slot (or reschedules if eligible)."""
     interview = SchedulingWorkflowService().candidate_book_slot(
         db,
         token=body.token,
@@ -119,4 +117,35 @@ def candidate_book_interview(
         scheduled_time=interview.scheduled_time,
         scheduled_duration_minutes=interview.scheduled_duration_minutes,
         timezone=availability.timezone if availability is not None else "UTC",
+        interview_id=interview.id,
+        rescheduled=bool(getattr(interview, "rescheduled_via_invite", False)),
+    )
+
+
+@router.post(
+    "/candidate-portal/interview/reschedule",
+    response_model=CandidateBookingResponse,
+)
+def candidate_reschedule_interview(
+    body: CandidateRescheduleRequest,
+    db: Session = Depends(get_db),
+):
+    """Candidate reschedules a booked interview using the same invitation token and interview ID."""
+    interview = SchedulingWorkflowService().candidate_reschedule(
+        db,
+        token=body.token,
+        interview_id=body.interview_id,
+        availability_id=body.availability_id,
+        scheduled_time=body.scheduled_time,
+    )
+    db.commit()
+    availability = db.get(InterviewAvailability, body.availability_id)
+    return CandidateBookingResponse(
+        status=interview.status,
+        scheduled_date=interview.scheduled_date.isoformat(),
+        scheduled_time=interview.scheduled_time,
+        scheduled_duration_minutes=interview.scheduled_duration_minutes,
+        timezone=availability.timezone if availability is not None else "UTC",
+        interview_id=interview.id,
+        rescheduled=True,
     )

@@ -21,15 +21,16 @@ services:
   backend:
     build:
       context: ./backend
-    env_file:
-      - path: ./backend/.env
-        required: false
     container_name: hr_ai_assistant_backend
     ports:
       - "8000:8000"
+    env_file:
+      - path: ./backend/.env
+        required: false
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-hr_ai_assistant}:${POSTGRES_PASSWORD:-hr_ai_assistant}@postgres:5432/${POSTGRES_DB:-hr_ai_assistant}
       AI_PROVIDER: ${AI_PROVIDER:-openrouter}
+      FRONTEND_BASE_URL: http://localhost:${FRONTEND_PORT:-5174}
       OLLAMA_API_KEY: ${OLLAMA_API_KEY:-}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-https://ollama.com/v1}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma4:31b}
