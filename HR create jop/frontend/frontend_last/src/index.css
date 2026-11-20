@@ -7531,8 +7531,8 @@ td details blockquote {
 .dashboard-intro-copy > p:last-child {
   max-width: 610px;
   color: rgba(245, 249, 247, .8);
-  font-size: 14px;
-  line-height: 1.75;
+  font-size: clamp(16px, 1.25vw, 18px);
+  line-height: 1.6;
 }
 
 .dashboard-live-indicator {
