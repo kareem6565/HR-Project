@@ -2739,7 +2739,7 @@ textarea {
 
 .application-filter-primary-row {
   display: grid;
-  grid-template-columns: minmax(220px, 1.6fr) minmax(150px, 1fr) minmax(170px, 1.1fr) auto;
+  grid-template-columns: minmax(220px, 1.6fr) minmax(150px, 1fr) auto;
   align-items: end;
   gap: 10px;
 }
@@ -2849,7 +2849,7 @@ textarea {
 
 @media (max-width: 1080px) {
   .application-filter-primary-row {
-    grid-template-columns: minmax(190px, 1.4fr) minmax(140px, 1fr) minmax(155px, 1fr);
+    grid-template-columns: minmax(190px, 1.4fr) minmax(140px, 1fr);
   }
 
   .application-filter-actions {

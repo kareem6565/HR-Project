@@ -96,6 +96,7 @@ describe("Applications score formatting", () => {
     render(<MemoryRouter><ApplicationsList /></MemoryRouter>);
     await user.type(screen.getByRole("searchbox", { name: "Search candidates or jobs" }), "Ada");
     await waitFor(() => expect(getApplications).toHaveBeenLastCalledWith(expect.objectContaining({ search: "Ada", page: 1, page_size: 20 })));
+    await user.click(screen.getByRole("button", { name: /More filters/ }));
     await user.selectOptions(screen.getByLabelText("CV processing"), "failed");
     await waitFor(() => expect(getApplications).toHaveBeenLastCalledWith(expect.objectContaining({ search: "Ada", processing_status: "failed" })));
     await user.click(screen.getAllByRole("button", { name: "Reset filters" })[0]);
