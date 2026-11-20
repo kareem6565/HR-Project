@@ -35,9 +35,27 @@
   --color-border: var(--hera-border);
   --color-primary: var(--hera-teal);
   --color-primary-dark: var(--hera-teal-hover);
-  --sidebar-bg: var(--hera-teal-deep);
-  --sidebar-muted: #9EADA8;
-  --sidebar-active-bg: rgba(255, 255, 255, 0.08);
+  --sidebar-bg: #EAF1ED;
+  --sidebar-text: var(--hera-teal-deep);
+  --sidebar-muted: #5D7169;
+  --sidebar-hover-bg: rgba(8, 42, 36, .055);
+  --sidebar-active-bg: #DCE9E2;
+  --sidebar-border: #D6E1DB;
+  --sidebar-active-accent: var(--hera-teal);
+  --dashboard-hero-background: linear-gradient(112deg, #EDF4F0 0%, #E1ECE6 100%);
+  --dashboard-hero-border: rgba(8, 42, 36, .12);
+  --dashboard-hero-heading: var(--hera-teal-deep);
+  --dashboard-hero-copy: #4F655D;
+  --dashboard-hero-kicker: #35594F;
+  --dashboard-hero-orbit: rgba(8, 42, 36, .12);
+  --dashboard-live-border: rgba(8, 42, 36, .14);
+  --dashboard-live-background: rgba(255, 255, 255, .72);
+  --dashboard-live-text: var(--hera-teal-deep);
+  --dashboard-action-border: rgba(8, 42, 36, .18);
+  --dashboard-action-text: var(--hera-teal-deep);
+  --dashboard-action-background: rgba(255, 255, 255, .52);
+  --dashboard-action-hover-border: rgba(8, 42, 36, .3);
+  --dashboard-action-hover-background: rgba(255, 255, 255, .84);
   --focus-ring: 0 0 0 3px var(--hera-focus-ring);
   --radius-md: 12px;
   --radius-lg: 16px;
@@ -201,6 +219,27 @@
   --color-primary-dark: #1d5d53;
   --hera-focus-ring: rgba(120, 184, 173, 0.35);
   --focus-ring: 0 0 0 3px var(--hera-focus-ring);
+  --sidebar-bg: var(--hera-teal-deep);
+  --sidebar-text: #fff;
+  --sidebar-muted: #9EADA8;
+  --sidebar-hover-bg: rgba(255, 255, 255, .06);
+  --sidebar-active-bg: rgba(255, 255, 255, .08);
+  --sidebar-border: rgba(255, 255, 255, .08);
+  --sidebar-active-accent: var(--hera-gold);
+  --dashboard-hero-background: linear-gradient(112deg, #183a39 0%, #214847 100%);
+  --dashboard-hero-border: rgba(233, 217, 138, .22);
+  --dashboard-hero-heading: var(--hera-cream-subtle);
+  --dashboard-hero-copy: rgba(245, 249, 247, .8);
+  --dashboard-hero-kicker: #f0dfa0;
+  --dashboard-hero-orbit: rgba(233, 217, 138, .26);
+  --dashboard-live-border: rgba(245, 249, 247, .2);
+  --dashboard-live-background: rgba(255, 255, 255, .07);
+  --dashboard-live-text: #f5f9f7;
+  --dashboard-action-border: rgba(245, 249, 247, .24);
+  --dashboard-action-text: #f5f9f7;
+  --dashboard-action-background: rgba(255, 255, 255, .075);
+  --dashboard-action-hover-border: rgba(245, 249, 247, .48);
+  --dashboard-action-hover-background: rgba(255, 255, 255, .14);
 }
 
 :root[data-theme="dark"] body,
@@ -433,7 +472,8 @@ button {
 .sidebar {
   width: 240px;
   background: var(--sidebar-bg);
-  color: #fff;
+  color: var(--sidebar-text);
+  border-inline-end: 1px solid var(--sidebar-border);
   padding: 25px 15px;
   display: flex;
   flex-direction: column;
@@ -523,15 +563,15 @@ button {
 }
 
 .nav-link:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: #fff;
+  background: var(--sidebar-hover-bg);
+  color: var(--sidebar-text);
 }
 
 .nav-link.active {
   background: var(--sidebar-active-bg);
-  color: #fff;
+  color: var(--sidebar-text);
   font-weight: 600;
-  box-shadow: inset 3px 0 0 var(--hera-gold);
+  box-shadow: inset 3px 0 0 var(--sidebar-active-accent);
 }
 
 .sidebar-bottom {
@@ -540,13 +580,13 @@ button {
 }
 
 .sidebar-admin-section {
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--sidebar-border);
   padding-top: 8px;
   margin-bottom: 4px;
 }
 
 .powered {
-  color: #667085;
+  color: var(--sidebar-muted);
   font-size: 11px;
   padding: 16px 13px 4px;
 }
@@ -7465,9 +7505,9 @@ td details blockquote {
   min-height: 232px;
   overflow: hidden;
   padding: clamp(26px, 3.4vw, 42px);
-  border: 1px solid rgba(233, 217, 138, .22);
+  border: 1px solid var(--dashboard-hero-border);
   border-radius: 18px;
-  background: linear-gradient(112deg, #183a39 0%, #214847 100%);
+  background: var(--dashboard-hero-background);
   box-shadow: 0 15px 38px rgba(18, 49, 46, .12);
 }
 
@@ -7479,7 +7519,7 @@ td details blockquote {
   aspect-ratio: 1;
   inset-inline-end: -150px;
   top: -205px;
-  border: 1px solid rgba(233, 217, 138, .26);
+  border: 1px solid var(--dashboard-hero-orbit);
   border-radius: 50%;
   box-shadow: 0 0 0 28px rgba(255, 255, 255, .025), 0 0 0 66px rgba(111, 168, 184, .045);
   pointer-events: none;
@@ -7495,7 +7535,7 @@ td details blockquote {
 }
 
 .dashboard-intro h2 {
-  color: var(--hera-cream-subtle);
+  color: var(--dashboard-hero-heading);
   font-size: clamp(24px, 3vw, 34px);
   line-height: 1.22;
   max-width: 720px;
@@ -7503,7 +7543,7 @@ td details blockquote {
 
 .dashboard-kicker {
   margin: 0 0 12px;
-  color: #f0dfa0;
+  color: var(--dashboard-hero-kicker);
   font-size: 11px;
   font-weight: 750;
   letter-spacing: 0.09em;
@@ -7530,7 +7570,7 @@ td details blockquote {
 
 .dashboard-intro-copy > p:last-child {
   max-width: 610px;
-  color: rgba(245, 249, 247, .8);
+  color: var(--dashboard-hero-copy);
   font-size: clamp(16px, 1.25vw, 18px);
   line-height: 1.6;
 }
@@ -7541,10 +7581,10 @@ td details blockquote {
   gap: 8px;
   flex: 0 0 auto;
   padding: 7px 10px;
-  border: 1px solid rgba(245, 249, 247, .2);
+  border: 1px solid var(--dashboard-live-border);
   border-radius: 999px;
-  background: rgba(255, 255, 255, .07);
-  color: #f5f9f7;
+  background: var(--dashboard-live-background);
+  color: var(--dashboard-live-text);
   font-size: 11px;
   font-weight: 650;
 }
@@ -8280,14 +8320,14 @@ td details blockquote {
 }
 
 .dashboard-redesign .dashboard-action-secondary {
-  border: 1px solid rgba(245, 249, 247, .24);
-  color: #f5f9f7;
-  background: rgba(255, 255, 255, .075);
+  border: 1px solid var(--dashboard-action-border);
+  color: var(--dashboard-action-text);
+  background: var(--dashboard-action-background);
 }
 
 .dashboard-redesign .dashboard-action-secondary:hover {
-  border-color: rgba(245, 249, 247, .48);
-  background: rgba(255, 255, 255, .14);
+  border-color: var(--dashboard-action-hover-border);
+  background: var(--dashboard-action-hover-background);
 }
 
 :root[data-theme="dark"] .dashboard-redesign .dashboard-action-primary {
@@ -8297,9 +8337,9 @@ td details blockquote {
 }
 
 :root[data-theme="dark"] .dashboard-redesign .dashboard-action-secondary {
-  border-color: rgba(245, 249, 247, .24);
-  color: #f5f9f7;
-  background: rgba(255, 255, 255, .075);
+  border-color: var(--dashboard-action-border);
+  color: var(--dashboard-action-text);
+  background: var(--dashboard-action-background);
 }
 
 .dashboard-charts-overview {
