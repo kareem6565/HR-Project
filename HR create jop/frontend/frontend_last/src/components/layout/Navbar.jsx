@@ -1,12 +1,14 @@
 import React from "react";
-import { LogOut, Menu, User as UserIcon, X } from "lucide-react";
+import { LogOut, Menu, Moon, Sun, User as UserIcon, X } from "lucide-react";
 import useAuth from "../../hooks/useAuth";
+import { useTheme } from "../../context/ThemeContext";
 import { BRAND } from "../../config/brand";
 import { HR_MANAGER_LOGOUT_URL } from "../../config/hrManager";
 import { getTitleForPath } from "../../config/routes";
 
 export default function Navbar({ pathname, isNavigationOpen = false, onMenuToggle }) {
   const { user, logout } = useAuth();
+  const { theme, setTheme } = useTheme();
 
   const matchedTitle = getTitleForPath(pathname);
   const handleLogout = () =>
@@ -30,6 +32,17 @@ export default function Navbar({ pathname, isNavigationOpen = false, onMenuToggl
       </div>
 
       <div className="top-actions">
+        <button
+          className="theme-toggle"
+          type="button"
+          aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+          aria-pressed={theme === "dark"}
+          title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+        >
+          {theme === "dark" ? <Sun size={17} aria-hidden="true" /> : <Moon size={17} aria-hidden="true" />}
+          <span className="theme-toggle-label">{theme === "dark" ? "Light mode" : "Dark mode"}</span>
+        </button>
 
         {user && (
           <div
