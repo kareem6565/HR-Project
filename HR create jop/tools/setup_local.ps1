@@ -24,6 +24,8 @@ function New-Secret([int]$length = 48) {
 
 $sharedSecret = New-Secret
 $jwtSecret = New-Secret
+$previousAppEnv = $env:APP_ENV
+$previousSeedPassword = $env:HR_SEED_PASSWORD
 
 # ── Backend environment ────────────────────────────────────────────────────────
 $backendEnv = Join-Path $backend ".env"
@@ -40,6 +42,24 @@ if (-not (Test-Path $backendEnv)) {
     $existing = Get-Content $backendEnv | Where-Object { $_ -match '^HR_SSO_SHARED_SECRET=(.+)$' }
     if ($existing) {
         $sharedSecret = ($existing -split '=', 2)[1].Trim()
+    }
+}
+
+# The seed script intentionally fails closed when APP_ENV is absent. Read the
+# local backend setting if it was not explicitly provided to this process.
+$seedAppEnv = $env:APP_ENV
+if (-not $seedAppEnv) {
+    $appEnvSetting = Get-Content $backendEnv | Where-Object { $_ -match '^\s*APP_ENV\s*=' } | Select-Object -Last 1
+    if ($appEnvSetting) {
+        $seedAppEnv = ($appEnvSetting -split '=', 2)[1].Trim().Trim('"').Trim("'")
+    }
+}
+if (-not $seedAppEnv) { throw "APP_ENV must be set in backend/.env or the process environment before seeding." }
+$seedPassword = $env:HR_SEED_PASSWORD
+if (-not $seedPassword) {
+    $seedPasswordSetting = Get-Content $backendEnv | Where-Object { $_ -match '^\s*HR_SEED_PASSWORD\s*=' } | Select-Object -Last 1
+    if ($seedPasswordSetting) {
+        $seedPassword = ($seedPasswordSetting -split '=', 2)[1].Trim().Trim('"').Trim("'")
     }
 }
 
@@ -86,7 +106,13 @@ Push-Location $backend
 & $python -m alembic upgrade head
 if ($LASTEXITCODE -ne 0) { Pop-Location; throw "alembic upgrade head failed" }
 & $python "..\tools\bootstrap_hera_org.py"
+if ($LASTEXITCODE -ne 0) { Pop-Location; throw "organization bootstrap failed" }
+$env:APP_ENV = $seedAppEnv
+if ($seedPassword) { $env:HR_SEED_PASSWORD = $seedPassword }
 & $python "..\tools\seed_hr_manager.py"
+if ($LASTEXITCODE -ne 0) { Pop-Location; throw "HR Manager seed failed" }
+$env:APP_ENV = $previousAppEnv
+$env:HR_SEED_PASSWORD = $previousSeedPassword
 Pop-Location
 
 # ── Frontend dependencies ──────────────────────────────────────────────────────
@@ -98,8 +124,7 @@ if (-not (Test-Path (Join-Path $frontend "node_modules"))) {
 }
 
 Write-Output ""
-Write-Output "setup complete. HR sign-in: employee code HR001 (password: hr123)"
-Write-Output "change the seeded password before real use."
+Write-Output "setup complete. Seeded account credentials follow the APP_ENV and HR_SEED_PASSWORD policy."
 
 if (-not $SkipStart) {
     & (Join-Path $PSScriptRoot "start_hera.ps1")

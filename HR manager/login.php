@@ -45,6 +45,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if ($user && password_verify($password, $user['password_hash'])) {
                 loginUser($user);
+                if (!empty($user['must_change_password'])) {
+                    redirect('/BIC2_Mvp/change_password.php');
+                }
                 redirect(roleHome($user['role']));
             }
             $error = $loginMode === 'legacy'

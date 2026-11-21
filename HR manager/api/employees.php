@@ -90,8 +90,8 @@ if ($method === 'POST') {
         $role = in_array($body['role'] ?? '', ['admin', 'hr', 'manager', 'employee']) ? $body['role'] : 'employee';
 
         $stmt = $pdo->prepare(
-            "INSERT INTO users (emp_code, email, name, password_hash, role, category_id, basic_salary, yearly_vacation_days)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            "INSERT INTO users (emp_code, email, name, password_hash, role, category_id, basic_salary, yearly_vacation_days, must_change_password)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, TRUE)
              RETURNING id"
         );
         $stmt->execute([
@@ -151,6 +151,7 @@ if ($method === 'POST') {
         if (!empty($body['password'])) {
             $fields[] = 'password_hash = ?';
             $params[] = password_hash($body['password'], PASSWORD_BCRYPT, ['cost' => 12]);
+            $fields[] = 'must_change_password = TRUE';
         }
 
         if (empty($fields)) jsonResponse(false, 'No fields to update.');
