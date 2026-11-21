@@ -332,9 +332,9 @@ export default function ApplicationReview() {
         // Fallback to selected job's results page or general matching
         const targetJobId = routerLocation.state?.jobId || bundle?.job?.id;
         if (targetJobId) {
-          navigate(`/matching?jobId=${targetJobId}`);
+          navigate(`/matching-results?jobId=${targetJobId}`);
         } else {
-          navigate("/matching");
+          navigate("/matching-results");
         }
       } else {
         await load();

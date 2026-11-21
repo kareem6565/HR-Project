@@ -79,7 +79,7 @@ export default function Dashboard() {
             <Link className="btn btn-primary" to="/applications">
               Review applications <ArrowRight size={15} aria-hidden="true" />
             </Link>
-            <Link className="btn btn-secondary" to="/evaluations">Evaluations</Link>
+            <Link className="btn btn-secondary" to="/applications">Applications</Link>
             <Link className="btn btn-secondary" to="/jobs">
               Manage jobs <BriefcaseBusiness size={15} aria-hidden="true" />
             </Link>
@@ -103,7 +103,7 @@ export default function Dashboard() {
             <div className="dashboard-shortcuts">
               <Link className="btn btn-primary" to="/jobs/new">Create a vacancy</Link>
               <Link className="btn btn-secondary" to="/candidates">Review candidates</Link>
-              <Link className="btn btn-secondary" to="/evaluations">Open evaluations</Link>
+              <Link className="btn btn-secondary" to="/applications">Open applications</Link>
             </div>
           </div>
         </section>

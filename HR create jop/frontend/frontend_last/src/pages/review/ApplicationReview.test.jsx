@@ -61,7 +61,7 @@ function renderPage(initialEntry = "/applications/app-1/review", state = undefin
     <MemoryRouter initialEntries={initialEntries}>
       <Routes>
         <Route path="/applications/:id/review" element={<ApplicationReview />} />
-        <Route path="/matching" element={<div data-testid="matching-page">Matching Page</div>} />
+        <Route path="/matching-results" element={<div data-testid="matching-page">Matching Page</div>} />
         <Route path="/applications/:id/review" element={<ApplicationReview />} />
       </Routes>
     </MemoryRouter>

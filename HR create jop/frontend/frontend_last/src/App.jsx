@@ -19,7 +19,6 @@ import PublicJobApplication from "./pages/jobs/PublicJobApplication";
 import CandidatesList from "./pages/candidates/CandidatesList";
 import CandidateDetails from "./pages/candidates/CandidateDetails";
 import ScreenCandidates from "./pages/candidates/ScreenCandidates";
-import EvaluationsList from "./pages/evaluations/EvaluationsList";
 import ApplicationsList from "./pages/applications/ApplicationsList";
 import ApplicationReview from "./pages/review/ApplicationReview";
 import TalentPoolList from "./pages/talent-pool/TalentPoolList";
@@ -37,6 +36,7 @@ import InterviewQuestions from "./pages/interview-questions/InterviewQuestions";
 import QuestionSetBuilder from "./pages/interview-questions/QuestionSetBuilder";
 import AIActivityList from "./pages/ai-activity/AIActivityList";
 import NotFound from "./pages/NotFound";
+import LegacyRedirect from "./components/common/LegacyRedirect";
 
 function AuthenticatedRoutes() {
   return (
@@ -74,7 +74,7 @@ function AuthenticatedRoutes() {
           <Route path="/candidates/screen" element={<ScreenCandidates />} />
           <Route path="/candidates/:id" element={<CandidateDetails />} />
 
-          <Route path="/evaluations" element={<EvaluationsList />} />
+          <Route path="/evaluations" element={<LegacyRedirect to="/applications" />} />
 
           <Route path="/applications" element={<ApplicationsList />} />
           <Route path="/applications/:id/review" element={<ApplicationReview />} />
@@ -82,7 +82,7 @@ function AuthenticatedRoutes() {
 
           <Route path="/talent-pool" element={<TalentPoolList />} />
           <Route path="/matching-results" element={<MatchingResults />} />
-          <Route path="/matching" element={<MatchingResults />} />
+          <Route path="/matching" element={<LegacyRedirect to="/matching-results" />} />
           <Route path="/analytics" element={<AnalyticsPage />} />
 
           {/* Admin-only settings route */}
