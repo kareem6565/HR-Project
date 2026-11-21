@@ -526,12 +526,18 @@ class CandidateEvaluationWorkflow:
         )
         self._enforce_context_consistency(application, job_profile, candidate_profile)
         input_reference = self._input_reference(application, job_profile, candidate_profile)
+        from app.services.job_profile_requirements import get_effective_job_requirements
+
+        requirements_data, requirements_source = get_effective_job_requirements(
+            application.job, job_profile
+        )
+        input_reference["requirements_source"] = requirements_source
         resume_text = application.resume.extracted_text
 
         try:
             payload = self.generate(
                 job_title=job_profile.profile_data.get("title"),
-                requirements_data=job_profile.profile_data.get("requirements"),
+                requirements_data=requirements_data,
                 candidate_skills=candidate_profile.profile_data.get("skills", []),
                 resume_text=resume_text,
                 candidate_profile_fields=candidate_profile.profile_data,

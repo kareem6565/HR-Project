@@ -144,14 +144,12 @@ export default function ApplicationsList() {
                   </button>
                 ))}
               </div>
-              {group.id === "decision" && (
-                <p className="application-filter-note">
-                  Application states mirror an HR decision recorded for the candidate.
-                </p>
-              )}
             </div>
           ))}
         </div>
+        <p className="application-filter-note">
+          Application states mirror an HR decision recorded for the candidate.
+        </p>
         <div className="application-filter-primary-row">
           <label className="application-filter-search">
             <span><Search size={14} aria-hidden="true" /> Search</span>

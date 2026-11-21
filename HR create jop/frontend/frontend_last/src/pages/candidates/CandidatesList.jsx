@@ -108,7 +108,7 @@ export default function CandidatesList() {
   if (error) return <ErrorState message="Unable to load candidates. Please try again." onRetry={load} />;
 
   return (
-    <section>
+    <section className="candidates-page">
       <div className="section-head">
         <div>
           <p className="eyebrow">CANDIDATES</p>
@@ -158,7 +158,7 @@ export default function CandidatesList() {
       </div>
 
       {!candidates.length ? (
-        <EmptyState message="No candidates yet. Start a screening to add candidates from CVs." />
+        <EmptyState message="No candidates yet. Start a screening to add candidates from CVs." illustration="/brand/illustrations/candidates.png" />
       ) : (
         <>
           <div className="panel table-panel">

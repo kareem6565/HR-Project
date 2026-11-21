@@ -451,7 +451,7 @@ export default function MatchingResults() {
           </div>
 
           {!jobs.length ? (
-            <EmptyState message="No jobs available. Create a job first to view candidate matches." />
+            <EmptyState message="No jobs available. Create a job first to view candidate matches." illustration="/brand/illustrations/jobs.png" />
           ) : (
             <div
               className="jobs-picker-grid"
@@ -625,7 +625,7 @@ export default function MatchingResults() {
           )}
 
           {!filteredCandidates.length ? (
-            <EmptyState message="No candidates match your filters for this job." />
+            <EmptyState message="No candidates match your filters for this job." illustration="/brand/illustrations/matching-results.png" />
           ) : (
             <>
               <div

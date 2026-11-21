@@ -31,6 +31,7 @@ from app.services.errors import (
     NotFoundError,
     ValidationError,
 )
+from app.services.job_profile_requirements import get_effective_job_requirements
 from app.services.storage_service import StorageProvider
 from app.services.upload_stream_service import BoundedFilePayload
 
@@ -101,6 +102,7 @@ class ScreeningBatchService:
                 "Screening requires an approved JobProfile. "
                 "Extract a profile and approve it in HR review before screening candidates."
             )
+        get_effective_job_requirements(job, approved_profile)
 
         # Preload existing applications and their resume checksums for this job
         stmt = (

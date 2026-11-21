@@ -154,6 +154,7 @@ def screen_candidates(
     from app.services.candidate_service import CandidateService
     from app.services.errors import ValidationError
     from app.services.job_application_service import JobApplicationService
+    from app.services.job_profile_requirements import get_effective_job_requirements
     from app.services.job_profile_service import JobProfileService
     from app.services.job_service import JobService
     from app.services.resume_details_service import derive_screening_payloads
@@ -215,15 +216,14 @@ def screen_candidates(
                 )
                 created_file_uris.append(resume.file_uri)
 
+                screening_requirements, _ = get_effective_job_requirements(
+                    job, approved_profile
+                )
                 profile_payload, evidence_payload, explanation_payload = derive_screening_payloads(
                     full_name=candidate.full_name,
                     job_title=job.title,
                     resume_text=resume.extracted_text,
-                    requirements=(
-                        approved_profile.profile_data.get("requirements")
-                        if approved_profile is not None
-                        else []
-                    ),
+                    requirements=screening_requirements,
                 )
                 profile_extractor = get_provider(
                     settings,
@@ -478,6 +478,7 @@ def _run_candidate_evaluation(
     from app.core.config import settings
     from app.models import JobApplication
     from app.services.errors import NotFoundError
+    from app.services.job_profile_requirements import get_effective_job_requirements
     from app.services.job_profile_service import JobProfileService
     from app.services.job_service import JobService
     from app.services.resume_details_service import (
@@ -496,9 +497,7 @@ def _run_candidate_evaluation(
     ):
         if profile.status == "approved":
             approved_profile = profile
-    requirements = (
-        approved_profile.profile_data.get("requirements") if approved_profile is not None else []
-    )
+    requirements, _ = get_effective_job_requirements(job, approved_profile)
     resume = ResumeService().get(
         db,
         resume_id=application.resume_id,

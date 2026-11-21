@@ -4,6 +4,7 @@ import {
   Plus,
   XCircle,
   Calendar,
+  CalendarClock,
   CalendarDays,
   Clock3,
   CheckCircle2,
@@ -208,7 +209,13 @@ export default function InterviewsList() {
           <p className="muted-note">{stats.thisWeek} scheduled this week</p>
         </div>
         <div className="interview-heading-actions">
-          <button className="btn-secondary" onClick={() => navigate("/interviews/availability")}>Manage availability</button>
+          <button
+            className="interview-availability-button"
+            onClick={() => navigate("/interviews/availability")}
+          >
+            <CalendarClock size={17} aria-hidden="true" />
+            <span>Manage availability</span>
+          </button>
           <button className="primary" onClick={() => navigate("/interviews/schedule")}>
             <Plus size={18} /> Schedule Interview
           </button>

@@ -40,6 +40,7 @@ from app.services.errors import UploadValidationError
 from app.services.job_application_service import JobApplicationService
 from app.services.resume_details_service import derive_screening_payloads
 from app.services.screening_batch_service import ScreeningBatchService
+from app.services.job_profile_requirements import get_effective_job_requirements
 from app.services.storage_service import LocalFileSystemStorage, StorageProvider
 from app.services.text_extraction_service import extract_text
 
@@ -344,11 +345,14 @@ class ScreeningWorker:
 
                 # 3. Profile extraction
                 processing_stage = "candidate_profile_extraction"
+                screening_requirements, _ = get_effective_job_requirements(
+                    job, approved_profile
+                )
                 profile_payload, evidence_payload, explanation_payload = derive_screening_payloads(
                     full_name=candidate.full_name,
                     job_title=job.title,
                     resume_text=resume.extracted_text,
-                    requirements=approved_profile.profile_data.get("requirements") or [],
+                    requirements=screening_requirements,
                 )
                 profile_extractor = get_provider(
                     settings,
