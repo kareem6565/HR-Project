@@ -36,3 +36,110 @@
 .public-application-success { margin-top:24px;padding:18px;border:1px solid #b8ded0;border-radius:12px;background:#effaf5;color:#1e553f; }
 .public-job-footer { max-width:900px;margin:20px auto 0;text-align:center;color:#75837e;font-size:13px; }
 @media(max-width:600px){.public-job-page{padding:18px 12px 28px}.public-job-card{border-radius:15px}.public-job-meta{gap:7px}}
+
+:root[data-theme="dark"] .public-job-page {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+:root[data-theme="dark"] .public-job-brand {
+  color: var(--color-text);
+}
+
+:root[data-theme="dark"] .public-job-mark {
+  background: #263d38;
+  color: #f0dfa0;
+}
+
+:root[data-theme="dark"] .public-job-card {
+  border-color: var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: 0 16px 48px rgb(0 0 0 / 18%);
+}
+
+:root[data-theme="dark"] .public-job-company,
+:root[data-theme="dark"] .public-job-footer,
+:root[data-theme="dark"] .public-application-form label span,
+:root[data-theme="dark"] .public-application-form small {
+  color: var(--color-muted);
+}
+
+:root[data-theme="dark"] .public-job-card h1,
+:root[data-theme="dark"] .public-job-section h2,
+:root[data-theme="dark"] .public-privacy-notice legend {
+  color: var(--color-text);
+}
+
+:root[data-theme="dark"] .public-job-meta span,
+:root[data-theme="dark"] .public-privacy-notice {
+  border-color: var(--color-border);
+  background: var(--color-surface-alt);
+  color: var(--color-text);
+}
+
+:root[data-theme="dark"] .public-job-section {
+  border-color: var(--color-border);
+}
+
+:root[data-theme="dark"] .public-job-section p,
+:root[data-theme="dark"] .public-job-section li,
+:root[data-theme="dark"] .public-application-summary,
+:root[data-theme="dark"] .public-privacy-notice p,
+:root[data-theme="dark"] .public-privacy-accept {
+  color: var(--color-text);
+}
+
+:root[data-theme="dark"] .public-job-closed {
+  border: 1px solid rgba(240, 214, 141, .2);
+  background: #393321;
+  color: #f0d68d;
+}
+
+:root[data-theme="dark"] .public-job-apply-link,
+:root[data-theme="dark"] .public-application-submit {
+  background: var(--color-primary-dark);
+  color: #fff;
+}
+
+:root[data-theme="dark"] .public-job-apply-link:hover,
+:root[data-theme="dark"] .public-application-submit:hover:not(:disabled) {
+  background: #267467;
+}
+
+:root[data-theme="dark"] .public-application-back {
+  color: #a5ddd4;
+}
+
+:root[data-theme="dark"] .public-application-form > label {
+  color: var(--color-text);
+}
+
+:root[data-theme="dark"] .public-application-form input:not([type="checkbox"]):not([type="file"]) {
+  border-color: var(--color-border);
+  background: var(--color-surface-alt);
+  color: var(--color-text);
+}
+
+:root[data-theme="dark"] .public-application-form input::placeholder {
+  color: var(--color-muted);
+  opacity: 1;
+}
+
+:root[data-theme="dark"] .public-application-form input[type="file"] {
+  border-color: var(--color-border);
+  background: var(--color-surface-alt);
+  color: var(--color-text);
+}
+
+:root[data-theme="dark"] .public-application-error {
+  border: 1px solid rgba(242, 170, 165, .25);
+  background: #3a2625;
+  color: #f2aaa5;
+}
+
+:root[data-theme="dark"] .public-application-success {
+  border-color: rgba(157, 216, 191, .25);
+  background: #1e3930;
+  color: #b6e6ce;
+}

@@ -26,6 +26,7 @@ export default function PipelineActions({ currentStatus, onDecision, size = "nor
           onClick={() => onDecision(decision)}
           disabled={disabled}
           title={label}
+          data-label={label}
           aria-label={label}
           aria-pressed={currentStatus === decision}
         >

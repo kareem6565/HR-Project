@@ -31,6 +31,7 @@ export default function RankedCandidateList({
   loadingLabel = "Loading...",
   errorMessage = "Unable to load the list. Please try again.",
   emptyMessage = "No candidates to show.",
+  emptyIllustration,
   toolbar,
   header,
   columns,
@@ -47,10 +48,10 @@ export default function RankedCandidateList({
         header ? (
           <div className="panel table-panel">
             {header}
-            <EmptyState message={emptyMessage} />
+            <EmptyState message={emptyMessage} illustration={emptyIllustration} />
           </div>
         ) : (
-          <EmptyState message={emptyMessage} />
+          <EmptyState message={emptyMessage} illustration={emptyIllustration} />
         )
       ) : (
         <DataTable header={header} columns={columns} data={rows} onRowClick={onRowClick} />

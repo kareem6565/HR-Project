@@ -135,15 +135,13 @@ export default function TalentPoolList() {
   ];
 
   return (
-    <section>
+    <section className="talent-pool-page">
       <div className="section-head">
         <div>
           <p className="eyebrow">TALENT POOL</p>
           <h2>Previous applications to revisit</h2>
-          <p className="muted-note">
-            This view contains applications HR marked Hold or Advance for earlier roles. Rejected applications are optional; rejection applies only to the original role. Review opens the original
-            application so its evidence and decision stay tied to that job. Only candidates with current Talent Pool consent appear here. Search includes stored profile skill tags;
-            HERA does not calculate a new suitability score here.
+          <p className="muted-note talent-pool-description">
+            Revisit candidates marked Hold or Advance on previous roles. Only candidates with current Talent Pool consent appear here.
           </p>
         </div>
       </div>
@@ -153,6 +151,7 @@ export default function TalentPoolList() {
         loadingLabel="Loading talent pool..."
         error={error}
         errorMessage="Unable to load the talent pool. Please try again."
+        emptyIllustration="/brand/illustrations/applications.png"
         onRetry={load}
         emptyMessage={
           search
