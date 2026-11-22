@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, BriefcaseBusiness, ClipboardList, Users, UserRoundCheck } from "lucide-react";
+import { ArrowRight, BriefcaseBusiness, ClipboardList, Plus, Users, UserRoundCheck } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -62,7 +62,7 @@ export default function Dashboard() {
   return (
     <div className="dashboard dashboard-redesign">
       <section className="dashboard-intro" aria-labelledby="dashboard-intro-title">
-        <div>
+        <div className="dashboard-intro-copy">
           <p className="dashboard-kicker">
             <HeraAssistantMark size={25} />
             <span>HERA · AI-ASSISTED, HR-LED</span>
@@ -73,14 +73,14 @@ export default function Dashboard() {
         <div className="dashboard-intro-actions">
           <span className="dashboard-live-indicator"><span aria-hidden="true" />Live workspace snapshot</span>
           <div className="dashboard-shortcuts" aria-label="Quick actions">
-            <Link className="btn btn-primary" to="/jobs/new">
-              Create vacancy <ArrowRight size={15} aria-hidden="true" />
+            <Link className="btn btn-primary dashboard-action-primary" to="/jobs/new">
+              <Plus size={16} aria-hidden="true" /> Create vacancy
             </Link>
-            <Link className="btn btn-primary" to="/applications">
+            <Link className="btn btn-secondary dashboard-action-secondary" to="/applications">
               Review applications <ArrowRight size={15} aria-hidden="true" />
             </Link>
-            <Link className="btn btn-secondary" to="/applications">Applications</Link>
-            <Link className="btn btn-secondary" to="/jobs">
+            <Link className="btn btn-secondary dashboard-action-secondary" to="/applications">Applications</Link>
+            <Link className="btn btn-secondary dashboard-action-secondary" to="/jobs">
               Manage jobs <BriefcaseBusiness size={15} aria-hidden="true" />
             </Link>
           </div>
@@ -115,7 +115,7 @@ export default function Dashboard() {
             <h2 id="pipeline-title">Hiring activity</h2>
             <p>All recorded applications grouped by role.</p>
           </div>
-          <span>Workspace snapshot · all recorded applications</span>
+          <span className="dashboard-section-note">Workspace snapshot · all recorded applications</span>
         </div>
 
         {hasApplications ? (
@@ -126,19 +126,62 @@ export default function Dashboard() {
                   <h3 id="jobs-chart-title">Applications by job</h3>
                   <p>Compare application volume across open and past roles.</p>
                 </div>
+                <span className="dashboard-chart-total">
+                  <strong>{stats.applications}</strong>
+                  <span>applications</span>
+                </span>
               </div>
               {applicationsByJob.length ? (
-                <div className="dashboard-chart" role="img" aria-label="Bar chart of applications for each job">
+                <>
+                <div
+                  className="dashboard-chart"
+                  role="img"
+                  aria-label="Bar chart of applications for each job"
+                  style={{ "--dashboard-chart-height": `${Math.min(Math.max(applicationsByJob.length * 48 + 72, 250), 430)}px` }}
+                >
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={applicationsByJob} margin={{ top: 12, right: 8, left: -18, bottom: 8 }}>
-                      <CartesianGrid stroke="var(--hera-border)" vertical={false} />
-                      <XAxis dataKey="job" tick={{ fill: "var(--hera-muted)", fontSize: 11 }} axisLine={false} tickLine={false} />
-                      <YAxis allowDecimals={false} tick={{ fill: "var(--hera-muted)", fontSize: 11 }} axisLine={false} tickLine={false} />
-                      <Tooltip cursor={{ fill: "rgba(27, 58, 58, 0.05)" }} />
-                      <Bar dataKey="applications" name="Applications" fill="var(--hera-teal)" radius={[5, 5, 0, 0]} maxBarSize={48} />
+                    <BarChart
+                      data={applicationsByJob}
+                      layout="vertical"
+                      margin={{ top: 8, right: 18, left: 8, bottom: 8 }}
+                      barCategoryGap="34%"
+                    >
+                      <CartesianGrid stroke="var(--hera-border)" horizontal={false} />
+                      <XAxis
+                        type="number"
+                        allowDecimals={false}
+                        tick={{ fill: "var(--hera-muted)", fontSize: 11 }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        type="category"
+                        dataKey="job"
+                        width={170}
+                        tick={{ fill: "var(--hera-ink)", fontSize: 12 }}
+                        tickFormatter={formatJobTick}
+                        axisLine={false}
+                        tickLine={false}
+                        interval={0}
+                      />
+                      <Tooltip
+                        cursor={{ fill: "rgba(27, 58, 58, 0.05)" }}
+                        contentStyle={{ border: "1px solid var(--hera-border)", borderRadius: 10, boxShadow: "0 8px 24px rgba(16, 38, 35, .12)" }}
+                      />
+                      <Bar dataKey="applications" name="Applications" fill="var(--hera-teal)" radius={[0, 5, 5, 0]} maxBarSize={28} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
+                <table className="sr-only">
+                  <caption>Application counts by job</caption>
+                  <thead><tr><th scope="col">Job</th><th scope="col">Applications</th></tr></thead>
+                  <tbody>
+                    {applicationsByJob.map((item) => (
+                      <tr key={item.job}><th scope="row">{item.job}</th><td>{item.applications}</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+                </>
               ) : <p className="dashboard-chart-empty">No job application breakdown is available yet.</p>}
             </section>
 
@@ -155,4 +198,8 @@ export default function Dashboard() {
       </section>
     </div>
   );
+}
+
+function formatJobTick(label) {
+  return label.length > 25 ? `${label.slice(0, 22)}…` : label;
 }

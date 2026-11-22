@@ -35,9 +35,13 @@ describe("Recruitment dashboard", () => {
     expect(screen.getByText("HERA · AI-ASSISTED, HR-LED")).toBeTruthy();
     expect(screen.getByText("HERA · AI-ASSISTED, HR-LED").previousElementSibling.getAttribute("aria-hidden")).toBe("true");
     expect(screen.getByText("Live workspace snapshot")).toBeTruthy();
+    expect(screen.getByRole("link", { name: /Create vacancy/i }).getAttribute("href")).toBe("/jobs/new");
     expect(screen.getByRole("link", { name: /Review applications/i }).getAttribute("href")).toBe("/applications");
     expect(screen.getByRole("link", { name: "Applications" }).getAttribute("href")).toBe("/applications");
     expect(screen.getByRole("link", { name: /Manage jobs/i }).getAttribute("href")).toBe("/jobs");
+    expect(screen.getByRole("img", { name: "Bar chart of applications for each job" })).toBeTruthy();
+    expect(screen.getByRole("table", { name: "Application counts by job" })).toBeTruthy();
+    expect(screen.getByRole("row", { name: "Product Designer 8" })).toBeTruthy();
     expect(screen.getByText("Advanced applications")).toBeTruthy();
     expect(screen.getByText("Candidates with applications")).toBeTruthy();
     expect(screen.queryByText("Hired")).toBeNull();

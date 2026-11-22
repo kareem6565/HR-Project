@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { BriefcaseBusiness, ClipboardPaste, FileUp, Sparkles, PenLine, ShieldCheck } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   createJob,
@@ -39,6 +40,27 @@ const EMPTY_JOB = {
 // The employment-type select preselects Full-time so an untouched default reads
 // as "not chosen yet" to the HERA auto-fill.
 const DEFAULT_JOB_TYPE = "Full-time";
+
+function getDescriptionBuilderErrorMessage(error) {
+  const status = error?.response?.status;
+  const errorType = error?.response?.data?.error_type;
+
+  if (status === 404) {
+    return "HERA could not find the job-description service (404). Your source text is still in the form; refresh the page and try again.";
+  }
+  if (status === 503 && errorType === "timeout") {
+    return "The AI provider timed out while analyzing this description. Your source text is still in the form; try again later.";
+  }
+  if (status === 503) {
+    return "The AI provider is temporarily unavailable. Your source text is still in the form; try again later.";
+  }
+  if (status === 429) {
+    return "The AI provider is rate-limiting requests. Your source text is still in the form; try again shortly.";
+  }
+
+  return error?.response?.data?.detail || error?.message ||
+    "HERA could not prepare the job description. Your current entries are unchanged.";
+}
 
 // Used for both /jobs/new (create) and /jobs/:id/edit (edit) — the only
 // difference is whether we preload an existing job and call updateJob
@@ -302,10 +324,7 @@ export default function JobForm() {
       setBuilderStatus("ready");
     } catch (error) {
       setBuilderStatus("error");
-      setBuilderError(
-        error?.response?.data?.detail || error?.message ||
-        "HERA could not prepare the job description. Your current entries are unchanged."
-      );
+      setBuilderError(getDescriptionBuilderErrorMessage(error));
     }
   };
 
@@ -339,7 +358,7 @@ export default function JobForm() {
       setImprovementStatus("ready");
     } catch (error) {
       setImprovementStatus("error");
-      setBuilderError(error?.response?.data?.detail || error?.message || `HERA could not improve ${target.label.toLowerCase()}.`);
+      setBuilderError(getDescriptionBuilderErrorMessage(error));
     }
   };
 
@@ -639,12 +658,14 @@ export default function JobForm() {
 
   return (
     <section className="content-grid job-form-grid">
-      <div className="panel">
-        <div className="panel-title">
+      <div className="panel job-form-panel">
+        <div className="job-form-page-heading">
           <div>
             <p className="eyebrow">JOB {isEdit ? "EDIT" : "SETUP"}</p>
-            <h3>{isEdit ? "Edit Job" : "Create New Job"}</h3>
+            <h1>{isEdit ? "Edit Job" : "Create a vacancy"}</h1>
+            <p>Build a clear, structured role profile. Your changes stay in draft until HR review.</p>
           </div>
+          <span className="job-draft-indicator"><ShieldCheck size={16} aria-hidden="true" /> Draft workflow</span>
         </div>
 
         {!isEdit && <div className="job-form-step-heading">
@@ -653,23 +674,31 @@ export default function JobForm() {
         </div>}
         <div className="job-creation-methods" role="group" aria-label="Job description creation method">
           {!isEdit && <button type="button" className="secondary"
+            aria-label="Import from LinkedIn"
             aria-pressed={creationMethod === "linkedin_import"}
             onClick={() => selectCreationMethod("linkedin_import")}>
+            <span className="job-method-icon" aria-hidden="true"><FileUp size={18} /></span>
             <span className="job-method-title">Import from LinkedIn</span>
             <span className="job-method-description">Start with a public job listing</span>
           </button>}
           <button type="button" className={creationMethod === "ai_generated" ? "primary" : "secondary"}
+            aria-label="Generate with AI"
             aria-pressed={creationMethod === "ai_generated"} onClick={() => selectCreationMethod("ai_generated")}>
+            <span className="job-method-icon" aria-hidden="true"><Sparkles size={18} /></span>
             <span className="job-method-title">Generate with AI</span>
             <span className="job-method-description">Build a first draft from role details</span>
           </button>
           <button type="button" className={creationMethod === "pasted_external" ? "primary" : "secondary"}
+            aria-label="Paste existing description"
             aria-pressed={creationMethod === "pasted_external"} onClick={() => selectCreationMethod("pasted_external")}>
+            <span className="job-method-icon" aria-hidden="true"><ClipboardPaste size={18} /></span>
             <span className="job-method-title">Paste existing</span>
             <span className="job-method-description">Organize a description you already have</span>
           </button>
           <button type="button" className={creationMethod === "manual" ? "primary" : "secondary"}
+            aria-label="Create manually"
             aria-pressed={creationMethod === "manual"} onClick={() => selectCreationMethod("manual")}>
+            <span className="job-method-icon" aria-hidden="true"><PenLine size={18} /></span>
             <span className="job-method-title">Create manually</span>
             <span className="job-method-description">Write and organize it yourself</span>
           </button>
@@ -771,7 +800,8 @@ export default function JobForm() {
                 .filter(({ item }) => section.dimensions.includes(item.dimension || "skill") ||
                   (section.key === "other" && !requirementSections.slice(0, 3).some((group) => group.dimensions.includes(item.dimension || "skill"))));
               return (
-              <details className="job-draft-section" key={section.key} open={sectionRequirements.length === 0}>
+              <details className="job-draft-section" key={section.key} open={sectionRequirements.length === 0}
+                role="region" aria-label={section.title}>
                 <summary>
                   <span>{section.title}</span>
                   <span className="job-draft-section-count">{sectionRequirements.length} {sectionRequirements.length === 1 ? "item" : "items"}</span>
@@ -912,7 +942,7 @@ export default function JobForm() {
         )}
         {saveError && <p className="hera-note hera-error" role="alert">{saveError}</p>}
 
-        <form onSubmit={onSubmit}>
+        <form className="job-form-fields" onSubmit={onSubmit}>
           <label>
             Job Title
             {aiFields.has("title") && (
@@ -973,7 +1003,7 @@ export default function JobForm() {
               <option value="remote">Remote</option>
             </select>
           </label>
-          <p className="muted-note">New vacancies are saved as drafts. Activation is available after required details are complete and the job profile is approved.</p>
+          <p className="muted-note job-form-policy-note"><BriefcaseBusiness size={15} aria-hidden="true" /> New vacancies are saved as drafts. Activation is available after required details are complete and the job profile is approved.</p>
           <label>
             Experience
             {aiFields.has("experience") && (

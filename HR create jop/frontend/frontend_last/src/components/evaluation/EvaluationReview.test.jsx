@@ -37,7 +37,8 @@ describe("UI-05: EvaluationSummary", () => {
     },
   };
 
-  it("renders authoritative score, group band, and versioning without raw JSON or provider name", () => {
+  it("keeps the score compact and reveals the full explanation on request", async () => {
+    const user = userEvent.setup();
     render(<EvaluationSummary evaluation={populatedEvaluation} group="must_review" />);
 
     // Score & Band
@@ -51,6 +52,10 @@ describe("UI-05: EvaluationSummary", () => {
 
     // Explanation section
     expect(screen.getByText("Why this score?")).toBeInTheDocument();
+    expect(screen.getByText("3 details")).toBeInTheDocument();
+    expect(document.querySelector(".evaluation-explanation")).not.toHaveAttribute("open");
+
+    await user.click(screen.getByText("Why this score?"));
     expect(
       screen.getByText(
         "Candidate meets core engineering requirements with demonstrated Python experience."
@@ -182,7 +187,8 @@ describe("UI-05: EvidenceTable", () => {
     },
   };
 
-  it("renders one unified evidence table with human-readable names and category labels", () => {
+  it("renders compact evidence rows with details available on demand", async () => {
+    const user = userEvent.setup();
     render(<EvidenceTable evidence={populatedEvidence} breakdown={breakdown} />);
 
     // Exactly one primary table is rendered
@@ -223,7 +229,9 @@ describe("UI-05: EvidenceTable", () => {
     expect(screen.getByText("Strong (+35%)")).toBeInTheDocument();
     expect(screen.getByText("Moderate (+15%)")).toBeInTheDocument();
 
-    // Inline review signal for missing must-have
+    // Review signals are available on demand instead of repeated in every row.
+    expect(screen.queryByText("No evidence found for must-have requirement")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Show details for PostgreSQL Database/i }));
     expect(
       screen.getByText("No evidence found for must-have requirement")
     ).toBeInTheDocument();
@@ -304,8 +312,40 @@ describe("UI-05: EvidenceTable", () => {
     render(<EvidenceTable evidence={missingEvidence} />);
 
     expect(screen.getByText("GraphQL API")).toBeInTheDocument();
-    expect(screen.getByText("No evidence found in CV text")).toBeInTheDocument();
+    expect(screen.getByText("No verified CV quote")).toBeInTheDocument();
     expect(screen.queryByText("null")).not.toBeInTheDocument();
     expect(screen.queryByText("undefined")).not.toBeInTheDocument();
+  });
+
+  it("shows a concise missing-evidence row and its review reason on demand", async () => {
+    const user = userEvent.setup();
+    render(
+      <EvidenceTable
+        evidence={[
+          {
+            id: "ev-missing",
+            evidence_type: "missing",
+            requirement_ref: {
+              requirement_key: "must_have:Kubernetes",
+              text: "Kubernetes experience",
+              category: "must_have",
+            },
+            candidate_evidence: {
+              explanation: "No verifiable quote was provided.",
+              verification_status: "unverified_quote",
+              verification_reason: "quote_not_provided",
+              uncertainty: "Confirm this qualification in an interview.",
+            },
+          },
+        ]}
+      />
+    );
+
+    expect(screen.getByText("No verified CV quote")).toBeInTheDocument();
+    expect(screen.queryByText("No verifiable quote was provided.")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Show details for Kubernetes experience/i }));
+    expect(screen.getByText("The evaluation did not return a supporting quote.")).toBeInTheDocument();
+    expect(screen.getByText("No verifiable quote was provided.")).toBeInTheDocument();
   });
 });

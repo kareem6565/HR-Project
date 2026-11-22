@@ -9,6 +9,18 @@ function normalizeStatus(status) {
     .join(" ");
 }
 
+function formatVerificationReason(reason) {
+  const labels = {
+    quote_not_provided: "The evaluation did not return a supporting quote.",
+    raw_resume_text_unavailable: "The extracted CV text was unavailable.",
+    profile_context_only: "The quote appeared in profile hints, not in the source CV.",
+    quote_too_short_for_fuzzy_match: "The short quote did not match the CV text exactly.",
+    fuzzy_similarity_below_threshold: "The quote differed too much from the extracted CV text.",
+    empty_quote_or_source: "The quote or extracted CV text was empty.",
+  };
+  return labels[reason] || normalizeStatus(reason);
+}
+
 /**
  * Checks if a string is a technical hash or internal ID like "req-0000000000000001",
  * "req-1234567890", a UUID, or purely hexadecimal characters.
@@ -92,6 +104,7 @@ function resolveCandidateEvidence(candidateEvidence, breakdownItem) {
         explanation: null,
         uncertainty: null,
         verificationStatus: null,
+        verificationReason: null,
         sourceSection: null,
       };
     }
@@ -105,6 +118,7 @@ function resolveCandidateEvidence(candidateEvidence, breakdownItem) {
       explanation: null,
       uncertainty: null,
       verificationStatus: null,
+      verificationReason: null,
       sourceSection: null,
     };
   }
@@ -117,6 +131,7 @@ function resolveCandidateEvidence(candidateEvidence, breakdownItem) {
       explanation: null,
       uncertainty: null,
       verificationStatus: null,
+      verificationReason: null,
       sourceSection: null,
     };
   }
@@ -130,6 +145,7 @@ function resolveCandidateEvidence(candidateEvidence, breakdownItem) {
       explanation: null,
       uncertainty: null,
       verificationStatus: null,
+      verificationReason: null,
       sourceSection: null,
     };
   }
@@ -146,6 +162,7 @@ function resolveCandidateEvidence(candidateEvidence, breakdownItem) {
       : [];
     const uncertainty = candidateEvidence.uncertainty || null;
     const verificationStatus = candidateEvidence.verification_status || null;
+    const verificationReason = candidateEvidence.verification_reason || null;
     const sourceSection =
       candidateEvidence.source_section ||
       candidateEvidence.source ||
@@ -178,6 +195,7 @@ function resolveCandidateEvidence(candidateEvidence, breakdownItem) {
       explanation,
       uncertainty,
       verificationStatus,
+      verificationReason,
       sourceSection,
     };
   }
@@ -189,6 +207,7 @@ function resolveCandidateEvidence(candidateEvidence, breakdownItem) {
     explanation: null,
     uncertainty: null,
     verificationStatus: null,
+    verificationReason: null,
     sourceSection: null,
   };
 }
@@ -277,7 +296,10 @@ export default function EvidenceTable({
         candidateData.sourceSection ||
           candidateData.uncertainty ||
           candidateData.verificationStatus ||
-          (candidateData.quote && candidateData.explanation) ||
+          candidateData.verificationReason ||
+          candidateData.quote ||
+          candidateData.explanation ||
+          signals.length > 0 ||
           (candidateData.terms && candidateData.terms.length > 0)
       );
 
@@ -382,11 +404,10 @@ export default function EvidenceTable({
           <table className="evidence-table" aria-label="Candidate Requirement Match Evidence">
             <thead>
               <tr>
-                <th scope="col" style={{ width: "26%" }}>Requirement</th>
-                <th scope="col" style={{ width: "16%" }}>Status</th>
-                <th scope="col" style={{ width: "36%" }}>Candidate Evidence</th>
-                <th scope="col" style={{ width: "12%" }}>Contribution</th>
-                <th scope="col" style={{ width: "10%" }}>Actions</th>
+                <th scope="col" style={{ width: "31%" }}>Requirement</th>
+                <th scope="col" style={{ width: "19%" }}>Match</th>
+                <th scope="col" style={{ width: "40%" }}>CV evidence</th>
+                <th scope="col" style={{ width: "10%" }}>Details</th>
               </tr>
             </thead>
             <tbody>
@@ -401,16 +422,6 @@ export default function EvidenceTable({
                       <td className="evidence-req-cell">
                         <span className="evidence-req-name" dir="auto">{row.name}</span>
                         <span className="evidence-req-category">{row.category}</span>
-                        {row.signals.length > 0 && (
-                          <div style={{ marginTop: 6 }}>
-                            {row.signals.map((sig, i) => (
-                              <span key={i} className="evidence-signal-badge">
-                                <AlertCircle size={11} aria-hidden="true" />
-                                <span>{sig}</span>
-                              </span>
-                            ))}
-                          </div>
-                        )}
                       </td>
 
                       {/* Status Column */}
@@ -424,11 +435,14 @@ export default function EvidenceTable({
                         {row.evidenceType === "missing" && (
                           <span className="chip chip-neutral">No evidence found</span>
                         )}
+                        <span className="evidence-contribution">{row.contribution}</span>
                       </td>
 
                       {/* Candidate Evidence Column */}
                       <td>
-                        {candidateData.quote ? (
+                        {row.evidenceType === "missing" ? (
+                          <span className="evidence-empty-state">No verified CV quote</span>
+                        ) : candidateData.quote ? (
                           <blockquote className="evidence-quote-box" dir="auto">
                             "{candidateData.quote}"
                           </blockquote>
@@ -450,9 +464,6 @@ export default function EvidenceTable({
                           </div>
                         )}
                       </td>
-
-                      {/* Contribution Column */}
-                      <td className="muted-note">{row.contribution}</td>
 
                       {/* Details Toggle Column */}
                       <td>
@@ -485,8 +496,22 @@ export default function EvidenceTable({
                     {/* Expandable Supporting Context Details */}
                     {isExpanded && row.hasDetails && (
                       <tr className="evidence-details-row">
-                        <td colSpan={5} style={{ background: "#fcfdfd", padding: "10px 18px 14px" }}>
+                        <td colSpan={4} style={{ background: "#fcfdfd", padding: "10px 18px 14px" }}>
                           <div className="evidence-details-drawer">
+                            {row.signals.length > 0 && (
+                              <div>
+                                <strong>Review signal:</strong>{" "}
+                                <span>{row.signals.join(" · ")}</span>
+                              </div>
+                            )}
+
+                            {candidateData.quote && (
+                              <div>
+                                <strong>CV evidence:</strong>{" "}
+                                <span dir="auto">“{candidateData.quote}”</span>
+                              </div>
+                            )}
+
                             {candidateData.sourceSection && (
                               <div>
                                 <strong>Resume Section:</strong>{" "}
@@ -501,6 +526,13 @@ export default function EvidenceTable({
                               </div>
                             )}
 
+                            {candidateData.verificationReason && (
+                              <div>
+                                <strong>Verification reason:</strong>{" "}
+                                <span>{formatVerificationReason(candidateData.verificationReason)}</span>
+                              </div>
+                            )}
+
                             {candidateData.uncertainty && (
                               <div>
                                 <strong>Uncertainty Note:</strong>{" "}
@@ -508,9 +540,9 @@ export default function EvidenceTable({
                               </div>
                             )}
 
-                            {candidateData.explanation && candidateData.quote && (
+                            {candidateData.explanation && (
                               <div>
-                                <strong>Matching Analysis:</strong>{" "}
+                                <strong>Review note:</strong>{" "}
                                 <span dir="auto">{candidateData.explanation}</span>
                               </div>
                             )}
