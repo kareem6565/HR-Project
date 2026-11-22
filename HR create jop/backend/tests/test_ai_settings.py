@@ -90,6 +90,7 @@ def test_get_returns_effective_config(client: httpx.Client) -> None:
     assert resp.status_code == 200
     body = resp.json()
     assert body["provider"] == effective["provider"]
+    assert body["is_demo"] is (effective["provider"] == "fake")
     assert body["has_api_key"] == bool(effective["api_key"])
     assert body["api_key_source"] == effective["api_key_source"]
     assert body["model"] == effective["model"]
@@ -231,6 +232,7 @@ def test_openrouter_settings_report_presence_without_returning_key(
     assert resp.json() == {
         "provider": "openrouter",
         "model": settings.openrouter_model,
+        "is_demo": False,
         "api_key_source": "environment",
         "has_api_key": True,
     }

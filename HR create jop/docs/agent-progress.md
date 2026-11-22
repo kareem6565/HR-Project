@@ -1,7 +1,7 @@
 # Agent Progress
 
 ## CURRENT
-- Task: A2 [AUTO] Make the effective AI provider visible and safe. Housekeeping commits completed; A2 plan is recorded below.
+- Task: A2 [AUTO] complete. Next in Section 5: A4 [AUTO].
 - Branch: `agent/recruitment-work` (created from the existing `feat/public-candidate-application` tree).
 - Housekeeping commits: `6bdf7a5` frontend readability; `8f14d0a` HERA brand mark; `167a4f1` HR Manager workspace/branding; `b827907` startup helper; `a35b6ab` change log.
 - S8 plan: (1) use the repository root `.github/workflows` and canonical backend/frontend; (2) add one CI workflow for Gitleaks, pip-audit, npm audit (high+), Ruff, pytest, Vitest, and build; (3) document exact local commands here; (4) validate workflow structure and record limitations. No secrets, dependencies, application changes, or data migrations planned.
@@ -48,6 +48,7 @@
 - S4 | Added 45-second assertion lifetime enforcement, 5-second bounded clock skew, random JTI single-use storage (hash only, expiry cleanup), retained issuer/audience and configured-org binding, and documented role mapping; PHP lint + 41 focused tests passed. Commit `17da746`.
 - S5 | Added AES-GCM file encryption, verified resumable storage migration, candidate anonymization/deletion, legal holds, retention settings/job, and documentation. Full backend suite: 1105 passed, 1 skipped, 12 deselected; focused S5/storage/Alembic suite: 38 passed. No live migration or retention deletion executed.
 - S8 | Added `.github/workflows/security-ci.yml` at the Git repository root. It redacts Gitleaks output and scans only incoming commits (avoids known historical report-only matches); runs Python dependency audit, Ruff, PostgreSQL-backed pytest, production npm audit at high/critical, Oxlint, Vitest, and Vite build. No application files or dependencies changed. Commit: `df7c6e5` (workflow only).
+- A2 | Production rejects `AI_PROVIDER=fake` unless `ALLOW_FAKE_AI=true`; startup logs provider/model/demo only; admin settings expose `is_demo`, with a visible simulated-response notice for Fake. Added config/API/UI regression tests and documented the override in both env examples. No dependencies. Backend focused tests: 14 passed, 1 skipped; frontend settings tests: 4 passed; Ruff check+format passed; targeted Oxlint passed; Vite build passed (existing chunk-size warning). `npm run lint` could not resolve its binary because the Windows workspace path contains `&`; direct Oxlint on both changed UI files passed.
 
 ### S8 local run
 

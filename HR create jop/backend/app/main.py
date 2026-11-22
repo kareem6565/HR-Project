@@ -14,6 +14,7 @@ from app.ai.providers.errors import (
     ProviderRateLimitError,
     ProviderTimeoutError,
 )
+from app.ai.providers.factory import resolve_ai_config
 from app.api.v1.router import api_router
 from app.api.v1.routes.health import router as health_router
 from app.core.config import settings
@@ -33,6 +34,13 @@ logger = logging.getLogger("app.main")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Start the screening worker thread on startup and stop it on shutdown."""
+    ai_config = resolve_ai_config(settings)
+    logger.info(
+        "Effective AI provider configured: provider=%s model=%s demo=%s",
+        ai_config["provider"],
+        ai_config["model"] or "none",
+        ai_config["is_fake"],
+    )
     if not settings.enable_screening_worker:
         yield
         return

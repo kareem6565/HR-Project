@@ -45,6 +45,7 @@ def get_ai_settings(_: RequestContext = Depends(require_roles("admin"))) -> AISe
     return AISettingsResponse(
         provider=config["provider"],
         model=config["model"],
+        is_demo=config["is_fake"],
         api_key_source=config["api_key_source"],
         has_api_key=bool(config["api_key"]),
     )

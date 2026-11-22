@@ -10,6 +10,7 @@ vi.mock("../../services/aiSettingsService", () => ({
   getAISettings: vi.fn().mockResolvedValue({
     provider: "ollama",
     model: "gemma4:31b",
+    is_demo: false,
     has_api_key: true,
     api_key_source: "environment",
   }),
@@ -75,5 +76,24 @@ describe("AI settings appearance", () => {
     expect(screen.getByText("openai/gpt-4o-mini")).toBeInTheDocument();
     expect(screen.getByText("Missing")).toBeInTheDocument();
     expect(screen.getByText(/manage the provider and its API key in the backend environment/i)).toBeInTheDocument();
+  });
+
+  it("shows an explicit demo notice when the fake provider is active", async () => {
+    vi.mocked(getAISettings).mockResolvedValueOnce({
+      provider: "fake",
+      model: "",
+      is_demo: true,
+      has_api_key: false,
+      api_key_source: "none",
+    });
+
+    render(
+      <ThemeProvider>
+        <MemoryRouter><AISettings /></MemoryRouter>
+      </ThemeProvider>,
+    );
+
+    expect(await screen.findByText(/demo ai is active/i)).toBeInTheDocument();
+    expect(screen.getByText(/responses are simulated/i)).toBeInTheDocument();
   });
 });

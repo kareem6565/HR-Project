@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     ai_provider: Literal["fake", "soal", "ollama", "openrouter"] = Field(
         default="openrouter", validation_alias="AI_PROVIDER"
     )
+    allow_fake_ai: bool = Field(default=False, validation_alias="ALLOW_FAKE_AI")
     soal_api_key: str | None = Field(default=None, validation_alias="SOAL_API_KEY")
     soal_base_url: str = Field(default="https://soal.help/api/v1", validation_alias="SOAL_BASE_URL")
     soal_model: str = Field(default="gemini-3.5-flash", validation_alias="SOAL_MODEL")
@@ -129,6 +130,14 @@ class Settings(BaseSettings):
         import binascii
         import re
 
+        if (
+            self.app_env.lower() == "production"
+            and self.ai_provider == "fake"
+            and not self.allow_fake_ai
+        ):
+            raise ValueError(
+                "AI_PROVIDER=fake is not allowed in production unless ALLOW_FAKE_AI=true."
+            )
         if self.app_env.lower() == "production" and not self.resume_encryption_enabled:
             raise ValueError("RESUME_ENCRYPTION_ENABLED=true is required in production.")
         if not self.resume_encryption_enabled:

@@ -86,6 +86,13 @@ export default function AISettings() {
           </span>
         </div>
 
+        {settings.is_demo && (
+          <div className="demo-notice" role="status" aria-live="polite">
+            <strong>Demo AI is active</strong>
+            <span>AI responses are simulated. Configure a live provider for real screening.</span>
+          </div>
+        )}
+
         <div className="stats-grid" style={{ marginBottom: "1rem" }}>
           <div className="stat-card">
             <div className="stat-info">

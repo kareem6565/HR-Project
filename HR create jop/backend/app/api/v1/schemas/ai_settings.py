@@ -8,6 +8,7 @@ from pydantic import BaseModel
 class AISettingsResponse(BaseModel):
     provider: str
     model: str
+    is_demo: bool
     api_key_source: str
     has_api_key: bool
 
