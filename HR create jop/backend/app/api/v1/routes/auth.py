@@ -21,6 +21,7 @@ from app.core.database import get_db
 from app.core.security import create_access_token, verify_password
 from app.models.organization import Organization
 from app.models.user import User
+from app.services.hr_sso_assertion_service import consume_assertion
 
 router = APIRouter()
 
@@ -54,7 +55,8 @@ def exchange_hr_assertion(
             algorithms=["HS256"],
             issuer=settings.hr_sso_issuer,
             audience="hera-recruitment",
-            options={"require": ["sub", "name", "role", "iat", "exp", "iss", "aud"]},
+            leeway=5,
+            options={"require": ["sub", "name", "role", "iat", "exp", "iss", "aud", "jti"]},
         )
     except (ValueError, TypeError, jwt.InvalidTokenError):
         raise HTTPException(
@@ -65,6 +67,24 @@ def exchange_hr_assertion(
 
     employee_code = claims.get("sub")
     full_name = claims.get("name")
+    issued_at = claims.get("iat")
+    expires_at = claims.get("exp")
+    assertion_id = claims.get("jti")
+    if (
+        type(issued_at) is not int
+        or type(expires_at) is not int
+        or not 0 < expires_at - issued_at <= 45
+        or not isinstance(assertion_id, str)
+        or not 16 <= len(assertion_id) <= 128
+        or not assertion_id.isascii()
+        or not assertion_id.isprintable()
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired HR sign-in assertion.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     if (
         claims.get("role") != "hr"
         or not isinstance(employee_code, str)
@@ -77,6 +97,13 @@ def exchange_hr_assertion(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only an authenticated HR account can enter recruitment.",
+        )
+
+    if not consume_assertion(db, assertion_id, expires_at):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired HR sign-in assertion.",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
     organization = db.get(Organization, organization_id)

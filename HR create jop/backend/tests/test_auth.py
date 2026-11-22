@@ -270,9 +270,16 @@ def test_login_legacy_user_without_password_hash(
 
 
 def _hr_manager_assertion(
-    employee_code: str = "HR001", role: str = "hr", secret: str | None = None
+    employee_code: str = "HR001",
+    role: str = "hr",
+    secret: str | None = None,
+    *,
+    assertion_id: str | None = None,
+    issued_at: int | None = None,
+    expires_at: int | None = None,
 ) -> str:
     now = int(datetime.now(UTC).timestamp())
+    issued_at = now if issued_at is None else issued_at
     return jwt.encode(
         {
             "iss": settings.hr_sso_issuer,
@@ -280,8 +287,9 @@ def _hr_manager_assertion(
             "sub": employee_code,
             "name": "Hera HR User",
             "role": role,
-            "iat": now,
-            "exp": now + 45,
+            "iat": issued_at,
+            "exp": issued_at + 45 if expires_at is None else expires_at,
+            "jti": assertion_id or str(uuid.uuid4()),
         },
         secret or settings.hr_sso_shared_secret,
         algorithm="HS256",
@@ -319,6 +327,58 @@ def test_hr_sso_exchange_provisions_recruiter(client, seeded_org, monkeypatch) -
     )
     assert second_response.status_code == 200
     assert second_response.json()["user"]["id"] == data["user"]["id"]
+
+
+def test_hr_sso_exchange_rejects_replayed_assertion(client, seeded_org, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "hr_sso_shared_secret", "test-shared-hr-secret-key-with-32chars")
+    monkeypatch.setattr(settings, "hr_sso_organization_id", str(seeded_org.id))
+    assertion = _hr_manager_assertion()
+
+    first = client.post("/api/v1/auth/sso/exchange", json={"assertion": assertion})
+    replay = client.post("/api/v1/auth/sso/exchange", json={"assertion": assertion})
+
+    assert first.status_code == 200
+    assert replay.status_code == 401
+    assert replay.json()["detail"] == "Invalid or expired HR sign-in assertion."
+
+
+def test_hr_sso_exchange_rejects_expired_assertion(client, seeded_org, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "hr_sso_shared_secret", "test-shared-hr-secret-key-with-32chars")
+    monkeypatch.setattr(settings, "hr_sso_organization_id", str(seeded_org.id))
+    now = int(datetime.now(UTC).timestamp())
+    assertion = _hr_manager_assertion(issued_at=now - 120, expires_at=now - 75)
+
+    response = client.post("/api/v1/auth/sso/exchange", json={"assertion": assertion})
+
+    assert response.status_code == 401
+
+
+def test_hr_sso_exchange_does_not_allow_replay_during_clock_skew(
+    client, seeded_org, monkeypatch
+) -> None:
+    monkeypatch.setattr(settings, "hr_sso_shared_secret", "test-shared-hr-secret-key-with-32chars")
+    monkeypatch.setattr(settings, "hr_sso_organization_id", str(seeded_org.id))
+    now = int(datetime.now(UTC).timestamp())
+    assertion = _hr_manager_assertion(issued_at=now - 48, expires_at=now - 3)
+
+    first = client.post("/api/v1/auth/sso/exchange", json={"assertion": assertion})
+    replay = client.post("/api/v1/auth/sso/exchange", json={"assertion": assertion})
+
+    assert first.status_code == 200
+    assert replay.status_code == 401
+
+
+def test_hr_sso_exchange_rejects_assertion_lifetime_over_limit(
+    client, seeded_org, monkeypatch
+) -> None:
+    monkeypatch.setattr(settings, "hr_sso_shared_secret", "test-shared-hr-secret-key-with-32chars")
+    monkeypatch.setattr(settings, "hr_sso_organization_id", str(seeded_org.id))
+    now = int(datetime.now(UTC).timestamp())
+    assertion = _hr_manager_assertion(issued_at=now, expires_at=now + 46)
+
+    response = client.post("/api/v1/auth/sso/exchange", json={"assertion": assertion})
+
+    assert response.status_code == 401
 
 
 def test_hr_sso_exchange_rejects_invalid_assertion(client, seeded_org, monkeypatch) -> None:

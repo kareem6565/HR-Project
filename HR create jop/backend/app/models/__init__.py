@@ -7,9 +7,10 @@ from app.models.candidate_invitation import CandidateInvitation
 from app.models.candidate_profile import CandidateProfile
 from app.models.chat_message import ChatMessage
 from app.models.chat_thread import ChatThread
+from app.models.github_evidence_analysis import GitHubEvidenceAnalysis
 from app.models.hr_decision import HRDecision
 from app.models.hr_feedback_correction import HRFeedbackCorrection
-from app.models.github_evidence_analysis import GitHubEvidenceAnalysis
+from app.models.hr_sso_assertion_use import HRSSOAssertionUse
 from app.models.interview import Interview
 from app.models.interview_availability import InterviewAvailability
 from app.models.interview_question import InterviewQuestion
@@ -44,6 +45,7 @@ __all__ = [
     "ChatThread",
     "HRDecision",
     "HRFeedbackCorrection",
+    "HRSSOAssertionUse",
     "GitHubEvidenceAnalysis",
     "Interview",
     "InterviewAvailability",
