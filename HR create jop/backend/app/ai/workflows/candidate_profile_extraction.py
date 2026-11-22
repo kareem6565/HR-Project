@@ -38,6 +38,12 @@ from app.ai.contracts import (
 from app.ai.markers import UNTRUSTED_SOURCE_SYSTEM_PROMPT, wrap_untrusted
 from app.ai.providers.base import AIProvider, StructuredGenerationRequest
 from app.ai.providers.errors import ProviderError
+from app.ai.workflows.result_cache import (
+    cache_key,
+    cached_trace_ids,
+    normalized_resume_hash,
+    provider_identity,
+)
 from app.models import Resume
 from app.services.candidate_profile_service import CandidateProfileService
 from app.services.errors import ValidationError
@@ -66,6 +72,7 @@ class CandidateProfileExtractionPayload:
     extracted: CandidateProfileExtractionOutput
     provider_result: Any
     input_reference: dict[str, str]
+    cache_key: str | None
 
 
 @dataclass(frozen=True)
@@ -105,7 +112,23 @@ class CandidateProfileExtractionWorkflow:
             "entity": "resume",
             "entity_id": str(resume_id or ""),
             "resume_text_sha256": _sha256(resume_text),
+            "resume_normalized_sha256": normalized_resume_hash(resume_text),
         }
+        identity = provider_identity(self._provider)
+        generated_cache_key = (
+            cache_key(
+                {
+                    "kind": WORKFLOW_TYPE,
+                    "resume_sha256": normalized_resume_hash(resume_text),
+                    "prompt_version": PROMPT_VERSION,
+                    "schema_version": AI_CONTRACT_SCHEMA_VERSION,
+                    "provider": identity[0],
+                    "model": identity[1],
+                }
+            )
+            if identity
+            else None
+        )
 
         result = self._provider.generate_structured(
             StructuredGenerationRequest(
@@ -121,6 +144,7 @@ class CandidateProfileExtractionWorkflow:
             extracted=extracted,
             provider_result=result,
             input_reference=input_reference,
+            cache_key=generated_cache_key,
         )
 
     def persist(
@@ -182,6 +206,12 @@ class CandidateProfileExtractionWorkflow:
                 "model": payload.provider_result.model,
                 "schema_version": payload.provider_result.schema_version
                 or AI_CONTRACT_SCHEMA_VERSION,
+                "cache_key": payload.cache_key,
+                "cache_trace_ids": {
+                    "workflow_run_id": str(run.id),
+                    "workflow_step_trace_id": str(step.id),
+                    "ai_trace_id": str(ai_trace.id),
+                },
             },
             organization_id=organization_id,
             make_current=True,
@@ -213,7 +243,44 @@ class CandidateProfileExtractionWorkflow:
             "entity": "resume",
             "entity_id": str(resume.id),
             "resume_text_sha256": _sha256(resume_text),
+            "resume_normalized_sha256": normalized_resume_hash(resume_text),
         }
+
+        identity = provider_identity(self._provider)
+        lookup_key = (
+            cache_key(
+                {
+                    "kind": WORKFLOW_TYPE,
+                    "resume_sha256": normalized_resume_hash(resume_text),
+                    "prompt_version": PROMPT_VERSION,
+                    "schema_version": AI_CONTRACT_SCHEMA_VERSION,
+                    "provider": identity[0],
+                    "model": identity[1],
+                }
+            )
+            if identity
+            else None
+        )
+        current_profile = self._profile_service.get_current_or_latest(
+            db, resume_id=resume.id, organization_id=organization_id
+        )
+        if (
+            lookup_key
+            and current_profile is not None
+            and current_profile.is_current
+            and current_profile.source == "ai_extracted"
+            and current_profile.provenance
+            and current_profile.provenance.get("cache_key") == lookup_key
+        ):
+            trace_ids = cached_trace_ids(current_profile.provenance)
+            if trace_ids and "ai_trace_id" in trace_ids:
+                return CandidateProfileExtractionResult(
+                    profile_id=current_profile.id,
+                    workflow_run_id=uuid.UUID(trace_ids["workflow_run_id"]),
+                    workflow_step_trace_id=uuid.UUID(trace_ids["workflow_step_trace_id"]),
+                    ai_trace_id=uuid.UUID(trace_ids["ai_trace_id"]),
+                    version_number=current_profile.version_number,
+                )
 
         try:
             payload = self.generate(resume_text=resume_text, resume_id=resume.id)

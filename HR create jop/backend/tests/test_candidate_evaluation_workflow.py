@@ -862,11 +862,28 @@ def test_evaluation_references_correct_job_application(db_session: Session) -> N
     assert evaluation.job_application_id == application.id
 
 
-def test_reevaluation_creates_new_version_and_preserves_previous(db_session: Session) -> None:
+def test_reevaluation_reuses_cached_evaluation_without_provider_calls(db_session: Session) -> None:
     organization, _user, application, _job_profile, _candidate_profile = create_parent_records(
         db_session
     )
-    workflow, _, _ = make_workflow()
+    workflow, evidence_provider, explanation_provider = make_workflow()
+    evidence_calls = 0
+    explanation_calls = 0
+    original_evidence = evidence_provider.generate_structured
+    original_explanation = explanation_provider.generate_structured
+
+    def count_evidence(request):
+        nonlocal evidence_calls
+        evidence_calls += 1
+        return original_evidence(request)
+
+    def count_explanation(request):
+        nonlocal explanation_calls
+        explanation_calls += 1
+        return original_explanation(request)
+
+    evidence_provider.generate_structured = count_evidence
+    explanation_provider.generate_structured = count_explanation
 
     first = workflow.run(
         db_session,
@@ -887,9 +904,71 @@ def test_reevaluation_creates_new_version_and_preserves_previous(db_session: Ses
     db_session.refresh(second_eval)
 
     assert first_eval.version_number == 1
-    assert second_eval.version_number == 2
-    assert first_eval.is_current is False
+    assert second_eval.version_number == 1
+    assert first_eval.is_current is True
     assert second_eval.is_current is True
+    assert first.evaluation_id == second.evaluation_id
+    assert evidence_calls == 1
+    assert explanation_calls == 1
+
+
+def test_job_profile_version_change_misses_evaluation_cache(db_session: Session) -> None:
+    organization, user, application, job_profile, _candidate_profile = create_parent_records(
+        db_session
+    )
+    workflow, evidence_provider, explanation_provider = make_workflow()
+    evidence_calls = 0
+    explanation_calls = 0
+    original_evidence = evidence_provider.generate_structured
+    original_explanation = explanation_provider.generate_structured
+
+    def count_evidence(request):
+        nonlocal evidence_calls
+        evidence_calls += 1
+        return original_evidence(request)
+
+    def count_explanation(request):
+        nonlocal explanation_calls
+        explanation_calls += 1
+        return original_explanation(request)
+
+    evidence_provider.generate_structured = count_evidence
+    explanation_provider.generate_structured = count_explanation
+    first = workflow.run(
+        db_session, job_application_id=application.id, organization_id=organization.id
+    )
+    db_session.commit()
+
+    job_profile.is_current = False
+    updated_profile_data = {
+        **job_profile.profile_data,
+        "requirements": [
+            *job_profile.profile_data["requirements"],
+            {"text": "Production deployment", "category": "important", "dimension": "skill"},
+        ],
+    }
+    db_session.add(
+        JobProfile(
+            job_id=job_profile.job_id,
+            version_number=2,
+            status="approved",
+            source="hr_created",
+            profile_data=updated_profile_data,
+            approved_by_user_id=user.id,
+            approved_at=datetime.now(UTC),
+            is_current=True,
+        )
+    )
+    db_session.commit()
+    second = workflow.run(
+        db_session, job_application_id=application.id, organization_id=organization.id
+    )
+    db_session.commit()
+
+    assert first.evaluation_id != second.evaluation_id
+    assert second.version_number == 2
+    assert evidence_calls == 2
+    assert explanation_calls == 2
 
 
 def test_multiple_versions_remain_queryable(db_session: Session) -> None:
@@ -918,7 +997,7 @@ def test_multiple_versions_remain_queryable(db_session: Session) -> None:
             .order_by(CandidateEvaluation.version_number)
         )
     )
-    assert [evaluation.version_number for evaluation in versions] == [1, 2]
+    assert [evaluation.version_number for evaluation in versions] == [1]
 
 
 def test_requires_approved_job_profile(db_session: Session) -> None:
@@ -1532,7 +1611,7 @@ def test_previous_versions_remain_unchanged(db_session: Session) -> None:
     assert first_eval.job_application_id == application.id
     assert first_eval.job_profile_id == _job_profile.id
     assert second_eval.job_application_id == application.id
-    assert second_eval.version_number == 2
+    assert second_eval.version_number == 1
 
 
 def test_evidence_key_must_exist_in_supplied_set(db_session: Session) -> None:
@@ -1617,7 +1696,7 @@ def test_missing_must_have_is_non_penalizing_review_signal(db_session: Session) 
     assert count_rows(db_session, HRDecision) == 0
 
 
-def test_reevaluation_does_not_accumulate_duplicate_evidence(db_session: Session) -> None:
+def test_cached_reevaluation_does_not_duplicate_evidence(db_session: Session) -> None:
     organization, _user, application, _job_profile, _candidate_profile = create_parent_records(
         db_session
     )
@@ -1636,7 +1715,7 @@ def test_reevaluation_does_not_accumulate_duplicate_evidence(db_session: Session
     )
     db_session.commit()
 
-    # Each evaluation is a distinct version; each has exactly its own evidence rows.
+    # A cache hit reuses the persisted evaluation and evidence rows.
     evaluations = list(
         db_session.scalars(
             select(CandidateEvaluation)
@@ -1644,7 +1723,7 @@ def test_reevaluation_does_not_accumulate_duplicate_evidence(db_session: Session
             .order_by(CandidateEvaluation.version_number)
         )
     )
-    assert len(evaluations) == 2
+    assert len(evaluations) == 1
     for evaluation in evaluations:
         rows = list(
             db_session.scalars(
@@ -1720,7 +1799,7 @@ class TestSoalProviderEvaluation:
         assert explanation_trace.status == "succeeded"
         assert evidence_trace.input_reference["entity"] == "job_application"
 
-    def test_reevaluation_creates_distinct_versions(self, db_session: Session) -> None:
+    def test_reevaluation_reuses_cached_version(self, db_session: Session) -> None:
         organization, _user, application, _job_profile, _candidate_profile = create_parent_records(
             db_session
         )
@@ -1745,9 +1824,10 @@ class TestSoalProviderEvaluation:
         db_session.refresh(second_eval)
 
         assert first_eval.version_number == 1
-        assert second_eval.version_number == 2
-        assert first_eval.is_current is False
+        assert second_eval.version_number == 1
+        assert first_eval.is_current is True
         assert second_eval.is_current is True
+        assert first.evaluation_id == second.evaluation_id
 
     def test_missing_job_application_fails_before_any_trace(self, db_session: Session) -> None:
         organization, _user, _application, _job_profile, _candidate_profile = create_parent_records(

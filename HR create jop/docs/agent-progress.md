@@ -1,7 +1,7 @@
 # Agent Progress
 
 ## CURRENT
-- Task: A4 [AUTO] complete. Next in Section 5: A3 [AUTO].
+- Task: A3 [AUTO] complete. Next in Section 5: A1 [GATE + NEEDS-HUMAN], blocked until local LLM base URL, exact model, and structured-output support are supplied.
 - Branch: `agent/recruitment-work` (created from the existing `feat/public-candidate-application` tree).
 - Housekeeping commits: `6bdf7a5` frontend readability; `8f14d0a` HERA brand mark; `167a4f1` HR Manager workspace/branding; `b827907` startup helper; `a35b6ab` change log.
 - S8 plan: (1) use the repository root `.github/workflows` and canonical backend/frontend; (2) add one CI workflow for Gitleaks, pip-audit, npm audit (high+), Ruff, pytest, Vitest, and build; (3) document exact local commands here; (4) validate workflow structure and record limitations. No secrets, dependencies, application changes, or data migrations planned.
@@ -27,12 +27,29 @@
 5. Add offline unit tests for metric calculations and formatting/failure accounting; never call a live or paid provider in tests.
 6. Run the benchmark once using only a local deterministic/fake path where feasible, focused tests, Ruff, and `git diff --check`; document that live-provider runs are opt-in and operator initiated.
 7. Commit only A4 code, fixtures/tests, and this progress update.
+
+## A3 PLAN [AUTO]
+1. Reuse the existing versioned `CandidateProfile` and `CandidateEvaluation` artifacts; avoid a new cache table that duplicates resume-derived personal data.
+2. Normalize resume text for cache identity and include prompt version, effective provider/model, and the approved job-profile version for evaluation.
+3. Store only cache identity metadata in each artifact's existing provenance; never persist resume text in cache metadata.
+4. On same-organization re-screen, reuse a matching current AI profile and completed current evaluation, including their existing evidence and trace IDs, so no provider is called.
+5. Treat human-corrected profiles as authoritative; do not replace them from an AI cache. Prompt, model, resume content, or job-profile version changes must miss.
+6. Add offline database-backed tests that count provider calls, assert repeat screening hits, and assert job-profile-version changes miss; retain existing organization-scope checks.
+7. Run focused tests, Ruff, and diff checks; update task status and commit only A3 code/tests plus this progress entry.
+
+### A3 checkpoint
+- Implemented cache identities in existing artifact provenance and same-org current-artifact lookups; no schema change or CV text duplication.
+- First focused test run: 61 passed, 7 skipped, 1 failed. The remaining assertion expected an additional evaluation version on identical input; root cause is now understood as an outdated expectation under A3 reuse.
+- Second focused test run after updating that expectation: 61 passed, 7 skipped, 1 failed. Root cause: the new job-profile version-miss test referenced `user` while its fixture unpacked the value as `_user`; fix the fixture binding and rerun.
+- Focused Ruff check excluding pre-existing E501/B904 diagnostics passed. Strict Ruff still finds 9 diagnostics on untouched lines in the two existing workflow/test files; the new helper passes strict check and format check. `py_compile` and `git diff --check` passed.
+- The first repeat-evaluation test expectation and a fixture binding were corrected; final focused run: 62 passed, 7 skipped. No live provider calls.
 ## TASK STATUS
 - S1: done (`b7903e7`).
 - S2: done (`e796dba`); no confirmed real secrets found, so no key rotation is pending.
 - S3: done (`98a72ce`).
 - S4: done (`17da746`; follow-up metering fix `e99d445`).
 - S5: done (`1725d09`).
+- A3: done; cache metadata lives in existing versioned artifacts, with no migration or dependency. Repeat extraction/evaluation reuses current artifacts and traces; resume content, profile version, prompt/schema, or effective provider/model changes miss. Focused tests: 62 passed, 7 skipped. No live AI calls.
 - S6: pending [GATE] design approval.
 - S7: pending [GATE] design approval.
 
@@ -58,6 +75,7 @@
 - S8 | Added `.github/workflows/security-ci.yml` at the Git repository root. It redacts Gitleaks output and scans only incoming commits (avoids known historical report-only matches); runs Python dependency audit, Ruff, PostgreSQL-backed pytest, production npm audit at high/critical, Oxlint, Vitest, and Vite build. No application files or dependencies changed. Commit: `df7c6e5` (workflow only).
 - A2 | Production rejects `AI_PROVIDER=fake` unless `ALLOW_FAKE_AI=true`; startup logs provider/model/demo only; admin settings expose `is_demo`, with a visible simulated-response notice for Fake. Added config/API/UI regression tests and documented the override in both env examples. No dependencies. Backend focused tests: 14 passed, 1 skipped; frontend settings tests: 4 passed; Ruff check+format passed; targeted Oxlint passed; Vite build passed (existing chunk-size warning). `npm run lint` could not resolve its binary because the Windows workspace path contains `&`; direct Oxlint on both changed UI files passed.
 - A4 | Added configured-provider synthetic benchmarking with JSON-rate, evidence precision/recall, grounded quote rate, latency and provider-call metrics; shared fixtures now include English, Arabic, mixed-language, missing-evidence, and injection cases. Reused the in-memory candidate-evaluation workflow; reports never print CVs, prompts, keys, or provider messages. Added offline metric, failure, report, and Fake-mode guard tests. No dependencies. Focused tests: 9 passed; Ruff check excluding pre-existing E501 warnings passed; tests format check and `py_compile` passed. Default deterministic run: 9 cases, deterministic=True, stuffing delta=0. No live provider request was made. Provider command: `python tools/eval_quality.py --provider-benchmark` (configured provider in `backend/.env`; sends only synthetic fixtures). Strict Ruff still reports 12 pre-existing E501 lines in `tools/eval_quality.py`, and the legacy file-wide format check proposes unrelated formatting changes.
+- A3 | Reused current versioned candidate profiles/evaluations based on hashed normalized resume content, job-profile/candidate-profile versions, prompt/schema versions, provider/model identity, and evaluation engine version. Stored only hashes and prior trace IDs in artifact provenance; no CV text, new table, migration, or dependency. Added call-count tests for cache hits and profile-version/content misses. Focused tests: 62 passed, 7 skipped; `py_compile`, added helper Ruff check/format, filtered Ruff, and `git diff --check` passed. Strict Ruff reports 9 existing E501/B904 diagnostics on untouched lines in the large workflow/test files. No external AI calls.
 
 ### S8 local run
 

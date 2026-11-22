@@ -41,6 +41,12 @@ from app.ai.contracts import (
 from app.ai.markers import UNTRUSTED_SOURCE_SYSTEM_PROMPT, wrap_untrusted
 from app.ai.providers.base import AIProvider, StructuredGenerationRequest
 from app.ai.providers.errors import ProviderError
+from app.ai.workflows.result_cache import (
+    cache_key,
+    cached_trace_ids,
+    normalized_resume_hash,
+    provider_identity,
+)
 from app.models import CandidateProfile, JobApplication, JobProfile
 from app.services.candidate_profile_service import CandidateProfileService
 from app.services.errors import NotFoundError, ValidationError
@@ -87,6 +93,7 @@ class CandidateEvaluationPayload:
     score_result: dict[str, Any]
     input_reference: dict[str, str]
     requirements: list
+    cache_key: str | None
 
 
 class GenerationComponentError(Exception):
@@ -313,6 +320,39 @@ class CandidateEvaluationWorkflow:
             score_result=score_result,
             input_reference=ref,
             requirements=requirements,
+            cache_key=self._cache_identity_key(
+                resume_text=resume_text,
+                input_reference=ref,
+            ),
+        )
+
+    def _cache_identity_key(
+        self, *, resume_text: str, input_reference: dict[str, str]
+    ) -> str | None:
+        evidence_identity = provider_identity(self._evidence_provider)
+        explanation_identity = provider_identity(self._explanation_provider)
+        if not evidence_identity or not explanation_identity:
+            return None
+        return cache_key(
+            {
+                "kind": WORKFLOW_TYPE,
+                "organization_id": input_reference.get("organization_id"),
+                "job_application_id": input_reference.get("entity_id"),
+                "resume_sha256": normalized_resume_hash(resume_text),
+                "job_profile_id": input_reference.get("job_profile_id"),
+                "job_profile_version": input_reference.get("job_profile_version"),
+                "job_profile_sha256": input_reference.get("job_profile_sha256"),
+                "candidate_profile_id": input_reference.get("candidate_profile_id"),
+                "candidate_profile_version": input_reference.get("candidate_profile_version"),
+                "candidate_profile_sha256": input_reference.get("candidate_profile_sha256"),
+                "prompt_version": PROMPT_VERSION,
+                "schema_version": AI_CONTRACT_SCHEMA_VERSION,
+                "evidence_provider": evidence_identity[0],
+                "evidence_model": evidence_identity[1],
+                "explanation_provider": explanation_identity[0],
+                "explanation_model": explanation_identity[1],
+                "evidence_engine_version": EVIDENCE_ENGINE_VERSION,
+            }
         )
 
     @staticmethod
@@ -415,6 +455,7 @@ class CandidateEvaluationWorkflow:
         input_reference = payload.input_reference or self._input_reference(
             application, job_profile, candidate_profile
         )
+        evaluation_cache_key = payload.cache_key
 
         evidence_output_ref = {"output_sha256": _sha256(_serialize(payload.evidence.model_dump()))}
         evidence_trace = self._trace_service.record_ai_trace(
@@ -470,6 +511,13 @@ class CandidateEvaluationWorkflow:
                 "schema_version": payload.explanation_result.schema_version
                 or AI_CONTRACT_SCHEMA_VERSION,
                 "evidence_engine_version": EVIDENCE_ENGINE_VERSION,
+                "cache_key": evaluation_cache_key,
+                "cache_trace_ids": {
+                    "workflow_run_id": str(run.id),
+                    "workflow_step_trace_id": str(step.id),
+                    "evidence_ai_trace_id": str(evidence_trace.id),
+                    "explanation_ai_trace_id": str(explanation_trace.id),
+                },
             },
             organization_id=resolved_org_id,
             make_current=True,
@@ -487,6 +535,15 @@ class CandidateEvaluationWorkflow:
                 organization_id=resolved_org_id,
             )
             persisted.append(evidence_row)
+
+        if persisted and evaluation.provenance is not None:
+            evaluation.provenance = {
+                **evaluation.provenance,
+                "cache_trace_ids": {
+                    **evaluation.provenance["cache_trace_ids"],
+                    "match_evidence_id": str(persisted[0].id),
+                },
+            }
 
         self._trace_service.mark_step_completed(db, workflow_step_trace_id=step.id)
         self._trace_service.mark_run_completed(db, workflow_run_id=run.id)
@@ -544,6 +601,40 @@ class CandidateEvaluationWorkflow:
         self._enforce_context_consistency(application, job_profile, candidate_profile)
         input_reference = self._input_reference(application, job_profile, candidate_profile)
         resume_text = application.resume.extracted_text
+        lookup_key = self._cache_identity_key(
+            resume_text=resume_text or "",
+            input_reference=input_reference,
+        )
+        current_evaluations = self._evaluation_service.list_versions(
+            db,
+            job_application_id=application.id,
+            organization_id=resolved_org_id,
+        )
+        current_evaluation = next(
+            (item for item in reversed(current_evaluations) if item.is_current), None
+        )
+        if (
+            lookup_key
+            and current_evaluation is not None
+            and current_evaluation.status == "completed"
+            and current_evaluation.provenance
+            and current_evaluation.provenance.get("cache_key") == lookup_key
+        ):
+            trace_ids = cached_trace_ids(current_evaluation.provenance)
+            if trace_ids and {
+                "evidence_ai_trace_id",
+                "explanation_ai_trace_id",
+                "match_evidence_id",
+            }.issubset(trace_ids):
+                return CandidateEvaluationResult(
+                    evaluation_id=current_evaluation.id,
+                    match_evidence_id=uuid.UUID(trace_ids["match_evidence_id"]),
+                    workflow_run_id=uuid.UUID(trace_ids["workflow_run_id"]),
+                    workflow_step_trace_id=uuid.UUID(trace_ids["workflow_step_trace_id"]),
+                    evidence_ai_trace_id=uuid.UUID(trace_ids["evidence_ai_trace_id"]),
+                    explanation_ai_trace_id=uuid.UUID(trace_ids["explanation_ai_trace_id"]),
+                    version_number=current_evaluation.version_number,
+                )
 
         try:
             payload = self.generate(
@@ -745,10 +836,13 @@ class CandidateEvaluationWorkflow:
         return {
             "entity": "job_application",
             "entity_id": str(application.id),
+            "organization_id": str(application.organization_id),
             "job_id": str(application.job_id),
             "resume_id": str(application.resume_id),
             "job_profile_id": str(job_profile.id),
+            "job_profile_version": str(job_profile.version_number),
             "candidate_profile_id": str(candidate_profile.id),
+            "candidate_profile_version": str(candidate_profile.version_number),
             "job_profile_sha256": _profile_hash(job_profile.profile_data),
             "candidate_profile_sha256": _profile_hash(candidate_profile.profile_data),
         }
