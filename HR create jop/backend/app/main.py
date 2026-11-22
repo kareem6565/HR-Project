@@ -9,10 +9,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.ai.providers.errors import (
+    ProviderContextLimitError,
     ProviderError,
     ProviderInvalidRequestError,
     ProviderRateLimitError,
     ProviderTimeoutError,
+    ProviderTruncatedResponseError,
 )
 from app.ai.providers.factory import resolve_ai_config
 from app.api.v1.router import api_router
@@ -145,6 +147,15 @@ def create_app() -> FastAPI:
         if isinstance(exc, ProviderTimeoutError):
             message = "AI provider timed out. Try again."
             error_type = "timeout"
+        elif isinstance(exc, ProviderContextLimitError):
+            message = (
+                "The request is too large for the configured local-model context; "
+                "no AI result was used."
+            )
+            error_type = "context_limit"
+        elif isinstance(exc, ProviderTruncatedResponseError):
+            message = "The local model did not finish its response; partial output was discarded."
+            error_type = "truncated_response"
         elif isinstance(exc, ProviderInvalidRequestError):
             message = "AI provider returned an invalid response. Try again."
             error_type = "invalid_request"

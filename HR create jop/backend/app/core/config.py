@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     retention_max_deletions_per_run: int = Field(
         default=100, ge=1, le=10000, validation_alias="RETENTION_MAX_DELETIONS_PER_RUN"
     )
-    ai_provider: Literal["fake", "soal", "ollama", "openrouter"] = Field(
+    ai_provider: Literal["fake", "soal", "ollama", "openrouter", "local", "ollama_local"] = Field(
         default="openrouter", validation_alias="AI_PROVIDER"
     )
     ai_mode: Literal["llm", "rules"] = Field(default="llm", validation_alias="AI_MODE")
@@ -43,6 +43,30 @@ class Settings(BaseSettings):
         default="https://ollama.com/v1", validation_alias="OLLAMA_BASE_URL"
     )
     ollama_model: str = Field(default="gemma4:31b", validation_alias="OLLAMA_MODEL")
+    local_llm_api_key: str | None = Field(default=None, validation_alias="LOCAL_LLM_API_KEY")
+    local_llm_base_url: str = Field(
+        default="http://localhost:8000/v1", validation_alias="LOCAL_LLM_BASE_URL"
+    )
+    local_llm_model: str = Field(default="", validation_alias="LOCAL_LLM_MODEL")
+    ollama_local_base_url: str = Field(
+        default="http://localhost:11434", validation_alias="OLLAMA_LOCAL_BASE_URL"
+    )
+    ollama_local_model: str = Field(default="", validation_alias="OLLAMA_LOCAL_MODEL")
+    ollama_local_num_ctx: int = Field(
+        default=16384, ge=2048, le=131072, validation_alias="OLLAMA_LOCAL_NUM_CTX"
+    )
+    ai_self_hosted_global_rpm_limit: int = Field(
+        default=60, gt=0, validation_alias="AI_SELF_HOSTED_GLOBAL_RPM_LIMIT"
+    )
+    ai_self_hosted_global_daily_limit: int = Field(
+        default=1000, gt=0, validation_alias="AI_SELF_HOSTED_GLOBAL_DAILY_LIMIT"
+    )
+    ai_self_hosted_user_rpm_limit: int = Field(
+        default=30, gt=0, validation_alias="AI_SELF_HOSTED_USER_RPM_LIMIT"
+    )
+    ai_self_hosted_user_daily_limit: int = Field(
+        default=300, gt=0, validation_alias="AI_SELF_HOSTED_USER_DAILY_LIMIT"
+    )
     openrouter_api_key: str | None = Field(default=None, validation_alias="OPENROUTER_API_KEY")
     openrouter_base_url: str = Field(
         default="https://openrouter.ai/api/v1", validation_alias="OPENROUTER_BASE_URL"

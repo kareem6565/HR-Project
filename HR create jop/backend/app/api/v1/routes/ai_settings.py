@@ -19,6 +19,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.ai.providers import ProviderError, ProviderRateLimitError
 from app.ai.providers.base import TextGenerationRequest
 from app.ai.providers.factory import resolve_ai_config
+from app.ai.providers.local import LocalProvider
+from app.ai.providers.ollama_local import OllamaLocalProvider
 from app.ai.providers.openrouter import OpenRouterProvider
 from app.api.v1.deps import RequestContext, require_roles
 from app.api.v1.schemas.ai_settings import (
@@ -99,30 +101,50 @@ def verify_ai_api_key(
     """
     config = resolve_ai_config(settings)
     api_key = body.api_key.strip() if body and body.api_key else config["api_key"]
-    model = config["model"] or (
-        settings.soal_model
-        if settings.ai_provider == "soal"
-        else settings.openrouter_model
-        if settings.ai_provider == "openrouter"
-        else settings.ollama_model
-    )
+    model = config["model"] or {
+        "soal": settings.soal_model,
+        "openrouter": settings.openrouter_model,
+        "ollama": settings.ollama_model,
+    }.get(settings.ai_provider, "")
 
-    if not api_key:
-        return VerifyApiKeyResponse(ok=False, message="No API key configured.", model=model)
+    if config["provider"] in {"local", "ollama_local"} and not model:
+        return VerifyApiKeyResponse(
+            ok=False,
+            message="Configure the self-hosted model name before testing the connection.",
+            model="",
+        )
 
-    if config["provider"] != "openrouter":
+    if config["provider"] == "local":
+        provider = LocalProvider(
+            api_key=api_key or None,
+            model=model,
+            base_url=config["base_url"],
+        )
+    elif config["provider"] == "ollama_local":
+        provider = OllamaLocalProvider(
+            model=model,
+            base_url=config["base_url"],
+            num_ctx=settings.ollama_local_num_ctx,
+        )
+    elif config["provider"] == "openrouter":
+        if not api_key:
+            return VerifyApiKeyResponse(ok=False, message="No API key configured.", model=model)
+        provider = OpenRouterProvider(
+            api_key=api_key,
+            model=model,
+            base_url=config["base_url"],
+            max_tokens=settings.openrouter_max_tokens,
+        )
+        provider.cost_policy_enabled = True
+    else:
         return VerifyApiKeyResponse(
             ok=False,
             message="Only OpenRouter's approved free-model route is enabled for verification.",
             model=model,
         )
-    provider = OpenRouterProvider(
-        api_key=api_key,
-        model=model,
-        base_url=config["base_url"],
-        max_tokens=settings.openrouter_max_tokens,
-    )
-    provider.cost_policy_enabled = True
+
+    if config["provider"] not in {"local", "ollama_local"} and not api_key:
+        return VerifyApiKeyResponse(ok=False, message="No API key configured.", model=model)
     started = time.monotonic()
     try:
         result = provider.generate_text(TextGenerationRequest(input=_VERIFY_PROMPT))

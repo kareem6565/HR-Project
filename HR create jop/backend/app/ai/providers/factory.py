@@ -9,7 +9,9 @@ from __future__ import annotations
 from app.ai.providers.base import AIProvider
 from app.ai.providers.errors import ProviderConfigurationError
 from app.ai.providers.fake import FakeAIProvider
+from app.ai.providers.local import LocalProvider
 from app.ai.providers.ollama_cloud import OllamaCloudProvider
+from app.ai.providers.ollama_local import OllamaLocalProvider
 from app.ai.providers.openrouter import OpenRouterProvider
 from app.ai.providers.soal import SoalProvider
 from app.core.config import Settings
@@ -22,7 +24,7 @@ def resolve_ai_config(settings: Settings) -> dict:
     """Return the effective provider config as a dict.
 
     Keys:
-    - ``provider``: "ollama", "soal", "openrouter" or "fake"
+    - ``provider``: selected provider id, including distinct self-hosted adapters
     - ``model``: the active model ("" when fake)
     - ``base_url``: the active endpoint ("" when fake)
     - ``api_key``: the active API key ("" when none)
@@ -48,6 +50,26 @@ def resolve_ai_config(settings: Settings) -> dict:
             "api_key_source": API_KEY_SOURCE_ENVIRONMENT
             if settings.ollama_api_key
             else API_KEY_SOURCE_NONE,
+            "is_fake": False,
+        }
+    if settings.ai_provider == "local":
+        return {
+            "provider": "local",
+            "model": settings.local_llm_model,
+            "base_url": settings.local_llm_base_url,
+            "api_key": settings.local_llm_api_key or "",
+            "api_key_source": API_KEY_SOURCE_ENVIRONMENT
+            if settings.local_llm_api_key
+            else API_KEY_SOURCE_NONE,
+            "is_fake": False,
+        }
+    if settings.ai_provider == "ollama_local":
+        return {
+            "provider": "ollama_local",
+            "model": settings.ollama_local_model,
+            "base_url": settings.ollama_local_base_url,
+            "api_key": "",
+            "api_key_source": API_KEY_SOURCE_NONE,
             "is_fake": False,
         }
     if settings.ai_provider == "openrouter":
@@ -106,6 +128,28 @@ def get_provider(settings: Settings, **fake_kwargs) -> AIProvider:
             model=config["model"],
             base_url=config["base_url"],
             max_tokens=settings.openrouter_max_tokens,
+        )
+        provider.cost_policy_enabled = True
+        return provider
+    if config["provider"] == "local":
+        if not config["model"]:
+            raise ProviderConfigurationError("LOCAL_LLM_MODEL is required when AI_PROVIDER=local.")
+        provider = LocalProvider(
+            api_key=config["api_key"] or None,
+            model=config["model"],
+            base_url=config["base_url"],
+        )
+        provider.cost_policy_enabled = True
+        return provider
+    if config["provider"] == "ollama_local":
+        if not config["model"]:
+            raise ProviderConfigurationError(
+                "OLLAMA_LOCAL_MODEL is required when AI_PROVIDER=ollama_local."
+            )
+        provider = OllamaLocalProvider(
+            model=config["model"],
+            base_url=config["base_url"],
+            num_ctx=settings.ollama_local_num_ctx,
         )
         provider.cost_policy_enabled = True
         return provider

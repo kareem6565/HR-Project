@@ -15,6 +15,15 @@ const SOURCE_LABELS = {
   none: "No key configured",
 };
 
+const PROVIDER_LABELS = {
+  fake: "Demo AI",
+  soal: "Soal Cloud",
+  ollama: "Ollama Cloud",
+  openrouter: "OpenRouter",
+  local: "Self-hosted OpenAI-compatible",
+  ollama_local: "Self-hosted Ollama",
+};
+
 export default function AISettings() {
   const { theme, setTheme } = useTheme();
   const [settings, setSettings] = useState(null);
@@ -97,7 +106,7 @@ export default function AISettings() {
           <div className="stat-card">
             <div className="stat-info">
               <span>Provider</span>
-              <strong>{settings.provider}</strong>
+              <strong>{PROVIDER_LABELS[settings.provider] || settings.provider}</strong>
             </div>
           </div>
           <div className="stat-card">
@@ -110,7 +119,11 @@ export default function AISettings() {
             <div className="stat-info">
               <span>API key</span>
               <strong style={{ color: settings.has_api_key ? "#12B76A" : "#F79009" }}>
-                {settings.has_api_key ? "Configured" : "Missing"}
+                {settings.has_api_key
+                  ? "Configured"
+                  : ["local", "ollama_local"].includes(settings.provider)
+                    ? "Optional / not set"
+                    : "Missing"}
               </strong>
             </div>
           </div>
@@ -123,7 +136,7 @@ export default function AISettings() {
         </div>
 
         <p className="muted-note">
-          Active provider: {activeProvider}. System operators manage the provider and its API key in the backend environment.
+          Active provider: {PROVIDER_LABELS[activeProvider] || activeProvider}. System operators manage its endpoint and credentials in the backend environment.
         </p>
 
         {(formError || notice) && (

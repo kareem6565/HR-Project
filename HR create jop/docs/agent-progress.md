@@ -1,7 +1,7 @@
 # Agent Progress
 
 ## CURRENT
-- Task: B1 complete. Next: A1 [GATE + NEEDS-HUMAN]; plan is posted below and awaits approval.
+- Task: A1 implementation complete; next prepare the A5 CPU-only pre-ranking plan and wait for owner approval before implementation.
 - Branch: `agent/recruitment-work` (created from the existing `feat/public-candidate-application` tree).
 - Housekeeping commits: `6bdf7a5` frontend readability; `8f14d0a` HERA brand mark; `167a4f1` HR Manager workspace/branding; `b827907` startup helper; `a35b6ab` change log.
 - S8 plan: (1) use the repository root `.github/workflows` and canonical backend/frontend; (2) add one CI workflow for Gitleaks, pip-audit, npm audit (high+), Ruff, pytest, Vitest, and build; (3) document exact local commands here; (4) validate workflow structure and record limitations. No secrets, dependencies, application changes, or data migrations planned.
@@ -69,7 +69,8 @@
 - S5: done (`1725d09`).
 - A3: done (`a6881eb`); cache metadata lives in existing versioned artifacts, with no migration or dependency. Repeat extraction/evaluation reuses current artifacts and traces; resume content, profile version, prompt/schema, or effective provider/model changes miss. Focused tests: 62 passed, 7 skipped. No live AI calls.
 - A6: done (`2290230`).
-- B1: done (worker lock and cleanup logging fixes; commit pending).
+- B1: done (worker lock and cleanup logging fixes; commit `3c4d56e`).
+- A1: implemented, live verification pending; distinct self-hosted provider adapters with mocked tests, isolated quotas/usage ledger, and configurable Ollama context. No real model or endpoint was configured.
 - S6: pending [GATE] design approval.
 - S7: pending [GATE] design approval.
 
@@ -94,14 +95,23 @@
 - Verified swallowed failure: cleanup of a newly created resume file suppressed deletion exceptions. It now emits a safe warning with item ID and exception class only; regression test verifies the path is not logged.
 - `services/outbox_worker.py` is absent and no outbox worker implementation exists in the backend; audited the actual screening and GitHub analysis queues instead. Unexpected loop exceptions are logged by type and polling continues; item-level failures remain persisted or recover through their lease.
 - Focused backend checks: 26 passed, 1 deselected; Ruff check passed; format check passed (4 files); `git diff --check` passed. No dependencies or schema changes.
-## A1 PLAN [GATE] — updated owner scope
-1. Verify OpenAI-compatible local server request semantics from official Ollama/vLLM documentation before implementation; do not assume endpoint behavior.
-2. Implement the `local` provider by reusing the existing OpenAI-compatible provider and configuration patterns; verify structured requests, retries, safe error mapping, and quota/ledger behavior against a mocked HTTP server only.
-3. Add configurable `num_ctx` for the self-hosted Ollama path without changing current provider defaults or external-provider policy.
-4. Update settings/status surfaces and tests only where needed for selecting and identifying the local provider; mark live verification as pending.
-5. Document that real-hardware speed and quantization effects are unmeasured pending a rented-GPU test.
-6. Separately propose (do not implement) a paid OpenRouter benchmark policy: explicit model allow-list, hard monthly spend cap, and warning at 80%; synthetic CVs only. Wait for approval before policy changes.
-7. Keep provider code, tests, docs, and progress changes in one A1 commit; run mocked tests, focused Ruff, and applicable checks.
+## A1 PLAN [GATE] — approved with native Ollama conditions on 2026-11-22
+1. Keep `ollama` as Ollama Cloud; add `local` for generic OpenAI-compatible self-hosted servers and separate `ollama_local` for native Ollama `/api/chat`.
+2. Verify official request/response fields before implementation: `options.num_ctx`, JSON-schema `format`, `prompt_eval_count`, `eval_count`, `done`, and `done_reason`.
+3. Add configurable local endpoint/model/API-key settings and Ollama `num_ctx` (default 16384); enforce typed failures for context-boundary or incomplete output and meter every call.
+4. Use a distinct self-hosted quota/usage-ledger path without changing external-provider cost authorization; add mocked HTTP tests only for success, JSON schema, truncation, connection error, timeout, and bad JSON.
+5. Update provider status labels and configuration docs. Record that real-hardware latency/quantization remain unmeasured until a rented-GPU test.
+6. Propose only (do not apply) the OpenRouter paid benchmark control: explicit model allow-list, atomic hard monthly cap, and warning at 80%; use synthetic CVs only and wait for separate approval.
+7. Run focused tests, Ruff, and diff checks, update this log, and commit A1 alone.
+
+### A1 completion
+- Added separate `local` OpenAI-compatible and `ollama_local` native adapters; retained `ollama` for Ollama Cloud. Models/endpoints remain operator-configured with no guessed model ID.
+- Native Ollama sends `/api/chat` with `stream:false`, JSON Schema in `format`, and `options.num_ctx` (default 16384). Prompt-token boundary, incomplete generation, invalid JSON, network failures, and timeouts return typed errors; failures and successes are written to the usage ledger.
+- Added separate configurable self-hosted quotas (60 RPM / 1000 daily global; 30 RPM / 300 daily per user by default). External provider quotas and paid authorization behavior are unchanged.
+- Admin settings distinguish both self-hosted paths; Verify works for local without requiring a cloud key. Added setup, memory-sizing, verification-state, and paid-benchmark proposal docs. No dependency, schema, prompt, or scoring changes.
+- Mocked backend provider/policy/settings checks: 80 passed, 1 skipped. Frontend AI-settings tests: 5 passed. Ruff check and format check passed on all touched Python files; targeted Oxlint and `git diff --check` passed. No live endpoint, model download, paid call, or real CV was used.
+- Limit: current official Ollama API docs do not document a tokenizer preflight endpoint; HERA rejects model-reported `prompt_eval_count >= num_ctx` before accepting any result, and rejects any incomplete response. Live endpoint/model verification is pending.
+- Performance and quantization effects on real hardware remain unmeasured until a rented-GPU check. OpenRouter paid benchmarking remains disabled pending exact model ID and approval of the proposed allow-list + atomic monthly cap + 80% warning.
 
 ## DONE
 - T0.4 | Verified current filters UI was introduced intentionally in `3867aad`; updated only three ApplicationsList tests and the MatchingResults comparison test using accessible roles/names, preserving status/search/filter/compare assertions and keyboard operation. Full frontend suite: 53 files, 339 passed. Ruff: clean; format: 298 files formatted. Commits: format `05b3997`, safe Ruff fixes `4c6ff26`, remaining Ruff `cc67a15`; T0.4 tests/progress commit `807a1a5`.
@@ -133,8 +143,6 @@ Frontend, from `HR create jop/frontend/frontend_last`:
 - S8 verification: PyYAML parsed the workflow and confirmed all three jobs; `git diff --check` passed. The first parser attempt used a YAML package absent from the local frontend install; switched to the already-installed backend PyYAML successfully. GitHub-hosted workflow execution was not available in this local session; full lint/test/build/audit jobs were not rerun because their pre-existing baseline outcomes are already recorded above and this task only adds workflow configuration.
 
 ## BLOCKED
-- NEEDS_HUMAN | A1 | Supply local LLM base URL, exact model name, and structured/JSON output support | Provider behavior must not be guessed | Once supplied, complete the gated local provider implementation | Until then, use a mocked HTTP server only.
-- NEEDS_HUMAN | A5 | Approve embedding model and available hardware/resources | Model footprint and dependency depend on this choice | Once supplied, prepare the gated plan | Continue unblocked tasks without model assumptions.
 - NEEDS_HUMAN | W1 | Select messaging provider; provide credentials, approved templates, and opt-in/legal wording | Integration and candidate consent cannot be invented | Once supplied, prepare the gated plan | Continue other unblocked tasks.
 
 ## DECISIONS
@@ -191,3 +199,5 @@ Frontend, from `HR create jop/frontend/frontend_last`:
 - A4 resolved checkpoints: moved benchmark helpers below the existing deterministic metric function after a placement error; corrected the Arabic fixture expectation to the scorer-verified 62.5 and restored the existing sparse-case expectation to 60 after an initially broad replacement.
 
 - T0.4 broader backend run (outside approved frontend-only edits): 1114 passed, 1 skipped, 12 deselected, 3 failed. The rate-limit case is order-dependent because prior public-application requests persist a shared TestClient-IP bucket; two worker cases can claim stale queued rows whose temporary files expired. No backend tests/code changed in this authorized frontend task.
+
+- NEEDS_HUMAN | A1 benchmark policy | Supply exact OpenRouter model ID and approve a proposed allow-list/monthly-cap policy before any paid benchmark | No model ID or paid-spend authorization has been provided | Submit the minimal policy proposal; implement only after explicit approval | Core self-hosted providers and mocked tests proceed without a model ID or live endpoint.

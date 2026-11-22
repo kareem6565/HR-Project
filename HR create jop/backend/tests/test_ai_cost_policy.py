@@ -76,6 +76,56 @@ def test_invalid_tester_allowlist_never_grants_elevated_limits():
     ) == (5, 20)
 
 
+def test_self_hosted_usage_has_separate_quota_namespace_and_ledger(policy_db):
+    settings = _settings(
+        ai_paid_mode_enabled=True,
+        ai_paid_budget_usd=250,
+        ai_self_hosted_global_rpm_limit=2,
+        ai_self_hosted_global_daily_limit=40,
+        ai_self_hosted_user_rpm_limit=2,
+        ai_self_hosted_user_daily_limit=20,
+    )
+    event_id = cost_policy.authorize_self_hosted_and_reserve(
+        provider="ollama_local",
+        model="operator-configured-model",
+        metadata={"workflow": "synthetic_test"},
+        settings=settings,
+    )
+    cost_policy.record_result(
+        event_id,
+        status="succeeded",
+        response={"usage": {"prompt_tokens": 9, "completion_tokens": 2}},
+    )
+    with policy_db() as session:
+        event = session.get(AIUsageEvent, event_id)
+        keys = {row.bucket_key for row in session.scalars(select(AIUsageCounter)).all()}
+        assert event.provider == "ollama_local"
+        assert event.status == "succeeded"
+        assert event.input_tokens == 9
+        assert event.output_tokens == 2
+        assert "self_hosted:global:minute" in keys
+        assert "self_hosted:global:day" in keys
+        assert "global:minute" not in keys
+        assert "global:day" not in keys
+
+
+def test_self_hosted_quota_limit_fails_closed_without_consuming_external_quota(policy_db):
+    settings = _settings(
+        ai_self_hosted_global_rpm_limit=1,
+        ai_self_hosted_global_daily_limit=5,
+    )
+    cost_policy.authorize_self_hosted_and_reserve(
+        provider="local", model="operator-configured-model", metadata=None, settings=settings
+    )
+    with pytest.raises(ProviderRateLimitError):
+        cost_policy.authorize_self_hosted_and_reserve(
+            provider="local", model="operator-configured-model", metadata=None, settings=settings
+        )
+    with policy_db() as session:
+        keys = {row.bucket_key for row in session.scalars(select(AIUsageCounter)).all()}
+        assert keys == {"self_hosted:global:minute", "self_hosted:global:day"}
+
+
 def _catalog_model(*, prompt="0", completion="0", supported=None):
     return {
         "id": "example/model:free",

@@ -31,6 +31,14 @@ class ProviderInvalidRequestError(ProviderError):
     """The request was malformed or rejected as invalid by the provider."""
 
 
+class ProviderContextLimitError(ProviderError):
+    """The prompt reached the configured context limit; no generated result is usable."""
+
+
+class ProviderTruncatedResponseError(ProviderError):
+    """The provider did not finish generation; partial output is never returned."""
+
+
 _PROVIDER_ERROR_CLASSES = {
     "timeout": ProviderTimeoutError,
     "rate_limit": ProviderRateLimitError,

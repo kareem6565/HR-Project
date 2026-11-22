@@ -161,7 +161,12 @@ def _reserve_counter(session: Session, key: str, window: datetime, limit: int) -
 
 
 def _new_event(
-    *, provider: str, model: str, metadata: dict[str, Any] | None, settings: Settings
+    *,
+    provider: str,
+    model: str,
+    metadata: dict[str, Any] | None,
+    settings: Settings,
+    quota_kind: str = "external",
 ) -> UUID:
     actor = ai_actor_context.get()
     user_id, organization_id = actor if actor else (None, None)
@@ -182,17 +187,39 @@ def _new_event(
                 "AI requests are paused after an unexpected non-zero model cost."
             )
         try:
-            checks = [
-                ("global:minute", minute, settings.ai_global_rpm_limit),
-                ("global:day", day, settings.ai_global_daily_limit),
-            ]
+            if quota_kind == "self_hosted":
+                checks = [
+                    ("self_hosted:global:minute", minute, settings.ai_self_hosted_global_rpm_limit),
+                    ("self_hosted:global:day", day, settings.ai_self_hosted_global_daily_limit),
+                ]
+            else:
+                checks = [
+                    ("global:minute", minute, settings.ai_global_rpm_limit),
+                    ("global:day", day, settings.ai_global_daily_limit),
+                ]
             if user_id is not None:
                 suffix = str(user_id)
-                user_rpm_limit, user_daily_limit = _user_quota_limits(user_id, settings)
+                user_key_prefix = "self_hosted:" if quota_kind == "self_hosted" else ""
+                user_rpm_limit, user_daily_limit = (
+                    (
+                        settings.ai_self_hosted_user_rpm_limit,
+                        settings.ai_self_hosted_user_daily_limit,
+                    )
+                    if quota_kind == "self_hosted"
+                    else _user_quota_limits(user_id, settings)
+                )
                 checks.extend(
                     [
-                        (f"user:{suffix}:minute", minute, user_rpm_limit),
-                        (f"user:{suffix}:day", day, user_daily_limit),
+                        (
+                            f"{user_key_prefix}user:{suffix}:minute",
+                            minute,
+                            user_rpm_limit,
+                        ),
+                        (
+                            f"{user_key_prefix}user:{suffix}:day",
+                            day,
+                            user_daily_limit,
+                        ),
                     ]
                 )
             for key, window, limit in checks:
@@ -272,6 +299,26 @@ def authorize_and_reserve(
         catalog = _fetch_catalog()
     _approved_model(model=model, structured=structured, settings=active, catalog=catalog)
     return _new_event(provider=provider, model=model, metadata=metadata, settings=active)
+
+
+def authorize_self_hosted_and_reserve(
+    *,
+    provider: str,
+    model: str,
+    metadata: dict[str, Any] | None,
+    settings: Settings | None = None,
+) -> UUID:
+    """Reserve isolated generous quotas and a usage event for a self-hosted server."""
+    if provider not in {"local", "ollama_local"}:
+        raise ProviderUnavailableError("Only explicitly self-hosted providers use this policy.")
+    active = settings or get_settings()
+    return _new_event(
+        provider=provider,
+        model=model,
+        metadata=metadata,
+        settings=active,
+        quota_kind="self_hosted",
+    )
 
 
 def record_result(

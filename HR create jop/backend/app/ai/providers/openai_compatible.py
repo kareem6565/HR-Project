@@ -41,20 +41,26 @@ class OpenAICompatibleProvider(AIProvider):
         timeout: float = 60.0,
         max_retries: int = 1,
         max_tokens: int | None = None,
+        http_client: Any = None,
+        self_hosted: bool = False,
     ) -> None:
         self.api_key = api_key
         self.model_name = model
         self.base_url = base_url
         self.max_tokens = max_tokens
+        self.self_hosted = self_hosted
         # Secure by default, including direct provider construction outside the factory.
         self.cost_policy_enabled = True
-        self._client = OpenAI(
-            api_key=api_key,
-            base_url=base_url,
-            timeout=timeout,
+        client_options: dict[str, Any] = {
+            "api_key": api_key,
+            "base_url": base_url,
+            "timeout": timeout,
             # Every HTTP attempt must pass the shared policy and be metered.
-            max_retries=0,
-        )
+            "max_retries": 0,
+        }
+        if http_client is not None:
+            client_options["http_client"] = http_client
+        self._client = OpenAI(**client_options)
 
     def generate_structured(self, request: StructuredGenerationRequest) -> StructuredAIResult:
         started = time.monotonic()
@@ -149,12 +155,12 @@ class OpenAICompatibleProvider(AIProvider):
         metadata: dict[str, Any] | None = None,
         system_prompt: str | None = None,
     ) -> Any:
-        from app.ai.cost_policy import (
-            add_free_routing_constraints,
-            authorize_and_reserve,
-            minimize_hr_identifiers,
-            record_result,
-        )
+        from app.ai.cost_policy import minimize_hr_identifiers, record_result
+
+        if self.self_hosted:
+            from app.ai.cost_policy import authorize_self_hosted_and_reserve
+        else:
+            from app.ai.cost_policy import add_free_routing_constraints, authorize_and_reserve
 
         minimized_input = minimize_hr_identifiers(input_text)
         messages: list[dict[str, Any]] = []
@@ -172,20 +178,25 @@ class OpenAICompatibleProvider(AIProvider):
             kwargs["max_tokens"] = self.max_tokens
         if use_response_format:
             kwargs["response_format"] = {"type": "json_object"}
-        if self.cost_policy_enabled:
+        if self.cost_policy_enabled and not self.self_hosted:
             add_free_routing_constraints(
                 kwargs, model=self.model_name, structured=output_schema is not None
             )
         event_id = None
         if self.cost_policy_enabled:
-            event_id = authorize_and_reserve(
-                provider=self.provider_name,
-                model=self.model_name,
-                base_url=self.base_url,
-                structured=output_schema is not None,
-                metadata=metadata,
-                has_api_key=bool(self.api_key),
-            )
+            if self.self_hosted:
+                event_id = authorize_self_hosted_and_reserve(
+                    provider=self.provider_name, model=self.model_name, metadata=metadata
+                )
+            else:
+                event_id = authorize_and_reserve(
+                    provider=self.provider_name,
+                    model=self.model_name,
+                    base_url=self.base_url,
+                    structured=output_schema is not None,
+                    metadata=metadata,
+                    has_api_key=bool(self.api_key),
+                )
         try:
             response = self._client.chat.completions.create(**kwargs)
         except Exception as error:

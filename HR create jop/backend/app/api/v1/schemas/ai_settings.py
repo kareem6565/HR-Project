@@ -6,6 +6,8 @@ from pydantic import BaseModel
 
 
 class AISettingsResponse(BaseModel):
+    """Effective AI provider status; provider is a stable machine-readable id."""
+
     provider: str
     model: str
     is_demo: bool
