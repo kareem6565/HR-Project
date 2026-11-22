@@ -121,7 +121,6 @@ class Settings(BaseSettings):
     )
     frontend_base_url: str = Field(default="http://localhost:5174", validation_alias="FRONTEND_BASE_URL")
     google_calendar_mode: str = Field(default="hera", validation_alias="GOOGLE_CALENDAR_MODE")  # "google" or "hera"
-    google_calendar_id: str = Field(default="primary", validation_alias="GOOGLE_CALENDAR_ID")
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
