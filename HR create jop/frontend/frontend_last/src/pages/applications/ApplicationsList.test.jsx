@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import ApplicationsList from "./ApplicationsList";
@@ -52,22 +52,27 @@ describe("Applications score formatting", () => {
     expect(screen.getByRole("group", { name: "Processing status" })).toBeInTheDocument();
     expect(screen.getByRole("group", { name: "HR decision status" })).toBeInTheDocument();
     expect(screen.getByRole("group", { name: "Other status" })).toBeInTheDocument();
-    expect(screen.getByText(/application states mirror an HR decision/i)).toBeInTheDocument();
     expect(await screen.findByText("Must Review")).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "AI review" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "HR decision" })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Analysis Pending" }));
-    await waitFor(() => expect(getApplications).toHaveBeenLastCalledWith(expect.objectContaining({ status: "analysis_pending", page: 1, page_size: 20 })));
-    expect(screen.getByRole("button", { name: "Analysis Pending" })).toHaveAttribute("aria-pressed", "true");
+    const statusFilter = screen.getByRole("combobox", { name: "Application status" });
+    const decisionGroup = screen.getByRole("group", { name: "HR decision status" });
+    expect(within(decisionGroup).getByRole("option", { name: "Advanced" })).toHaveValue("advanced");
 
-    await user.click(screen.getByRole("button", { name: "Advanced" }));
-    await waitFor(() => expect(getApplications).toHaveBeenLastCalledWith(expect.objectContaining({ status: "advanced", page: 1, page_size: 20 })));
-    expect(screen.getByRole("button", { name: "Advanced" })).toHaveAttribute("aria-pressed", "true");
+    for (const option of within(statusFilter).getAllByRole("option").slice(1)) {
+      await user.selectOptions(statusFilter, option.value);
+      await waitFor(() =>
+        expect(getApplications).toHaveBeenLastCalledWith(
+          expect.objectContaining({ status: option.value, page: 1, page_size: 20 })
+        )
+      );
+      expect(statusFilter).toHaveValue(option.value);
+    }
 
-    await user.click(screen.getByRole("button", { name: "All" }));
+    await user.selectOptions(statusFilter, "all");
     await waitFor(() => expect(getApplications).toHaveBeenLastCalledWith(expect.not.objectContaining({ status: expect.anything() })));
-    expect(screen.getByRole("button", { name: "All" })).toHaveAttribute("aria-pressed", "true");
+    expect(statusFilter).toHaveValue("all");
   });
 
   it("distinguishes no applications from an empty status filter and offers supported next actions", async () => {
@@ -84,7 +89,7 @@ describe("Applications score formatting", () => {
     await user.click(screen.getByRole("button", { name: "Start screening" }));
     expect(screen.getByText("Current route: /candidates/screen")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Advanced" }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "Application status" }), "advanced");
     expect(await screen.findByText("No applications match these filters.")).toBeInTheDocument();
     await user.click(screen.getAllByRole("button", { name: "Reset filters" })[0]);
     await waitFor(() => expect(getApplications).toHaveBeenLastCalledWith(expect.not.objectContaining({ status: expect.anything() })));
@@ -94,8 +99,13 @@ describe("Applications score formatting", () => {
     getApplications.mockResolvedValue(pageResult([]));
     const user = userEvent.setup();
     render(<MemoryRouter><ApplicationsList /></MemoryRouter>);
-    await user.type(screen.getByRole("searchbox", { name: "Search candidates or jobs" }), "Ada");
+    await user.type(screen.getByRole("searchbox", { name: "Search" }), "Ada");
     await waitFor(() => expect(getApplications).toHaveBeenLastCalledWith(expect.objectContaining({ search: "Ada", page: 1, page_size: 20 })));
+
+    const moreFilters = screen.getByRole("button", { name: /More filters/ });
+    moreFilters.focus();
+    await user.keyboard("{Enter}");
+    expect(moreFilters).toHaveAttribute("aria-expanded", "true");
     await user.selectOptions(screen.getByLabelText("CV processing"), "failed");
     await waitFor(() => expect(getApplications).toHaveBeenLastCalledWith(expect.objectContaining({ search: "Ada", processing_status: "failed" })));
     await user.click(screen.getAllByRole("button", { name: "Reset filters" })[0]);

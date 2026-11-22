@@ -177,11 +177,17 @@ describe("MatchingResults fidelity: real backend-derived data", () => {
 
     expect(await screen.findByText("Compare candidates · Backend Engineer")).toBeInTheDocument();
     const dialog = screen.getByRole("dialog", { name: /Compare candidates/ });
-    expect(within(dialog).getByText("Ada Lovelace")).toBeInTheDocument();
-    expect(within(dialog).getByText("Grace Hopper")).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("columnheader", { name: /Ada Lovelace/ })
+    ).toHaveTextContent("Ada Lovelace");
+    expect(
+      within(dialog).getByRole("columnheader", { name: /Grace Hopper/ })
+    ).toHaveTextContent("Grace Hopper");
     expect(within(dialog).getByText("Score: 88%")).toBeInTheDocument();
     expect(within(dialog).getByText("Score: 60%")).toBeInTheDocument();
-    expect(within(dialog).getByText(/Built APIs in Python\./)).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("cell", { name: /Built APIs in Python\./ })
+    ).toHaveTextContent("Built APIs in Python.");
     expect(within(dialog).queryByText(/unverified candidate evidence/)).not.toBeInTheDocument();
     expect(within(dialog).getByText(/does not recalculate scores or recommend/)).toBeInTheDocument();
   });

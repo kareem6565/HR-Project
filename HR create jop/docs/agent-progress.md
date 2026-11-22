@@ -1,7 +1,7 @@
 # Agent Progress
 
 ## CURRENT
-- Task: A6 [GATE] complete. Next: authorized T0.4 (CI baseline repairs, no unrelated behavior changes).
+- Task: T0.4 complete. Next: B1 [AUTO] worker audit.
 - Branch: `agent/recruitment-work` (created from the existing `feat/public-candidate-application` tree).
 - Housekeeping commits: `6bdf7a5` frontend readability; `8f14d0a` HERA brand mark; `167a4f1` HR Manager workspace/branding; `b827907` startup helper; `a35b6ab` change log.
 - S8 plan: (1) use the repository root `.github/workflows` and canonical backend/frontend; (2) add one CI workflow for Gitleaks, pip-audit, npm audit (high+), Ruff, pytest, Vitest, and build; (3) document exact local commands here; (4) validate workflow structure and record limitations. No secrets, dependencies, application changes, or data migrations planned.
@@ -68,7 +68,7 @@
 - S4: done (`17da746`; follow-up metering fix `e99d445`).
 - S5: done (`1725d09`).
 - A3: done (`a6881eb`); cache metadata lives in existing versioned artifacts, with no migration or dependency. Repeat extraction/evaluation reuses current artifacts and traces; resume content, profile version, prompt/schema, or effective provider/model changes miss. Focused tests: 62 passed, 7 skipped. No live AI calls.
-- A6: done (implementation validated; commit pending).
+- A6: done (`2290230`).
 - S6: pending [GATE] design approval.
 - S7: pending [GATE] design approval.
 
@@ -81,7 +81,14 @@
 6. Add focused backend startup-guard tests and frontend banner tests; run focused checks, lint, and build as required.
 7. Review the diff for secret leakage, unintended AI-policy changes, and compatibility before committing A2 alone.
 
+## B1 PLAN [AUTO]
+1. Inspect worker, outbox, screening batch services, and relevant tests to map claim locks, retry/backoff, attempt limits, recovery, concurrency, crashes, and failure visibility.
+2. Record verified behavior with file-level references; distinguish confirmed defects from design choices.
+3. Run focused worker tests first; make only a minimal fix for verified lost or silent failures and add a regression test.
+4. Run the focused checks, document limitations, update task status, and commit only B1 changes.
+
 ## DONE
+- T0.4 | Verified current filters UI was introduced intentionally in `3867aad`; updated only three ApplicationsList tests and the MatchingResults comparison test using accessible roles/names, preserving status/search/filter/compare assertions and keyboard operation. Full frontend suite: 53 files, 339 passed. Ruff: clean; format: 298 files formatted. Commits: format `05b3997`, safe Ruff fixes `4c6ff26`, remaining Ruff `cc67a15`; T0.4 tests/progress commit pending.
 - T0.0 | Created this progress log; no dependencies.
 - T0.1 | Baseline complete; no files changed and no dependencies added.
 - T0.2 | Corrected architecture provider list, PostgreSQL screening queue/worker description, and canonical frontend path. Text-only; no dependencies.
@@ -166,3 +173,5 @@ Frontend, from `HR create jop/frontend/frontend_last`:
 - A4 checkpoint: the expectation edit matched the first occurrence of `60` and changed the pre-existing sparse case instead of the new Arabic case. Restore the sparse case score to 60 and set 62.5 only on the Arabic case by ID.
 
 - A4 resolved checkpoints: moved benchmark helpers below the existing deterministic metric function after a placement error; corrected the Arabic fixture expectation to the scorer-verified 62.5 and restored the existing sparse-case expectation to 60 after an initially broad replacement.
+
+- T0.4 broader backend run (outside approved frontend-only edits): 1114 passed, 1 skipped, 12 deselected, 3 failed. The rate-limit case is order-dependent because prior public-application requests persist a shared TestClient-IP bucket; two worker cases can claim stale queued rows whose temporary files expired. No backend tests/code changed in this authorized frontend task.
