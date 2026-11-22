@@ -46,11 +46,14 @@ class OpenAICompatibleProvider(AIProvider):
         self.model_name = model
         self.base_url = base_url
         self.max_tokens = max_tokens
+        # Secure by default, including direct provider construction outside the factory.
+        self.cost_policy_enabled = True
         self._client = OpenAI(
             api_key=api_key,
             base_url=base_url,
             timeout=timeout,
-            max_retries=max_retries,
+            # Every HTTP attempt must pass the shared policy and be metered.
+            max_retries=0,
         )
 
     def generate_structured(self, request: StructuredGenerationRequest) -> StructuredAIResult:
