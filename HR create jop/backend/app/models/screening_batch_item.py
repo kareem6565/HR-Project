@@ -42,14 +42,16 @@ class ScreeningBatchItem(Base):
         Index("ix_screening_batch_items_batch_id", "batch_id"),
         Index("ix_screening_batch_items_claim", "status", "next_attempt_at"),
         Index("ix_screening_batch_items_sha256", "sha256"),
-        Index("uq_screening_batch_items_public_application", "application_id", unique=True,
-              postgresql_where=text("source = 'public_application' AND application_id IS NOT NULL"),
-              sqlite_where=text("source = 'public_application' AND application_id IS NOT NULL")),
+        Index(
+            "uq_screening_batch_items_public_application",
+            "application_id",
+            unique=True,
+            postgresql_where=text("source = 'public_application' AND application_id IS NOT NULL"),
+            sqlite_where=text("source = 'public_application' AND application_id IS NOT NULL"),
+        ),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     batch_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("screening_batches.id", ondelete="CASCADE"), nullable=False
     )
@@ -84,10 +86,14 @@ class ScreeningBatchItem(Base):
         UUID(as_uuid=True), ForeignKey("job_applications.id", ondelete="SET NULL"), nullable=True
     )
     evaluation_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("candidate_evaluations.id", ondelete="SET NULL"), nullable=True
+        UUID(as_uuid=True),
+        ForeignKey("candidate_evaluations.id", ondelete="SET NULL"),
+        nullable=True,
     )
     duplicate_of_item_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("screening_batch_items.id", ondelete="SET NULL"), nullable=True
+        UUID(as_uuid=True),
+        ForeignKey("screening_batch_items.id", ondelete="SET NULL"),
+        nullable=True,
     )
 
     created_at: Mapped[datetime] = mapped_column(

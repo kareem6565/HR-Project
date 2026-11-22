@@ -291,9 +291,7 @@ def _derive_question_payload(db: Session, *, application, organization_id: uuid.
         questions.append(
             {
                 "category": "candidate_specific",
-                "text": (
-                    f"How would you approach a task that requires {gap}?"
-                ),
+                "text": (f"How would you approach a task that requires {gap}?"),
                 "topic": gap,
                 "requirement_key": None,
                 "review_guide": guide(

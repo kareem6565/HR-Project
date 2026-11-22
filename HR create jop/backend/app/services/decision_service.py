@@ -151,8 +151,7 @@ class DecisionService:
 
             active_interviews = list(
                 db.scalars(
-                    select(Interview)
-                    .where(
+                    select(Interview).where(
                         Interview.job_application_id == application.id,
                         Interview.status == "scheduled",
                     )
@@ -185,9 +184,7 @@ class DecisionService:
         organization_id: uuid.UUID | None,
     ) -> JobApplication:
         stmt = (
-            select(JobApplication)
-            .where(JobApplication.id == job_application_id)
-            .with_for_update()
+            select(JobApplication).where(JobApplication.id == job_application_id).with_for_update()
         )
         application = db.scalars(stmt).first()
         if application is None:
@@ -219,7 +216,9 @@ class DecisionService:
         if user is None:
             raise NotFoundError("User was not found.")
         if user.organization_id != application.organization_id:
-            raise ValidationError("User must belong to the same organization as the JobApplication.")
+            raise ValidationError(
+                "User must belong to the same organization as the JobApplication."
+            )
         if (
             expected_organization_id is not None
             and user.organization_id != expected_organization_id
@@ -238,7 +237,9 @@ class DecisionService:
     ) -> CandidateEvaluation | None:
         if candidate_evaluation_id and expected_evaluation_id:
             if candidate_evaluation_id != expected_evaluation_id:
-                raise ConflictError("candidate_evaluation_id and expected_evaluation_id must match.")
+                raise ConflictError(
+                    "candidate_evaluation_id and expected_evaluation_id must match."
+                )
 
         target_id = expected_evaluation_id or candidate_evaluation_id
         if target_id is None:

@@ -553,7 +553,9 @@ class InterviewQuestionService:
         db: Session, *, job_application_id: uuid.UUID, organization_id: uuid.UUID | None
     ) -> JobApplication:
         application = db.get(JobApplication, job_application_id)
-        if application is None or (organization_id is not None and application.organization_id != organization_id):
+        if application is None or (
+            organization_id is not None and application.organization_id != organization_id
+        ):
             raise NotFoundError("JobApplication was not found.")
         return application
 
@@ -620,7 +622,9 @@ class InterviewQuestionService:
             raise ValidationError("Question review guide requires 2 to 5 rubric criteria.")
         if basis == "verified_cv_evidence":
             if not isinstance(source_quote, str) or not source_quote or not resume_text:
-                raise ValidationError("Verified CV evidence requires a source quote and resume text.")
+                raise ValidationError(
+                    "Verified CV evidence requires a source quote and resume text."
+                )
             if source_quote not in resume_text:
                 raise ValidationError("Question source quote must match the extracted CV exactly.")
         elif source_quote is not None:

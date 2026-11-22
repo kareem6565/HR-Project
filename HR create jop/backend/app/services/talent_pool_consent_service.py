@@ -25,6 +25,8 @@ def _consent_text(organization_name: str) -> str:
         "consent by contacting the organization. This consent does not authorize indefinite "
         "retention of my CV or evaluation evidence."
     )
+
+
 LINK_LIFETIME = timedelta(days=7)
 
 

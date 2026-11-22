@@ -64,6 +64,7 @@ def _force_fake_ai_provider() -> Generator[None, None, None]:
 
 def _is_postgres_reachable(test_database_url: str) -> bool:
     import socket
+
     test_url = make_url(test_database_url)
     host = test_url.host or "localhost"
     port = test_url.port or 5432

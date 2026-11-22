@@ -283,8 +283,7 @@ def test_batch_bounded_reader_enforces_max_files() -> None:
     from starlette.datastructures import UploadFile
 
     files = [
-        UploadFile(filename=f"cv_{i}.pdf", file=io.BytesIO(make_pdf_bytes()))
-        for i in range(25)
+        UploadFile(filename=f"cv_{i}.pdf", file=io.BytesIO(make_pdf_bytes())) for i in range(25)
     ]
     with pytest.raises(UploadValidationError) as exc_info:
         read_batch_bounded(files, max_files=20)
@@ -309,7 +308,9 @@ def test_batch_bounded_reader_enforces_single_file_limit_in_batch() -> None:
 
     files = [
         UploadFile(filename="cv_1.pdf", file=io.BytesIO(b"%PDF-" + b"x" * 10_000)),
-        UploadFile(filename="cv_2.pdf", file=io.BytesIO(b"%PDF-" + b"x" * 60_000)),  # Exceeds 50 KiB
+        UploadFile(
+            filename="cv_2.pdf", file=io.BytesIO(b"%PDF-" + b"x" * 60_000)
+        ),  # Exceeds 50 KiB
     ]
     with pytest.raises(UploadValidationError) as exc_info:
         read_batch_bounded(files, max_files=20, max_file_bytes=50_000, max_batch_bytes=200_000)
@@ -565,10 +566,7 @@ def test_api_screen_batch_exceeding_file_count_rejected(
 
     monkeypatch.setattr(settings, "max_batch_files", 3)
 
-    files = [
-        ("files", (f"cv_{i}.pdf", make_pdf_bytes(), "application/pdf"))
-        for i in range(4)
-    ]
+    files = [("files", (f"cv_{i}.pdf", make_pdf_bytes(), "application/pdf")) for i in range(4)]
     resp = client.post(f"/api/v1/jobs/{job.id}/screen", headers=h, files=files)
     assert resp.status_code == 422
     body = resp.json()
@@ -662,9 +660,7 @@ def test_upload_failure_cleans_up_stored_file(db_session: Session, tmp_path: Pat
     assert all(not f.is_file() for f in files)
 
 
-def test_cross_tenant_upload_isolation_preserved(
-    client: TestClient, db_session: Session
-) -> None:
+def test_cross_tenant_upload_isolation_preserved(client: TestClient, db_session: Session) -> None:
     org_a, user_a, cand_a, _job_a = setup_tenant(db_session, org_name="Org A")
     org_b, user_b, cand_b, _job_b = setup_tenant(db_session, org_name="Org B")
 

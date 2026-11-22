@@ -115,7 +115,9 @@ class PdfTextExtractor(TextExtractor):
                 t = page.extract_text() or ""
                 pages.append(t)
             except Exception as exc:
-                logger.warning("Error extracting text from PDF page %d: %s", idx, type(exc).__name__)
+                logger.warning(
+                    "Error extracting text from PDF page %d: %s", idx, type(exc).__name__
+                )
                 raise UploadValidationError(
                     f"Failed to extract text from page {idx + 1} of PDF.",
                     code=UPLOAD_ERROR_CORRUPT,

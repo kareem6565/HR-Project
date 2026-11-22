@@ -42,10 +42,12 @@ class ScreeningBatchService:
         self, db: Session, *, application: JobApplication, job: Job, resume: Resume
     ) -> ScreeningBatchItem:
         """Durably enqueue a public application using the existing screening worker."""
-        existing = db.scalar(select(ScreeningBatchItem).where(
-            ScreeningBatchItem.source == "public_application",
-            ScreeningBatchItem.application_id == application.id,
-        ))
+        existing = db.scalar(
+            select(ScreeningBatchItem).where(
+                ScreeningBatchItem.source == "public_application",
+                ScreeningBatchItem.application_id == application.id,
+            )
+        )
         if existing is not None:
             return existing
         profile_id = job.published_job_profile_id
@@ -53,17 +55,29 @@ class ScreeningBatchService:
         if profile is None or profile.job_id != job.id or profile.status != "approved":
             raise ValidationError("The published approved JobProfile is unavailable for screening.")
         batch = ScreeningBatch(
-            organization_id=job.organization_id, job_id=job.id, created_by_user_id=None,
-            status="queued", total_files=1, completed_files=0, failed_files=0,
+            organization_id=job.organization_id,
+            job_id=job.id,
+            created_by_user_id=None,
+            status="queued",
+            total_files=1,
+            completed_files=0,
+            failed_files=0,
         )
         db.add(batch)
         db.flush()
         item = ScreeningBatchItem(
-            batch_id=batch.id, filename=resume.original_filename or "resume",
-            storage_key=resume.file_uri, sha256=resume.checksum or "",
-            status="queued", stage="queued", source="public_application",
-            job_profile_id=profile.id, candidate_id=application.candidate_id,
-            resume_id=resume.id, application_id=application.id, max_attempts=3,
+            batch_id=batch.id,
+            filename=resume.original_filename or "resume",
+            storage_key=resume.file_uri,
+            sha256=resume.checksum or "",
+            status="queued",
+            stage="queued",
+            source="public_application",
+            job_profile_id=profile.id,
+            candidate_id=application.candidate_id,
+            resume_id=resume.id,
+            application_id=application.id,
+            max_attempts=3,
         )
         db.add(item)
         db.flush()
@@ -170,9 +184,7 @@ class ScreeningBatchService:
                 elif extension not in ("pdf", "docx"):
                     status = "failed"
                     error_code = UPLOAD_ERROR_UNSUPPORTED_TYPE
-                    error_message = (
-                        f"Unsupported file type: {extension or 'unknown'!r}. Only .pdf and .docx are allowed."
-                    )
+                    error_message = f"Unsupported file type: {extension or 'unknown'!r}. Only .pdf and .docx are allowed."
                 elif extension == "pdf" and not payload.data.startswith(b"%PDF-"):
                     status = "failed"
                     error_code = UPLOAD_ERROR_UNSUPPORTED_TYPE

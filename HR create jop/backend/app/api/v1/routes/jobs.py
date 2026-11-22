@@ -226,9 +226,7 @@ def get_public_job(
     response.headers["Cache-Control"] = "no-store"
     details = JobService().public_details(db, public_id=public_id)
     if details["accepting_applications"]:
-        JobDistributionService().record_view(
-            db, public_id=public_id, tracking_key=utm_campaign
-        )
+        JobDistributionService().record_view(db, public_id=public_id, tracking_key=utm_campaign)
     return details
 
 

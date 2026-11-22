@@ -43,8 +43,7 @@ def exchange_hr_assertion(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=(
-                "The configured HERA organization ID is invalid. "
-                "Ask an administrator to verify it."
+                "The configured HERA organization ID is invalid. Ask an administrator to verify it."
             ),
         ) from None
 

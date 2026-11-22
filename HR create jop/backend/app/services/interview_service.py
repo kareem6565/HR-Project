@@ -93,9 +93,7 @@ class InterviewService:
 
         # Concurrency protection: lock application row to prevent race conditions
         db.scalars(
-            select(JobApplication)
-            .where(JobApplication.id == application.id)
-            .with_for_update()
+            select(JobApplication).where(JobApplication.id == application.id).with_for_update()
         ).first()
 
         interval = _to_minutes(scheduled_time)
@@ -240,9 +238,7 @@ class InterviewService:
             return
 
         decision_state = (
-            latest_decision.decision
-            if latest_decision is not None
-            else application.status
+            latest_decision.decision if latest_decision is not None else application.status
         )
         raise ValidationError(
             f"Interview scheduling denied: Application status is {decision_state!r}. "

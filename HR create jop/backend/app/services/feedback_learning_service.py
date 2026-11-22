@@ -85,7 +85,9 @@ class FeedbackLearningService:
             entity_id=correction.id,
             metadata={
                 "correction_type": correction_type,
-                "candidate_evaluation_id": str(candidate_evaluation_id) if candidate_evaluation_id else None,
+                "candidate_evaluation_id": str(candidate_evaluation_id)
+                if candidate_evaluation_id
+                else None,
             },
             flush=False,
         )

@@ -23,7 +23,9 @@ def test_public_application_worker_reuses_records_and_pinned_profile(monkeypatch
     item_id = uuid.uuid4()
     claim_token = "public-claim-token"
     file_bytes = b"private public-application resume"
-    profile = SimpleNamespace(id=profile_id, job_id=job_id, status="superseded", profile_data={"requirements": []})
+    profile = SimpleNamespace(
+        id=profile_id, job_id=job_id, status="superseded", profile_data={"requirements": []}
+    )
     job = SimpleNamespace(id=job_id, organization_id=organization_id, title="Engineer")
     candidate = SimpleNamespace(
         id=candidate_id, organization_id=organization_id, full_name="Alex Candidate"
@@ -115,19 +117,25 @@ def test_public_application_worker_reuses_records_and_pinned_profile(monkeypatch
 
     monkeypatch.setattr(worker_module, "extract_text", lambda *args, **kwargs: "CV text")
     monkeypatch.setattr(
-        worker_module, "derive_screening_payloads", lambda **kwargs: ("profile", "evidence", "explanation")
+        worker_module,
+        "derive_screening_payloads",
+        lambda **kwargs: ("profile", "evidence", "explanation"),
     )
     monkeypatch.setattr(worker_module, "get_provider", lambda *args, **kwargs: object())
     monkeypatch.setattr(worker_module, "CandidateProfileExtractionWorkflow", FakeProfileWorkflow)
     monkeypatch.setattr(worker_module, "CandidateEvaluationWorkflow", FakeEvaluationWorkflow)
     monkeypatch.setattr(ScreeningBatchService, "_update_batch_state", lambda batch: None)
     monkeypatch.setattr(
-        worker_module, "CandidateService",
+        worker_module,
+        "CandidateService",
         lambda: (_ for _ in ()).throw(AssertionError("Public applications must reuse candidates.")),
     )
     monkeypatch.setattr(
-        worker_module, "JobApplicationService",
-        lambda: (_ for _ in ()).throw(AssertionError("Public applications must reuse applications.")),
+        worker_module,
+        "JobApplicationService",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("Public applications must reuse applications.")
+        ),
     )
 
     succeeded = ScreeningWorker(storage=FakeStorage()).process_item(

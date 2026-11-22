@@ -138,7 +138,7 @@ def valid_question_set_payload() -> dict:
                     "Verify PostgreSQL experience.", "verification_question"
                 ),
             },
-        ]
+        ],
     }
 
 
@@ -455,7 +455,7 @@ def test_question_key_must_exist_in_supplied_set(db_session: Session) -> None:
                 "requirement_key": unknown_key,
                 "review_guide": review_guide("Explore this requirement."),
             }
-        ]
+        ],
     }
     workflow, _ = make_workflow(payload=payload)
 
@@ -488,7 +488,7 @@ def test_question_text_uses_readable_topics_not_raw_keys(db_session: Session) ->
                     "Check the candidate's approach.", "verification_question"
                 ),
             }
-        ]
+        ],
     }
     workflow, _ = make_workflow(payload=payload)
 

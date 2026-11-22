@@ -82,7 +82,9 @@ class CandidateEvaluation(Base):
     explanation: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     score_breakdown: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     scoring_version: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    evidence_engine_version: Mapped[str | None] = mapped_column(String(50), nullable=True, default="2.0")
+    evidence_engine_version: Mapped[str | None] = mapped_column(
+        String(50), nullable=True, default="2.0"
+    )
     provenance: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     is_current: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(

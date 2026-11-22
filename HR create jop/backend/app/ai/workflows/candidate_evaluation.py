@@ -170,7 +170,9 @@ class CandidateEvaluationWorkflow:
         ref = input_reference or {}
 
         if not resume_text or not resume_text.strip():
-            raise ValidationError("Extracted resume text is required to generate grounded evidence.")
+            raise ValidationError(
+                "Extracted resume text is required to generate grounded evidence."
+            )
 
         if self._ai_mode == "rules":
             return self._generate_rules(
@@ -258,7 +260,9 @@ class CandidateEvaluationWorkflow:
             raise GenerationComponentError(EVIDENCE_AI_COMPONENT, exc) from exc
 
         try:
-            raw_evidence = validate_match_evidence_list(evidence_result.data, allowed_keys=allowed_keys)
+            raw_evidence = validate_match_evidence_list(
+                evidence_result.data, allowed_keys=allowed_keys
+            )
         except ValidationError as exc:
             raise GenerationComponentError(EVIDENCE_AI_COMPONENT, exc) from exc
 
@@ -367,9 +371,10 @@ class CandidateEvaluationWorkflow:
         # EvidenceVerificationService against the original CV text.
         for item in verified_items:
             candidate_evidence = item.get("candidate_evidence") or {}
-            if item.get("evidence_type") == "matched" and candidate_evidence.get(
-                "quote_verified"
-            ) is not True:
+            if (
+                item.get("evidence_type") == "matched"
+                and candidate_evidence.get("quote_verified") is not True
+            ):
                 item["evidence_type"] = "partial" if candidate_evidence.get("quote") else "missing"
                 item["strength"] = "moderate" if item["evidence_type"] == "partial" else "none"
         verified = validate_match_evidence_list(
@@ -815,8 +820,12 @@ class CandidateEvaluationWorkflow:
                     token_usage=evidence_result.token_usage,
                 )
 
-            status = "failed" if isinstance(error.original_error, ProviderError) else "validation_failed"
-            val_err = {"message": str(error.original_error)} if status == "validation_failed" else None
+            status = (
+                "failed" if isinstance(error.original_error, ProviderError) else "validation_failed"
+            )
+            val_err = (
+                {"message": str(error.original_error)} if status == "validation_failed" else None
+            )
             self._trace_service.record_ai_trace(
                 db,
                 workflow_step_trace_id=step.id,
@@ -844,7 +853,9 @@ class CandidateEvaluationWorkflow:
 
         from app.services.audit_service import AuditService
 
-        err_type = type(error.original_error if isinstance(error, GenerationComponentError) else error).__name__
+        err_type = type(
+            error.original_error if isinstance(error, GenerationComponentError) else error
+        ).__name__
         AuditService().log_event(
             db,
             action="candidate_evaluation.failed",

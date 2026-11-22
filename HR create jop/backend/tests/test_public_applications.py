@@ -164,9 +164,9 @@ def test_anonymous_submission_reuses_models_and_saves_consent_and_attribution(
     assert application.candidate.email == "alex@example.test"
     assert application.public_contact_email == "Alex@example.test"
     assert application.resume.file_uri.startswith(f"resumes/{job.organization_id}/")
-    item = db_session.scalar(select(ScreeningBatchItem).where(
-        ScreeningBatchItem.application_id == application.id
-    ))
+    item = db_session.scalar(
+        select(ScreeningBatchItem).where(ScreeningBatchItem.application_id == application.id)
+    )
     assert item is not None
     assert item.source == "public_application"
     assert item.status == "queued"
@@ -226,9 +226,16 @@ def test_idempotent_retry_returns_same_reference_without_creating_another_applic
         == 1
     )
     application = db_session.scalar(select(JobApplication).where(JobApplication.job_id == job.id))
-    assert len(db_session.scalars(select(ScreeningBatchItem).where(
-        ScreeningBatchItem.application_id == application.id
-    )).all()) == 1
+    assert (
+        len(
+            db_session.scalars(
+                select(ScreeningBatchItem).where(
+                    ScreeningBatchItem.application_id == application.id
+                )
+            ).all()
+        )
+        == 1
+    )
 
 
 def test_same_email_submitted_with_new_idempotency_key_is_not_merged(

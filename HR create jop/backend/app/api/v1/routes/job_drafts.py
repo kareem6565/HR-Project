@@ -98,9 +98,7 @@ def build_job_description(
             raise ValidationError("The AI did not return an improved section.")
         draft = draft.model_copy(update={"requirements": [], "needs_confirmation": []})
     confirmation = list(draft.needs_confirmation)
-    confirmation.extend(
-        item.text for item in draft.requirements if item.category == "important"
-    )
+    confirmation.extend(item.text for item in draft.requirements if item.category == "important")
     if body.operation == "parse":
         verified = []
         for requirement in draft.requirements:
@@ -154,8 +152,10 @@ def _derive_description_payload(body: JobDescriptionBuilderRequest) -> dict:
             label in lowered for label in ("required skills", "preferred skills", "role notes")
         ):
             requirement_category = (
-                "must_have" if lowered.startswith("required skills")
-                else "nice_to_have" if lowered.startswith("preferred skills")
+                "must_have"
+                if lowered.startswith("required skills")
+                else "nice_to_have"
+                if lowered.startswith("preferred skills")
                 else "important"
             )
             item = item.split(":", 1)[1].strip()

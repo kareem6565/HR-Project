@@ -196,9 +196,7 @@ class JobProfileExtractionWorkflow:
                 )
         source_texts = {
             "manual_description": (
-                job.description_text
-                if job.description_text is not None
-                else raw_description
+                job.description_text if job.description_text is not None else raw_description
             ),
             "uploaded_file": job.source_file_text or "",
         }
@@ -408,8 +406,16 @@ class JobProfileExtractionWorkflow:
         inherited = {
             key: value
             for key, value in previous_provenance.items()
-            if key not in {"workflow", "provider", "model", "workflow_run_id",
-                           "workflow_step_trace_id", "ai_trace_id", "ai_extraction"}
+            if key
+            not in {
+                "workflow",
+                "provider",
+                "model",
+                "workflow_run_id",
+                "workflow_step_trace_id",
+                "ai_trace_id",
+                "ai_extraction",
+            }
         }
         raw_input_snapshot = dict(input_reference)
         if original_listing_text is not None:

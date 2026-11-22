@@ -62,7 +62,9 @@ class HRFeedbackCorrection(Base):
         UUID(as_uuid=True), ForeignKey("candidate_profiles.id", ondelete="SET NULL"), nullable=True
     )
     candidate_evaluation_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("candidate_evaluations.id", ondelete="SET NULL"), nullable=True
+        UUID(as_uuid=True),
+        ForeignKey("candidate_evaluations.id", ondelete="SET NULL"),
+        nullable=True,
     )
     job_application_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("job_applications.id", ondelete="SET NULL"), nullable=True

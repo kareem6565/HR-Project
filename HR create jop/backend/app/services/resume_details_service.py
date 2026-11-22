@@ -543,11 +543,7 @@ def extract_experience(text: str | None) -> list[str]:
 def build_skills(text: str | None) -> list[str]:
     """Return the skills found in the resume text, in dictionary relevance order."""
     norm = normalize_for_matching(text)
-    return [
-        skill
-        for skill in _SKILLS
-        if has_term_match(norm, skill) or _has_phrase(norm, skill)
-    ]
+    return [skill for skill in _SKILLS if has_term_match(norm, skill) or _has_phrase(norm, skill)]
 
 
 # ---------------------------------------------------------------------------

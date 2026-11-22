@@ -47,23 +47,25 @@ def list_job_screening_batches(
         done_c = sum(1 for it in items if it.status == "done")
         failed_c = sum(1 for it in items if it.status == "failed")
         duplicate_c = sum(1 for it in items if it.status == "duplicate")
-        result.append({
-            "id": str(batch.id),
-            "batch_id": str(batch.id),
-            "job_id": str(batch.job_id),
-            "status": batch.status,
-            "total_files": batch.total_files,
-            "counts": {
-                "total": batch.total_files,
-                "queued": queued_c,
-                "running": running_c,
-                "completed": done_c,
-                "failed": failed_c,
-                "duplicate": duplicate_c,
-            },
-            "created_at": batch.created_at.isoformat(),
-            "completed_at": batch.completed_at.isoformat() if batch.completed_at else None,
-        })
+        result.append(
+            {
+                "id": str(batch.id),
+                "batch_id": str(batch.id),
+                "job_id": str(batch.job_id),
+                "status": batch.status,
+                "total_files": batch.total_files,
+                "counts": {
+                    "total": batch.total_files,
+                    "queued": queued_c,
+                    "running": running_c,
+                    "completed": done_c,
+                    "failed": failed_c,
+                    "duplicate": duplicate_c,
+                },
+                "created_at": batch.created_at.isoformat(),
+                "completed_at": batch.completed_at.isoformat() if batch.completed_at else None,
+            }
+        )
     return result
 
 

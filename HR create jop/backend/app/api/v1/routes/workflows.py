@@ -83,9 +83,7 @@ def extract_job_profile(
                 related_entity_type="job",
                 related_entity_id=job_uuid,
             )
-            step = traces.start_step(
-                db, workflow_run_id=run.id, step_name="extract_job_profile"
-            )
+            step = traces.start_step(db, workflow_run_id=run.id, step_name="extract_job_profile")
             traces.record_ai_trace(
                 db,
                 workflow_step_trace_id=step.id,
@@ -322,9 +320,7 @@ def _default_job_requirements(job) -> list[dict[str, str]]:
             if not text or text.lower() in seen:
                 continue
             seen.add(text.lower())
-            requirements.append(
-                {"text": text, "category": "must_have", "dimension": dimension}
-            )
+            requirements.append({"text": text, "category": "must_have", "dimension": dimension})
     requirements.append(
         {
             "text": "Relevant professional experience",

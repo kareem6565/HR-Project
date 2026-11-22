@@ -204,11 +204,7 @@ class ScreeningWorker:
     ) -> bool:
         """Process a single claimed item end-to-end with failure isolation."""
         item = db.get(ScreeningBatchItem, item_id)
-        if (
-            item is None
-            or item.claim_token != claim_token
-            or item.status != "running"
-        ):
+        if item is None or item.claim_token != claim_token or item.status != "running":
             logger.warning("Claim lost or item reclaimed by another worker: %s", item_id)
             return False
 
@@ -233,12 +229,13 @@ class ScreeningWorker:
             approved_profile = next((p for p in job.profiles if p.status == "approved"), None)
 
         valid_profile_statuses = (
-            {"approved", "superseded"}
-            if item_source == "public_application"
-            else {"approved"}
+            {"approved", "superseded"} if item_source == "public_application" else {"approved"}
         )
-        if (approved_profile is None or getattr(approved_profile, "job_id", job.id) != job.id
-                or approved_profile.status not in valid_profile_statuses):
+        if (
+            approved_profile is None
+            or getattr(approved_profile, "job_id", job.id) != job.id
+            or approved_profile.status not in valid_profile_statuses
+        ):
             self._record_permanent_failure(
                 item_id,
                 claim_token,
@@ -253,17 +250,33 @@ class ScreeningWorker:
             app = db.get(JobApplication, item.application_id) if item.application_id else None
             resume_record = db.get(Resume, item.resume_id) if item.resume_id else None
             candidate_record = db.get(Candidate, item.candidate_id) if item.candidate_id else None
-            if (app is None or resume_record is None or candidate_record is None
-                    or app.organization_id != org_id or app.job_id != job.id
-                    or candidate_record.organization_id != org_id
-                    or app.resume_id != resume_record.id or app.candidate_id != candidate_record.id
-                    or resume_record.candidate_id != candidate_record.id):
-                self._record_permanent_failure(item_id, claim_token, "APPLICATION_CONTEXT_INVALID",
-                    "Public application screening context is invalid.", db=db)
+            if (
+                app is None
+                or resume_record is None
+                or candidate_record is None
+                or app.organization_id != org_id
+                or app.job_id != job.id
+                or candidate_record.organization_id != org_id
+                or app.resume_id != resume_record.id
+                or app.candidate_id != candidate_record.id
+                or resume_record.candidate_id != candidate_record.id
+            ):
+                self._record_permanent_failure(
+                    item_id,
+                    claim_token,
+                    "APPLICATION_CONTEXT_INVALID",
+                    "Public application screening context is invalid.",
+                    db=db,
+                )
                 return False
             if resume_record.file_uri != item.storage_key:
-                self._record_permanent_failure(item_id, claim_token, "RESUME_STORAGE_MISMATCH",
-                    "Stored resume reference does not match the application.", db=db)
+                self._record_permanent_failure(
+                    item_id,
+                    claim_token,
+                    "RESUME_STORAGE_MISMATCH",
+                    "Stored resume reference does not match the application.",
+                    db=db,
+                )
                 return False
 
         # Read stored file
@@ -284,8 +297,11 @@ class ScreeningWorker:
             and hashlib.sha256(raw_bytes).hexdigest() != item.sha256
         ):
             self._record_permanent_failure(
-                item_id, claim_token, "RESUME_CHECKSUM_MISMATCH",
-                "Stored resume integrity check failed.", db=db
+                item_id,
+                claim_token,
+                "RESUME_CHECKSUM_MISMATCH",
+                "Stored resume integrity check failed.",
+                db=db,
             )
             return False
 
@@ -300,9 +316,7 @@ class ScreeningWorker:
             )
         except UploadValidationError as exc:
             self._log_item_failure(item, "cv_text_extraction", exc, level=logging.WARNING)
-            self._record_permanent_failure(
-                item_id, claim_token, exc.code, str(exc), db=db
-            )
+            self._record_permanent_failure(item_id, claim_token, exc.code, str(exc), db=db)
             return False
         except Exception as exc:
             self._log_item_failure(item, "cv_text_extraction", exc, level=logging.WARNING)
@@ -333,15 +347,23 @@ class ScreeningWorker:
                     resume_id = uuid.uuid4()
                     extension = Path(item.filename).suffix.lower().lstrip(".")
                     created_resume_uri = self.storage.save(
-                        organization_id=org_id, resume_id=resume_id, extension=extension,
+                        organization_id=org_id,
+                        resume_id=resume_id,
+                        extension=extension,
                         stream=lambda: raw_bytes,
                     )
                     resume = Resume(
-                        id=resume_id, candidate_id=candidate.id, file_uri=created_resume_uri,
+                        id=resume_id,
+                        candidate_id=candidate.id,
+                        file_uri=created_resume_uri,
                         original_filename=item.filename,
-                        content_type="application/pdf" if extension == "pdf" else "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        file_size_bytes=len(raw_bytes), checksum=item.sha256,
-                        extracted_text=text, status="text_extracted",
+                        content_type="application/pdf"
+                        if extension == "pdf"
+                        else "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        file_size_bytes=len(raw_bytes),
+                        checksum=item.sha256,
+                        extracted_text=text,
+                        status="text_extracted",
                     )
                     db.add(resume)
                     db.flush()
@@ -369,8 +391,11 @@ class ScreeningWorker:
                 if item_source == "manual_upload":
                     processing_stage = "application_creation"
                     application = JobApplicationService().create(
-                        db, organization_id=org_id, job_id=job.id,
-                        candidate_id=candidate.id, resume_id=resume.id,
+                        db,
+                        organization_id=org_id,
+                        job_id=job.id,
+                        candidate_id=candidate.id,
+                        resume_id=resume.id,
                     )
 
                 # 5. Candidate evaluation
@@ -479,6 +504,7 @@ class ScreeningWorker:
         db: Session | None = None,
     ) -> None:
         """Mark an item permanently failed in a short committed transaction."""
+
         def _apply(session: Session) -> None:
             item = session.get(ScreeningBatchItem, item_id)
             if item and item.claim_token == claim_token:
@@ -506,6 +532,7 @@ class ScreeningWorker:
         processing_stage: str = "candidate_evaluation",
     ) -> None:
         """Requeue an item with exponential backoff or fail if attempts exhausted."""
+
         def _apply(session: Session) -> None:
             item = session.get(ScreeningBatchItem, item_id)
             if item and item.claim_token == claim_token:
@@ -530,7 +557,9 @@ class ScreeningWorker:
                     item.status = "failed"
                     item.stage = "failed"
                     item.error_code = "MAX_ATTEMPTS_EXCEEDED"
-                    item.error_message = f"Exceeded maximum attempts ({item.max_attempts}). Last error: {reason}"
+                    item.error_message = (
+                        f"Exceeded maximum attempts ({item.max_attempts}). Last error: {reason}"
+                    )
                     item.claim_token = None
                     item.lease_expires_at = None
                     logger.warning(
@@ -561,9 +590,7 @@ class ScreeningWorker:
 
             GitHubEvidenceService.recover_stale(db)
             analysis_id = (
-                GitHubEvidenceService().claim_next(db)
-                if self._prefer_github_analysis
-                else None
+                GitHubEvidenceService().claim_next(db) if self._prefer_github_analysis else None
             )
             if analysis_id is not None:
                 self._prefer_github_analysis = False

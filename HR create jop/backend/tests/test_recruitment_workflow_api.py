@@ -86,7 +86,9 @@ def seed_entities(db: Session):
     return org, user, interviewer, job, candidate, application
 
 
-def test_api_advance_gate_denies_interview_scheduling_before_decision(client: httpx.Client, db_session: Session) -> None:
+def test_api_advance_gate_denies_interview_scheduling_before_decision(
+    client: httpx.Client, db_session: Session
+) -> None:
     org, user, interviewer, job, candidate, application = seed_entities(db_session)
     headers = auth_headers(str(org.id), str(user.id))
 
@@ -141,7 +143,9 @@ def test_api_hr_decision_is_consistent_in_application_list_and_review_bundle(
     assert review["pool_row"]["group"] == "lower_priority"
 
 
-def test_api_invitation_creation_and_candidate_portal_booking(client: httpx.Client, db_session: Session) -> None:
+def test_api_invitation_creation_and_candidate_portal_booking(
+    client: httpx.Client, db_session: Session
+) -> None:
     org, user, interviewer, job, candidate, application = seed_entities(db_session)
     headers = auth_headers(str(org.id), str(user.id))
 
@@ -191,9 +195,7 @@ def test_api_invitation_creation_and_candidate_portal_booking(client: httpx.Clie
     token = inv_resp.json()["token"]
 
     # 4. Candidate accesses public portal view (NO auth headers required!)
-    portal_resp = client.post(
-        "/api/v1/candidate-portal/interview/preview", json={"token": token}
-    )
+    portal_resp = client.post("/api/v1/candidate-portal/interview/preview", json={"token": token})
     assert portal_resp.status_code == 200
     portal_data = portal_resp.json()
     assert portal_data["candidate_name"] == "Salma Test"

@@ -250,8 +250,7 @@ class SchedulingWorkflowService:
         invitation = db.scalar(
             select(CandidateInvitation)
             .where(
-                CandidateInvitation.token_hash
-                == hashlib.sha256(token.encode("utf-8")).hexdigest()
+                CandidateInvitation.token_hash == hashlib.sha256(token.encode("utf-8")).hexdigest()
             )
             .with_for_update()
         )

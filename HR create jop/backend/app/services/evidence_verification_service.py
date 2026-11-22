@@ -62,7 +62,9 @@ class EvidenceVerificationService:
             req = req_map.get(req_key)
 
             candidate_evidence = dict(item.get("candidate_evidence") or {})
-            raw_quote = candidate_evidence.get("quote") or candidate_evidence.get("evidence_text") or ""
+            raw_quote = (
+                candidate_evidence.get("quote") or candidate_evidence.get("evidence_text") or ""
+            )
             evidence_type = item.get("evidence_type", "missing")
             uncertainty = candidate_evidence.get("uncertainty")
 
@@ -116,7 +118,9 @@ class EvidenceVerificationService:
                 candidate_evidence["quote_verified"] = False
                 candidate_evidence["verification_status"] = "unverified_quote"
                 candidate_evidence["verification_reason"] = "quote_not_provided"
-                candidate_evidence["uncertainty"] = "No supporting text quote was provided to ground the claim."
+                candidate_evidence["uncertainty"] = (
+                    "No supporting text quote was provided to ground the claim."
+                )
                 candidate_evidence["explanation"] = (
                     "No verifiable quote provided. Sufficient evidence was not found in the resume."
                 )
@@ -152,9 +156,7 @@ class EvidenceVerificationService:
                     normalized_quote
                     and normalized_quote in normalize_quote_for_verification(profile_source)
                 )
-                mismatch_reason = (
-                    "profile_context_only" if profile_only else diagnostic["reason"]
-                )
+                mismatch_reason = "profile_context_only" if profile_only else diagnostic["reason"]
                 logger.warning(
                     "Rejecting unverifiable evidence for requirement %s: reason=%s "
                     "best_similarity=%s profile_context_match=%s",

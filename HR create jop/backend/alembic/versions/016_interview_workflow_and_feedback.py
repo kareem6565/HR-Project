@@ -43,12 +43,8 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.PrimaryKeyConstraint("id"),
-        sa.ForeignKeyConstraint(
-            ["organization_id"], ["organizations.id"], ondelete="RESTRICT"
-        ),
-        sa.ForeignKeyConstraint(
-            ["interviewer_user_id"], ["users.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["organization_id"], ["organizations.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(["interviewer_user_id"], ["users.id"], ondelete="CASCADE"),
         sa.CheckConstraint(
             "status IN ('available', 'booked', 'cancelled')",
             name="ck_interview_availabilities_status",
@@ -88,9 +84,7 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.PrimaryKeyConstraint("id"),
-        sa.ForeignKeyConstraint(
-            ["organization_id"], ["organizations.id"], ondelete="RESTRICT"
-        ),
+        sa.ForeignKeyConstraint(["organization_id"], ["organizations.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(
             ["job_application_id"], ["job_applications.id"], ondelete="CASCADE"
         ),
@@ -99,7 +93,9 @@ def upgrade() -> None:
             name="ck_candidate_invitations_status",
         ),
     )
-    op.create_index("ix_candidate_invitations_token", "candidate_invitations", ["token"], unique=True)
+    op.create_index(
+        "ix_candidate_invitations_token", "candidate_invitations", ["token"], unique=True
+    )
     op.create_index("ix_candidate_invitations_app", "candidate_invitations", ["job_application_id"])
     op.create_index("ix_candidate_invitations_org", "candidate_invitations", ["organization_id"])
 
@@ -143,18 +139,10 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.PrimaryKeyConstraint("id"),
-        sa.ForeignKeyConstraint(
-            ["organization_id"], ["organizations.id"], ondelete="RESTRICT"
-        ),
-        sa.ForeignKeyConstraint(
-            ["user_id"], ["users.id"], ondelete="RESTRICT"
-        ),
-        sa.ForeignKeyConstraint(
-            ["job_id"], ["jobs.id"], ondelete="SET NULL"
-        ),
-        sa.ForeignKeyConstraint(
-            ["job_profile_id"], ["job_profiles.id"], ondelete="SET NULL"
-        ),
+        sa.ForeignKeyConstraint(["organization_id"], ["organizations.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(["job_id"], ["jobs.id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(["job_profile_id"], ["job_profiles.id"], ondelete="SET NULL"),
         sa.ForeignKeyConstraint(
             ["candidate_profile_id"], ["candidate_profiles.id"], ondelete="SET NULL"
         ),

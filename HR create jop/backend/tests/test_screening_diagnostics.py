@@ -64,9 +64,7 @@ def test_structured_failure_diagnostics_exclude_payload_and_exception_text(caplo
     assert event["processing_stage"] == "candidate_profile_extraction"
     assert event["exception_class"] == "ValidationError"
     assert {"location": ["score"], "type": "int_parsing"} in event["validation_errors"]
-    assert {"location": ["[REDACTED]"], "type": "extra_forbidden"} in event[
-        "validation_errors"
-    ]
+    assert {"location": ["[REDACTED]"], "type": "extra_forbidden"} in event["validation_errors"]
     assert event["exception_frames"]
     assert canary not in rendered
     assert mock_secret not in rendered
@@ -93,9 +91,7 @@ def test_formatter_redacts_unrecognized_diagnostic_fields() -> None:
     record.validation_errors = [
         {"location": ["full_name", "UNEXPECTED_CANARY_LOCATION"], "type": "missing"}
     ]
-    record.exception_frames = [
-        {"file": "CANARY_PATH.pdf", "function": "safe_function", "line": 3}
-    ]
+    record.exception_frames = [{"file": "CANARY_PATH.pdf", "function": "safe_function", "line": 3}]
 
     rendered = StructuredJsonFormatter().format(record)
     event = json.loads(rendered)
@@ -206,9 +202,7 @@ def test_worker_pipeline_failure_logs_actual_stage_without_sensitive_values(
     )
     monkeypatch.setattr(worker_module, "get_provider", lambda *args, **kwargs: object())
     monkeypatch.setattr(worker_module, "CandidateService", SyntheticCandidateService)
-    monkeypatch.setattr(
-        worker_module, "CandidateProfileExtractionWorkflow", FailingProfileWorkflow
-    )
+    monkeypatch.setattr(worker_module, "CandidateProfileExtractionWorkflow", FailingProfileWorkflow)
     monkeypatch.setattr(ScreeningBatchService, "_update_batch_state", lambda batch: None)
     session = FakeSession()
     worker = ScreeningWorker(storage=FakeStorage(), initial_retry_delay_seconds=30)

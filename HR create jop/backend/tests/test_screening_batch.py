@@ -51,6 +51,7 @@ from tests.resume_upload_fixtures import make_docx_bytes, make_pdf_bytes
 # Fixtures & Setup
 # ==============================================================================
 
+
 @pytest.fixture()
 def client(db_session):
     """Provide a test client wired to the active database session."""
@@ -201,6 +202,7 @@ def job_b(db_session, org_b, recruiter_b) -> Job:
 # 1. Batch Submission Tests
 # ==============================================================================
 
+
 class TestBatchSubmission:
     def test_submit_batch_immediate_202_acceptance(self, client, job_a, recruiter_a):
         pdf1 = make_pdf_bytes("Alice Engineer resume content with Python and FastAPI")
@@ -208,7 +210,14 @@ class TestBatchSubmission:
 
         files = [
             ("files", ("alice_cv.pdf", io.BytesIO(pdf1), "application/pdf")),
-            ("files", ("bob_cv.docx", io.BytesIO(docx1), "application/vnd.openxmlformats-officedocument.wordprocessingml.document")),
+            (
+                "files",
+                (
+                    "bob_cv.docx",
+                    io.BytesIO(docx1),
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                ),
+            ),
         ]
 
         resp = client.post(
@@ -270,12 +279,16 @@ class TestBatchSubmission:
             headers=auth_header(recruiter_a),
         )
         assert resp.status_code in (400, 422)
-        assert resp.json().get("code") == UPLOAD_ERROR_BATCH_LIMIT_EXCEEDED or "limit" in resp.text.lower()
+        assert (
+            resp.json().get("code") == UPLOAD_ERROR_BATCH_LIMIT_EXCEEDED
+            or "limit" in resp.text.lower()
+        )
 
 
 # ==============================================================================
 # 2. Duplicate Detection Tests
 # ==============================================================================
+
 
 class TestDuplicateDetection:
     def test_in_batch_duplicate_cv_handling(self, client, job_a, recruiter_a):
@@ -302,6 +315,7 @@ class TestDuplicateDetection:
 
     def test_historical_duplicate_cv_handling(self, client, db_session, job_a, recruiter_a):
         import hashlib
+
         existing_pdf = make_pdf_bytes("Historical Applied Candidate Content")
         sha256_hash = hashlib.sha256(existing_pdf).hexdigest()
 
@@ -350,6 +364,7 @@ class TestDuplicateDetection:
 # 3. Batch and Item Status Query Tests
 # ==============================================================================
 
+
 class TestBatchStatusQuery:
     def test_get_batch_status_success_and_counts(self, client, job_a, recruiter_a):
         pdf = make_pdf_bytes("Queryable Resume Text")
@@ -394,6 +409,7 @@ class TestBatchStatusQuery:
 # ==============================================================================
 # 4. Item Retry Tests
 # ==============================================================================
+
 
 class TestItemRetry:
     def test_retry_failed_item_success(self, client, db_session, job_a, recruiter_a):
@@ -476,8 +492,11 @@ class TestItemRetry:
 # 5. Worker Processing & Failure Isolation Tests
 # ==============================================================================
 
+
 class TestWorkerProcessing:
-    def test_worker_claims_and_screens_item_successfully(self, client, db_session, job_a, recruiter_a):
+    def test_worker_claims_and_screens_item_successfully(
+        self, client, db_session, job_a, recruiter_a
+    ):
         pdf = make_pdf_bytes("Ada Lovelace is a brilliant Python software engineer.")
         files = [("files", ("ada_lovelace.pdf", io.BytesIO(pdf), "application/pdf"))]
         post_resp = client.post(
@@ -662,6 +681,7 @@ class TestWorkerProcessing:
 # ==============================================================================
 # 6. Storage Cleanup Tests
 # ==============================================================================
+
 
 class TestStorageCleanup:
     def test_cleanup_orphaned_batches_preserves_resumes(self, tmp_path, org_a):

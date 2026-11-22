@@ -268,13 +268,11 @@ def test_quality_review_persists_only_exact_source_quotes(db_session: Session) -
                     },
                     {
                         "finding_type": "not_measurable",
-
                         "source_quote": "At least 3 years of backend experience.",
                         "concern": (
                             "The required experience does not specify what experience is relevant."
                         ),
                         "question_for_hr": "Which backend experience should qualify?",
-
                     },
                     {
                         "finding_type": "unclear_requirement",
@@ -499,9 +497,10 @@ def test_new_version_preserves_linkedin_source_provenance(db_session: Session) -
         "status": "succeeded",
     }
     assert new_profile.provenance["source_url"] == source_metadata["source_url"]
-    assert new_profile.provenance["custom_import_metadata"] == prior.provenance[
-        "custom_import_metadata"
-    ]
+    assert (
+        new_profile.provenance["custom_import_metadata"]
+        == prior.provenance["custom_import_metadata"]
+    )
     assert new_profile.raw_input_snapshot["original_listing_text"] == original_text
     assert new_profile.provenance["ai_extraction"]["status"] == "completed"
 

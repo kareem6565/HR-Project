@@ -34,7 +34,9 @@ def upgrade() -> None:
         sa.Column("granted_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("consent_expires_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("revoked_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.CheckConstraint(
             "response IS NULL OR response IN ('accepted', 'declined')",
             name="ck_talent_pool_consents_response",

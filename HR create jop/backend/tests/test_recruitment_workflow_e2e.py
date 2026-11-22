@@ -371,18 +371,17 @@ def test_candidate_invitation_expires_and_withdrawn_availability_disappears(
     db_session.commit()
 
     month = availability.scheduled_date.replace(day=1)
-    assert workflow.list_available_slots_for_invitation(
-        db_session, token=issue.token, month=month
-    )
+    assert workflow.list_available_slots_for_invitation(db_session, token=issue.token, month=month)
     workflow.cancel_availability(
         db_session,
         organization_id=org.id,
         availability_id=availability.id,
     )
     db_session.commit()
-    assert workflow.list_available_slots_for_invitation(
-        db_session, token=issue.token, month=month
-    ) == []
+    assert (
+        workflow.list_available_slots_for_invitation(db_session, token=issue.token, month=month)
+        == []
+    )
 
     issue.invitation.expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
     db_session.commit()
@@ -538,7 +537,9 @@ def test_candidate_books_available_slot_and_prevents_double_booking(
         )
 
 
-def test_candidate_invitation_is_single_booking_and_requires_hr_reissue_to_reschedule(db_session: Session) -> None:
+def test_candidate_invitation_is_single_booking_and_requires_hr_reissue_to_reschedule(
+    db_session: Session,
+) -> None:
     """Stage I: HR must cancel a booked interview before issuing a replacement link."""
     org, recruiter, interviewer, job, candidate, application = seed_test_pipeline(db_session)
     workflow = SchedulingWorkflowService()
@@ -800,8 +801,16 @@ def test_feedback_learning_propose_skill_alias_and_benchmark(
 
     # Controlled evaluation against validation cases
     benchmark_cases = [
-        {"text": "Experienced in deploying services to k8s clusters", "term": "kubernetes", "expected": True},
-        {"text": "Built web applications using React and Python", "term": "python", "expected": True},
+        {
+            "text": "Experienced in deploying services to k8s clusters",
+            "term": "kubernetes",
+            "expected": True,
+        },
+        {
+            "text": "Built web applications using React and Python",
+            "term": "python",
+            "expected": True,
+        },
         {"text": "Marketing manager with SEO skills", "term": "kubernetes", "expected": False},
     ]
 
