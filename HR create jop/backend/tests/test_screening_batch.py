@@ -16,10 +16,10 @@ Validates:
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
 import io
 import time
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from starlette.testclient import TestClient
@@ -45,7 +45,6 @@ from app.services.storage_service import LocalFileSystemStorage
 from app.services.user_service import UserService
 from app.worker import ScreeningWorker
 from tests.resume_upload_fixtures import make_docx_bytes, make_pdf_bytes
-
 
 # ==============================================================================
 # Fixtures & Setup

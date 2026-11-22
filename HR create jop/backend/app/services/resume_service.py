@@ -12,7 +12,6 @@ from app.services.errors import (
     InvalidStateError,
     NotFoundError,
     UploadValidationError,
-    ValidationError,
 )
 from app.services.storage_service import StorageProvider
 from app.services.text_extraction_service import (

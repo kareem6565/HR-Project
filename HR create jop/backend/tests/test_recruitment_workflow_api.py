@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import uuid
 from collections.abc import Generator
-from datetime import date
 
 import httpx
 import pytest
@@ -13,7 +11,6 @@ from app.core.database import get_db
 from app.main import app
 from app.models import Candidate, Job, JobApplication, Organization, Resume, User
 from app.services.decision_service import DecisionService
-from app.services.scheduling_workflow_service import SchedulingWorkflowService
 
 
 @pytest.fixture()

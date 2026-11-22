@@ -10,6 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
+from app.ai.tools.pipeline_tools import _get_talent_pool
 from app.core.database import get_db
 from app.main import app
 from app.models import (
@@ -24,7 +25,6 @@ from app.models import (
 )
 from app.services.errors import NotFoundError
 from app.services.talent_pool_consent_service import TalentPoolConsentService
-from app.ai.tools.pipeline_tools import _get_talent_pool
 
 
 @pytest.fixture()

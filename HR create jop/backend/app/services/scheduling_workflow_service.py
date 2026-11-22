@@ -5,7 +5,7 @@ import secrets
 import uuid
 from calendar import monthrange
 from dataclasses import dataclass
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -25,7 +25,6 @@ from app.services.errors import ConflictError, NotFoundError, ValidationError
 from app.services.interview_service import (
     DEFAULT_DURATION_MINUTES,
     InterviewService,
-    _conflict_message,
     _to_hhmm,
     _to_minutes,
 )
@@ -199,7 +198,7 @@ class SchedulingWorkflowService:
 
         token = secrets.token_urlsafe(32)
         token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
-        expires_at = datetime.now(timezone.utc) + timedelta(days=expires_in_days)
+        expires_at = datetime.now(UTC) + timedelta(days=expires_in_days)
 
         # Keep only one live invitation per application. Reissuing invalidates
         # older unused links, while booked interviews remain untouched.
@@ -261,10 +260,10 @@ class SchedulingWorkflowService:
             raise ValidationError("This interview invitation is no longer active.")
 
         # Ensure timezone-aware comparison
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         expires_at = invitation.expires_at
         if expires_at.tzinfo is None:
-            expires_at = expires_at.replace(tzinfo=timezone.utc)
+            expires_at = expires_at.replace(tzinfo=UTC)
 
         if now > expires_at:
             if invitation.status != "expired":

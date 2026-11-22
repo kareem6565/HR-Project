@@ -1,25 +1,20 @@
 from __future__ import annotations
 
-import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from sqlalchemy.orm import Session
 
 from app.models import (
     Candidate,
-    CandidateEvaluation,
-    HRDecision,
-    Interview,
     Job,
     JobApplication,
-    JobProfile,
     Organization,
     Resume,
     User,
 )
 from app.services.decision_service import DecisionService
-from app.services.errors import ConflictError, NotFoundError, ValidationError
+from app.services.errors import ConflictError, ValidationError
 from app.services.feedback_learning_service import FeedbackLearningService
 from app.services.interview_service import InterviewService
 from app.services.scheduling_workflow_service import SchedulingWorkflowService
@@ -383,7 +378,7 @@ def test_candidate_invitation_expires_and_withdrawn_availability_disappears(
         == []
     )
 
-    issue.invitation.expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+    issue.invitation.expires_at = datetime.now(UTC) - timedelta(seconds=1)
     db_session.commit()
     with pytest.raises(ValidationError, match="expired"):
         workflow.get_candidate_view(db_session, token=issue.token)

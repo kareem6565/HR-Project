@@ -8,8 +8,9 @@ Create Date: 2026-10-21
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 revision: str = "015_audit_logs"
 down_revision: str | None = "014_evidence_engine_v2"

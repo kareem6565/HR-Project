@@ -8,8 +8,9 @@ Create Date: 2026-10-21
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects.postgresql import UUID
+
+from alembic import op
 
 revision: str = "013_screening_batches"
 down_revision: str | None = "012_auth_roles"

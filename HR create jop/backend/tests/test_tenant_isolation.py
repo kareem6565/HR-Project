@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import io
 import uuid
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import pytest
@@ -23,7 +23,6 @@ from app.models import (
     Candidate,
     CandidateEvaluation,
     CandidateProfile,
-    ChatMessage,
     ChatThread,
     HRDecision,
     Interview,
@@ -32,7 +31,6 @@ from app.models import (
     Job,
     JobApplication,
     JobProfile,
-    MatchEvidence,
     Organization,
     Resume,
     User,
@@ -41,7 +39,6 @@ from app.models import (
 )
 from app.services.storage_service import LocalFileSystemStorage
 from app.services.user_service import UserService
-
 
 # ==============================================================================
 # Fixtures: Two Independent Organizations and Users

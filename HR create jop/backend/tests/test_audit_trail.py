@@ -32,7 +32,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.exc import DBAPIError, IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 from starlette.testclient import TestClient
@@ -56,7 +56,7 @@ from app.models import (
 )
 from app.services.audit_service import AuditService, sanitize_audit_metadata
 from app.services.decision_service import DecisionService
-from app.services.errors import ConflictError, NotFoundError, ValidationError
+from app.services.errors import ConflictError, NotFoundError
 from app.services.job_profile_service import JobProfileService
 from app.services.user_service import UserService
 

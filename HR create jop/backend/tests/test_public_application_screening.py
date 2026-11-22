@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import hashlib
+import uuid
 from contextlib import nullcontext
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
-import uuid
 
+import app.worker as worker_module
 from app.models import Candidate, Job, JobApplication, JobProfile, Resume, ScreeningBatchItem
 from app.services.screening_batch_service import ScreeningBatchService
 from app.worker import ScreeningWorker
-import app.worker as worker_module
 
 
 def test_public_application_worker_reuses_records_and_pinned_profile(monkeypatch) -> None:

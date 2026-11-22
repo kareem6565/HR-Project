@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import JobApplication
-from app.services.errors import NotFoundError, ValidationError
+from app.services.errors import NotFoundError
 from app.services.job_application_validation import validate_job_application_consistency
 
 

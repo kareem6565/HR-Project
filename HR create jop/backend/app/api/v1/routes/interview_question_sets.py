@@ -11,7 +11,7 @@ from app.api.v1.schemas.interview_question_sets import (
     InterviewQuestionSetUpdate,
 )
 from app.core.database import get_db
-from app.services.errors import NotFoundError, ValidationError
+from app.services.errors import NotFoundError
 from app.services.interview_question_service import InterviewQuestionService
 
 router = APIRouter()

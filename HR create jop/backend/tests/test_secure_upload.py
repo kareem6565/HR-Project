@@ -19,7 +19,6 @@ from collections.abc import Generator
 from datetime import UTC, datetime
 from pathlib import Path
 
-import httpx
 import pytest
 from fastapi.testclient import TestClient
 from pypdf import PdfWriter
@@ -32,7 +31,6 @@ from app.main import app
 from app.models import (
     Candidate,
     Job,
-    JobApplication,
     JobProfile,
     Organization,
     Resume,
@@ -47,15 +45,11 @@ from app.services.errors import (
     UPLOAD_ERROR_PAGE_LIMIT_EXCEEDED,
     UPLOAD_ERROR_TOO_LARGE,
     UPLOAD_ERROR_UNSUPPORTED_TYPE,
-    NotFoundError,
     UploadValidationError,
-    ValidationError,
 )
 from app.services.resume_service import ResumeService
 from app.services.storage_service import LocalFileSystemStorage
 from app.services.text_extraction_service import (
-    DocxTextExtractor,
-    PdfTextExtractor,
     extract_text,
 )
 from app.services.upload_stream_service import read_batch_bounded, read_upload_file_bounded

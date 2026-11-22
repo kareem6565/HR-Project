@@ -14,14 +14,13 @@ Validates:
 
 from __future__ import annotations
 
-import io
 import json
 import logging
 import uuid
 
+import pytest
 from fastapi import APIRouter
 from fastapi.testclient import TestClient
-import pytest
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
@@ -29,7 +28,6 @@ from app.core.database import get_db
 from app.core.logging import (
     RedactingFilter,
     StructuredJsonFormatter,
-    get_request_id,
     sanitize_log_value,
 )
 from app.main import app

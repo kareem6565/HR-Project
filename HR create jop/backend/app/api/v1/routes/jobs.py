@@ -21,9 +21,9 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.models import Job, JobApplication
 from app.services.errors import UploadValidationError
+from app.services.job_distribution_service import JobDistributionService
 from app.services.job_service import JobService
 from app.services.public_application_service import PublicApplicationService
-from app.services.job_distribution_service import JobDistributionService
 from app.services.upload_stream_service import read_upload_file_bounded
 
 router = APIRouter()

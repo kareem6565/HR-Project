@@ -1,8 +1,9 @@
 """Track organization-scoped LinkedIn job imports from Apify."""
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 revision = "024_linkedin_job_imports"
 down_revision = "023_public_application_screening"

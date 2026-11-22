@@ -12,27 +12,27 @@ Verifies:
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-from decimal import Decimal
-from pathlib import Path
 import sys
-import uuid
-import pytest
+from datetime import UTC, datetime
+from pathlib import Path
+
 from sqlalchemy.orm import Session
 
 repo_root = Path(__file__).resolve().parent.parent.parent
 if str(repo_root) not in sys.path:
     sys.path.insert(0, str(repo_root))
 
+from tools.eval_quality import DEFAULT_JOB_PROFILE, SYNTHETIC_BENCHMARK, compute_metrics
+
 from app.ai.contracts import JobRequirement, normalize_job_profile_requirements, requirement_key
 from app.ai.providers.fake import FakeAIProvider
 from app.ai.workflows.candidate_evaluation import (
-    CandidateEvaluationWorkflow,
     CandidateEvaluationPayload,
+    CandidateEvaluationWorkflow,
 )
 from app.ai.workflows.candidate_profile_extraction import (
-    CandidateProfileExtractionWorkflow,
     CandidateProfileExtractionPayload,
+    CandidateProfileExtractionWorkflow,
 )
 from app.models import (
     Candidate,
@@ -46,17 +46,14 @@ from app.models import (
     User,
 )
 from app.services.evidence_verification_service import EvidenceVerificationService
-from app.services.resume_details_service import derive_evidence_payload, derive_screening_payloads
+from app.services.resume_details_service import derive_evidence_payload
 from app.services.scoring_service import ScoringService
 from app.services.text_normalization import (
     find_quote_in_source,
     has_term_match,
     normalize_arabic,
     normalize_for_matching,
-    tokenize_words,
 )
-from tools.eval_quality import compute_metrics, SYNTHETIC_BENCHMARK, DEFAULT_JOB_PROFILE
-
 
 # ===========================================================================
 # 1. Evidence Verification & Grounding Tests
