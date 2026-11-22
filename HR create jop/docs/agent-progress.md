@@ -1,7 +1,7 @@
 # Agent Progress
 
 ## CURRENT
-- Task: A1 implementation complete; next prepare the A5 CPU-only pre-ranking plan and wait for owner approval before implementation.
+- Task: A5 [GATE] plan posted; waiting for approval of proposed top N and below-N behavior. Do not implement before approval.
 - Branch: `agent/recruitment-work` (created from the existing `feat/public-candidate-application` tree).
 - Housekeeping commits: `6bdf7a5` frontend readability; `8f14d0a` HERA brand mark; `167a4f1` HR Manager workspace/branding; `b827907` startup helper; `a35b6ab` change log.
 - S8 plan: (1) use the repository root `.github/workflows` and canonical backend/frontend; (2) add one CI workflow for Gitleaks, pip-audit, npm audit (high+), Ruff, pytest, Vitest, and build; (3) document exact local commands here; (4) validate workflow structure and record limitations. No secrets, dependencies, application changes, or data migrations planned.
@@ -113,6 +113,17 @@
 - Limit: current official Ollama API docs do not document a tokenizer preflight endpoint; HERA rejects model-reported `prompt_eval_count >= num_ctx` before accepting any result, and rejects any incomplete response. Live endpoint/model verification is pending.
 - Performance and quantization effects on real hardware remain unmeasured until a rented-GPU check. OpenRouter paid benchmarking remains disabled pending exact model ID and approval of the proposed allow-list + atomic monthly cap + 80% warning.
 
+## A5 PLAN [GATE] — CPU-only advisory pre-ranking
+1. Inspect the screening queue, candidate-profile artifacts, evaluation-state transitions, organization settings, and review UI before coding; preserve the existing LLM evaluator and official scoring path.
+2. Add a CPU embedding pre-ranker over job requirements and bounded CV chunks. Rank every application with normalized cosine similarity, then send only the configurable top N to the existing LLM evidence evaluation. Never infer HR decisions or official scores from the advisory rank.
+3. Store/show the advisory rank separately from `AI match score`; label it advisory in the UI. For applications below N, record an explicit `not evaluated by LLM: outside top N` state so it cannot be confused with a zero score or failure. HR can still inspect every candidate.
+4. Make pre-ranking opt-in and top N organization-configurable; if the selected local embedding model is unavailable, fail visibly before LLM calls rather than silently bypassing the limit. Scope every query and cache key to organization and content version.
+5. Add deterministic/synthetic-only tests for Arabic, English, mixed-language matching, ties, top-N boundaries, org isolation, model failure, and proof that advisory output never changes official scoring or HR decisions. Benchmark CPU latency and ranking quality only with synthetic CVs.
+6. Candidate model options verified from official Hugging Face/Sentence Transformers pages:
+   - `intfloat/multilingual-e5-small`: 0.1B parameters; safetensors weights 471 MB; MIT; supports Arabic (94-language card, Arabic Mr. TyDi results); max input 512 tokens, uses `query:` / `passage:` prefixes. [Model card](https://huggingface.co/intfloat/multilingual-e5-small), [weight file](https://huggingface.co/intfloat/multilingual-e5-small/blob/main/model.safetensors).
+   - `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`: 0.1B parameters; safetensors weights 471 MB; Apache-2.0; 50+ languages including Arabic; 384 dimensions and 128-token max sequence length. [Model card](https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2), [official language list](https://github.com/huggingface/sentence-transformers/blob/main/docs/sentence_transformer/pretrained_models.md), [weight file](https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2/blob/main/model.safetensors).
+7. Do not add dependencies, download weights, migrate data, or change screening behavior until this plan is approved. Choose the model after synthetic Arabic/English ranking evaluation; no performance claim until CPU measurements exist.
+
 ## DONE
 - T0.4 | Verified current filters UI was introduced intentionally in `3867aad`; updated only three ApplicationsList tests and the MatchingResults comparison test using accessible roles/names, preserving status/search/filter/compare assertions and keyboard operation. Full frontend suite: 53 files, 339 passed. Ruff: clean; format: 298 files formatted. Commits: format `05b3997`, safe Ruff fixes `4c6ff26`, remaining Ruff `cc67a15`; T0.4 tests/progress commit `807a1a5`.
 - T0.0 | Created this progress log; no dependencies.
@@ -144,6 +155,8 @@ Frontend, from `HR create jop/frontend/frontend_last`:
 
 ## BLOCKED
 - NEEDS_HUMAN | W1 | Select messaging provider; provide credentials, approved templates, and opt-in/legal wording | Integration and candidate consent cannot be invented | Once supplied, prepare the gated plan | Continue other unblocked tasks.
+- NEEDS_HUMAN | A1 benchmark policy | Supply exact OpenRouter model ID and approve a proposed allow-list/monthly-cap policy before any paid benchmark | No model ID or paid-spend authorization has been provided | Submit the minimal policy proposal; implement only after explicit approval | Core self-hosted providers and mocked tests proceed without a model ID or live endpoint.
+- NEEDS_HUMAN | A5 | Approve proposed default top N=20 and explicit below-N state (“not evaluated by LLM; advisory rank only”) | These determine evaluation scope and candidate-facing state | Implement the bounded advisory flow only after approval | Plan and verified model candidates are documented; no code or weights changed.
 
 ## DECISIONS
 - Preserve all pre-existing working-tree changes and exclude them from T0.0 commit.
@@ -200,4 +213,3 @@ Frontend, from `HR create jop/frontend/frontend_last`:
 
 - T0.4 broader backend run (outside approved frontend-only edits): 1114 passed, 1 skipped, 12 deselected, 3 failed. The rate-limit case is order-dependent because prior public-application requests persist a shared TestClient-IP bucket; two worker cases can claim stale queued rows whose temporary files expired. No backend tests/code changed in this authorized frontend task.
 
-- NEEDS_HUMAN | A1 benchmark policy | Supply exact OpenRouter model ID and approve a proposed allow-list/monthly-cap policy before any paid benchmark | No model ID or paid-spend authorization has been provided | Submit the minimal policy proposal; implement only after explicit approval | Core self-hosted providers and mocked tests proceed without a model ID or live endpoint.
