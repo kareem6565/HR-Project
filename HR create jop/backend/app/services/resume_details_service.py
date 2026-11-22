@@ -25,7 +25,10 @@ from app.ai.contracts import (
     validate_evaluation_explanation,
     validate_match_evidence_list,
 )
-from app.services.evidence_verification_service import EvidenceVerificationService
+from app.services.evidence_verification_service import (
+    EVIDENCE_ENGINE_VERSION,
+    EvidenceVerificationService,
+)
 from app.services.text_normalization import (
     ARABIC_STOPWORDS,
     extract_verbatim_quote,
@@ -687,7 +690,7 @@ def derive_evidence_payload(*, resume_text: str | None, requirements: Any) -> di
                     "method": "deterministic",
                     "source": "resume_text",
                     "edge": "resume_details_service.build_match_evidence",
-                    "evidence_engine_version": "2.0",
+                    "evidence_engine_version": EVIDENCE_ENGINE_VERSION,
                 },
             }
         )

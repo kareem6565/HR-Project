@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from difflib import SequenceMatcher
 from typing import Any
 
 # Arabic diacritics / tashkeel range: \u064B to \u065F plus \u0670 (superscript alef)
@@ -190,29 +191,78 @@ def has_term_match(normalized_source: str, term: str) -> bool:
     return False
 
 
-def find_quote_in_source(quote: str, source_text: str) -> tuple[bool, dict[str, Any] | None]:
-    """Verify whether a proposed quote exists in the source text and locate its position.
+_QUOTE_FUZZY_THRESHOLD = 85.0
+_QUOTE_FUZZY_MIN_LENGTH = 24
+
+
+def normalize_quote_for_verification(text: str | None) -> str:
+    """Normalize PDF punctuation, dash, ligature, and spacing artifacts for quote checks.
+
+    This deliberately differs from ``normalize_for_matching``: verification can
+    ignore formatting punctuation, but does not infer synonyms or semantic matches.
+    """
+    if not text:
+        return ""
+
+    decomposed = unicodedata.normalize("NFKD", text).casefold()
+    chars: list[str] = []
+    for char in decomposed:
+        category = unicodedata.category(char)
+        if category.startswith("M"):
+            continue
+        if char.isspace() or category.startswith(("P", "S", "Z")):
+            if chars and chars[-1] != " ":
+                chars.append(" ")
+            continue
+        chars.append(char)
+    return "".join(chars).strip()
+
+
+def _partial_quote_similarity(quote: str, source: str) -> tuple[float, int]:
+    """Return the best character similarity for a quote-sized source window."""
+    if len(quote) > len(source):
+        return SequenceMatcher(None, quote, source, autojunk=False).ratio() * 100, 0
+
+    matcher = SequenceMatcher(None, quote, source, autojunk=False)
+    best_score = 0.0
+    best_start = 0
+    max_start = len(source) - len(quote)
+    for block in matcher.get_matching_blocks():
+        start = min(max(0, block.b - block.a), max_start)
+        window = source[start : start + len(quote)]
+        score = SequenceMatcher(None, quote, window, autojunk=False).ratio() * 100
+        if score > best_score:
+            best_score = score
+            best_start = start
+    return best_score, best_start
+
+
+def match_quote_in_source(
+    quote: str, source_text: str
+) -> tuple[bool, dict[str, Any] | None, dict[str, Any]]:
+    """Verify a quote and return safe diagnostic metadata without logging its text.
 
     Returns:
-        (is_verified: bool, location_metadata: dict | None)
+        (is_verified, location_metadata, diagnostic_metadata)
     """
     cleaned_quote = (quote or "").strip()
     if not cleaned_quote or not source_text:
-        return False, None
+        return False, None, {"reason": "empty_quote_or_source", "similarity": None}
 
     # 1. Attempt exact verbatim match in source text
     exact_idx = source_text.find(cleaned_quote)
     if exact_idx >= 0:
-        return True, {
+        location = {
             "start": exact_idx,
             "end": exact_idx + len(cleaned_quote),
             "match_type": "exact",
             "verbatim_quote": cleaned_quote,
         }
+        return True, location, {"reason": "exact_source_substring", "similarity": 100.0}
 
-    # 2. Attempt normalized match for whitespace or diacritic variations
-    norm_quote = normalize_for_matching(cleaned_quote)
-    norm_source = normalize_for_matching(source_text)
+    # 2. Normalize whitespace, Unicode compatibility forms, punctuation, and dashes.
+    norm_quote = normalize_quote_for_verification(cleaned_quote)
+    norm_source = normalize_quote_for_verification(source_text)
 
     if norm_quote and norm_quote in norm_source:
         norm_idx = norm_source.find(norm_quote)
@@ -220,15 +270,50 @@ def find_quote_in_source(quote: str, source_text: str) -> tuple[bool, dict[str, 
         ratio = len(source_text) / max(1, len(norm_source))
         est_start = int(norm_idx * ratio)
         est_end = min(len(source_text), int((norm_idx + len(norm_quote)) * ratio))
-        return True, {
+        location = {
             "start": est_start,
             "end": est_end,
             "match_type": "normalized",
             "verbatim_quote": cleaned_quote,
         }
+        return True, location, {"reason": "normalized_source_substring", "similarity": 100.0}
 
-    # Quote does not appear in source text (fabricated, altered, or from another CV)
-    return False, None
+    if len(norm_quote) < _QUOTE_FUZZY_MIN_LENGTH:
+        return False, None, {
+            "reason": "quote_too_short_for_fuzzy_match",
+            "similarity": None,
+        }
+
+    # 3. Allow only close character-level matches for PDF extraction noise. This
+    # does not accept paraphrases or synonym matches, and short skill names stay
+    # on the exact/normalized path to avoid accidental false positives.
+    similarity, norm_idx = _partial_quote_similarity(norm_quote, norm_source)
+    if similarity >= _QUOTE_FUZZY_THRESHOLD:
+        ratio = len(source_text) / max(1, len(norm_source))
+        est_start = int(norm_idx * ratio)
+        est_end = min(len(source_text), int((norm_idx + len(norm_quote)) * ratio))
+        location = {
+            "start": est_start,
+            "end": est_end,
+            "match_type": "fuzzy",
+            "similarity": round(similarity, 2),
+            "verbatim_quote": cleaned_quote,
+        }
+        return True, location, {
+            "reason": "fuzzy_source_match",
+            "similarity": round(similarity, 2),
+        }
+
+    return False, None, {
+        "reason": "fuzzy_similarity_below_threshold",
+        "similarity": round(similarity, 2),
+    }
+
+
+def find_quote_in_source(quote: str, source_text: str) -> tuple[bool, dict[str, Any] | None]:
+    """Verify whether a proposed quote exists in the source text and locate it."""
+    is_verified, location, _diagnostic = match_quote_in_source(quote, source_text)
+    return is_verified, location
 
 
 def extract_verbatim_quote(source_text: str | None, term: str, max_chars: int = 180) -> str:

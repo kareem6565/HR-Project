@@ -26,6 +26,7 @@ import hashlib
 import json
 import uuid
 from dataclasses import dataclass
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -34,18 +35,18 @@ from app.ai.contracts import (
     CandidateProfileExtractionOutput,
     validate_candidate_profile_extraction,
 )
-from app.ai.markers import wrap_untrusted
+from app.ai.markers import UNTRUSTED_SOURCE_SYSTEM_PROMPT, wrap_untrusted
 from app.ai.providers.base import AIProvider, StructuredGenerationRequest
 from app.ai.providers.errors import ProviderError
 from app.models import Resume
 from app.services.candidate_profile_service import CandidateProfileService
-from app.services.errors import NotFoundError, ValidationError
+from app.services.errors import ValidationError
 from app.services.workflow_trace_service import WorkflowTraceService
 
 WORKFLOW_TYPE = "candidate_profile_extraction"
 STEP_NAME = "extract_candidate_profile"
 AI_COMPONENT_NAME = "candidate_profile_extractor"
-PROMPT_VERSION = "1"
+PROMPT_VERSION = "2"
 
 
 def _sha256(value: str) -> str:
@@ -109,6 +110,7 @@ class CandidateProfileExtractionWorkflow:
         result = self._provider.generate_structured(
             StructuredGenerationRequest(
                 input=wrap_untrusted(resume_text, "CV"),
+                system_prompt=UNTRUSTED_SOURCE_SYSTEM_PROMPT,
                 output_schema=CandidateProfileExtractionOutput,
                 schema_version=AI_CONTRACT_SCHEMA_VERSION,
                 metadata={"workflow": WORKFLOW_TYPE},
@@ -178,7 +180,8 @@ class CandidateProfileExtractionWorkflow:
                 "workflow": WORKFLOW_TYPE,
                 "provider": payload.provider_result.provider,
                 "model": payload.provider_result.model,
-                "schema_version": payload.provider_result.schema_version or AI_CONTRACT_SCHEMA_VERSION,
+                "schema_version": payload.provider_result.schema_version
+                or AI_CONTRACT_SCHEMA_VERSION,
             },
             organization_id=organization_id,
             make_current=True,
