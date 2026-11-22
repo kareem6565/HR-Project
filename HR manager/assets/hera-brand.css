@@ -3,6 +3,9 @@
   --hera-gold: #E9D98A;
   --hera-sky: #6FA8B8;
   --hera-ink: #292C2A;
+  --hera-motion-fast: 140ms;
+  --hera-motion-page: 240ms;
+  --hera-motion-ease: cubic-bezier(.2,.65,.3,1);
 }
 
 body.hera-theme {
@@ -64,6 +67,31 @@ body.hera-theme header:not(.dark-header) {
   box-shadow: 0 4px 20px rgba(27,58,58,.04);
 }
 body.hera-theme main { color: var(--hera-ink); }
+
+/* Keep full-page HR navigation on the same short, transform-only motion rhythm. */
+body.hera-theme > main {
+  animation: hera-hr-page-enter var(--hera-motion-page) var(--hera-motion-ease) both;
+}
+
+@keyframes hera-hr-page-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (hover: hover) {
+  body.hera-theme main button:not(:disabled) {
+    transition: transform var(--hera-motion-fast) var(--hera-motion-ease);
+  }
+  body.hera-theme main button:not(:disabled):hover,
+  body.hera-theme main .btn:not(:disabled):hover {
+    transform: translateY(-1px);
+  }
+  body.hera-theme main button:not(:disabled):active,
+  body.hera-theme main .btn:not(:disabled):active {
+    transform: none;
+  }
+}
+
 body.hera-theme .card,
 body.hera-theme .card-glass,
 body.hera-theme .panel,
@@ -501,6 +529,9 @@ body.hera-unified-app:not(.light-mode) .hera-shell-content #themeToggleBtn [clas
   body.hera-unified-app .hera-shell-content header .hidden.md\:inline { display: none !important; }
 }
 @media (prefers-reduced-motion: reduce) {
+  body.hera-theme > main { animation: none !important; }
+  body.hera-theme main button,
+  body.hera-theme main .btn { transition-duration: .01ms !important; }
   body.hera-unified-app *, body.hera-unified-app *::before, body.hera-unified-app *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
 }
 

@@ -130,7 +130,7 @@ require_once __DIR__ . '/includes/helpers.php';
     ::-webkit-scrollbar-track { background: #F8FAFC; }
     ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
   </style>
-  <link rel="stylesheet" href="/BIC2_Mvp/assets/hera-brand.css" />
+  <link rel="stylesheet" href="/BIC2_Mvp/assets/hera-brand.css?v=hera-motion-20261116-1" />
   <script src="/BIC2_Mvp/assets/hera-language.js" defer></script>
 </head>
 <body class="min-h-screen flex flex-col selection:bg-indigo-100 selection:text-indigo-900">
