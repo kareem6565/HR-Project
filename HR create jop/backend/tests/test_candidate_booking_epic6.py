@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from contextlib import contextmanager
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import select
@@ -294,3 +294,110 @@ def test_google_sync_failure_after_successful_booking_is_retried_without_losing_
     assert interview.status == "scheduled"
     assert interview.calendar_sync_status == "synced"
     assert interview.google_event_id == "evt-after-retry"
+
+
+def test_rescheduling_between_interviewers_uses_each_owners_google_account(
+    db_session, google_mode_settings, monkeypatch
+):
+    from app.core.config import settings
+
+    org, interviewer_a, _candidate, _job, application, availability_a = _seed(
+        db_session, with_google_connection=True
+    )
+    interviewer_b = User(
+        id=uuid.uuid4(),
+        organization_id=org.id,
+        email=f"hr-b-{uuid.uuid4().hex}@example.com",
+        full_name="HR Interviewer B",
+        role="recruiter",
+        roles=["recruiter"],
+        status="active",
+        is_active=True,
+    )
+    connection_b = HRGoogleConnection(
+        id=uuid.uuid4(),
+        organization_id=org.id,
+        user_id=interviewer_b.id,
+        google_email="hr-b-google@example.com",
+        calendar_id="calendar-b",
+        access_token_encrypted=encrypt_secret("access-token-b"),
+        refresh_token_encrypted=encrypt_secret("refresh-token-b"),
+        token_expiry=datetime.now(UTC) + timedelta(hours=2),
+        status="connected",
+    )
+    availability_b = InterviewAvailability(
+        id=uuid.uuid4(),
+        organization_id=org.id,
+        interviewer_user_id=interviewer_b.id,
+        scheduled_date=availability_a.scheduled_date + timedelta(days=2),
+        start_time="14:00",
+        end_time="16:00",
+        duration_minutes=30,
+        timezone="UTC",
+        status="available",
+    )
+    db_session.add_all([interviewer_b, connection_b, availability_b])
+    db_session.flush()
+    monkeypatch.setattr(settings, "google_calendar_mode", "google")
+
+    def responder(method, url, headers, body):
+        token = headers.get("Authorization")
+        if method == "POST" and url.endswith("/freeBusy"):
+            if token == "Bearer access-token" and body["items"][0]["id"] == "primary":
+                return FakeResponse(200, {"calendars": {"primary": {"busy": []}}})
+            if token == "Bearer access-token-b" and body["items"][0]["id"] == "calendar-b":
+                return FakeResponse(200, {"calendars": {"calendar-b": {"busy": []}}})
+        if method == "POST" and url.endswith("/calendars/primary/events"):
+            assert token == "Bearer access-token"
+            return FakeResponse(200, {"id": "event-a"})
+        if method == "DELETE" and url.endswith("/calendars/primary/events/event-a"):
+            assert token == "Bearer access-token"
+            return FakeResponse(204, {})
+        if method == "POST" and url.endswith("/calendars/calendar-b/events"):
+            assert token == "Bearer access-token-b"
+            return FakeResponse(200, {"id": "event-b"})
+        raise AssertionError(f"unexpected call {method} {url} using {token}")
+
+    issue = SchedulingWorkflowService().create_invitation(
+        db_session,
+        organization_id=org.id,
+        job_application_id=application.id,
+        actor_user_id=interviewer_a.id,
+    )
+    with mock_google_http(monkeypatch, responder) as calls:
+        original = SchedulingWorkflowService().candidate_book_slot(
+            db_session,
+            token=issue.token,
+            availability_id=availability_a.id,
+            scheduled_time="11:00",
+        )
+        db_session.flush()
+        assert CalendarOutboxService().process_pending(db_session, limit=10) == 1
+        db_session.flush()
+        assert original.google_event_id == "event-a"
+
+        rescheduled = SchedulingWorkflowService().candidate_book_slot(
+            db_session,
+            token=issue.token,
+            availability_id=availability_b.id,
+            scheduled_time="14:00",
+        )
+        db_session.flush()
+        assert rescheduled.id == original.id
+        assert rescheduled.interviewer_user_id == interviewer_b.id
+        assert CalendarOutboxService().process_pending(db_session, limit=10) == 2
+
+    assert [(call[0], call[2]["Authorization"]) for call in calls] == [
+        ("POST", "Bearer access-token"),
+        ("POST", "Bearer access-token"),
+        ("POST", "Bearer access-token-b"),
+        ("DELETE", "Bearer access-token"),
+        ("POST", "Bearer access-token-b"),
+    ]
+    db_session.expire_all()
+    stored = db_session.get(Interview, original.id)
+    assert stored is not None
+    assert stored.status == "scheduled"
+    assert stored.interviewer_user_id == interviewer_b.id
+    assert stored.google_calendar_id == "calendar-b"
+    assert stored.google_event_id == "event-b"

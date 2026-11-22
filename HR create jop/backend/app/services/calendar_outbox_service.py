@@ -8,7 +8,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import CalendarSyncOutbox, HRGoogleConnection, Interview
+from app.models import CalendarSyncOutbox, Interview
 from app.services.audit_service import AuditService
 from app.services.google_calendar_service import GoogleCalendarService
 from app.services.google_oauth_service import GoogleOAuthService
@@ -147,7 +147,14 @@ class CalendarOutboxService:
                 interview.calendar_sync_status = "cancelled"
                 interview.calendar_sync_error = None
                 return
-            hr_user_id = payload.get("hr_user_id") or (str(row.hr_user_id) if row.hr_user_id else None)
+            # The interview assignment is the source of truth for calendar updates.
+            # Keep the outbox snapshot only for legacy rows whose interview no longer
+            # has an assigned interviewer.
+            hr_user_id = (
+                str(interview.interviewer_user_id)
+                if interview.interviewer_user_id
+                else payload.get("hr_user_id") or (str(row.hr_user_id) if row.hr_user_id else None)
+            )
             conn = None
             if hr_user_id:
                 conn = GoogleOAuthService().get_connection(
