@@ -3,12 +3,14 @@ from __future__ import annotations
 import threading
 import uuid
 from datetime import datetime, timedelta, timezone
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import sessionmaker
 
+from app.core.crypto import decrypt_secret
 from app.core.database import get_db
 from app.models import HRGoogleConnection, HRGoogleOAuthState, Organization, User
 from app.services.google_oauth_service import GoogleOAuthService
@@ -91,6 +93,101 @@ class TestGoogleOAuthRoutesAuthBoundary:
 
 
 class TestGoogleOAuthCallback:
+    def test_two_hera_users_connect_and_disconnect_independently(
+        self, client, db_session, seeded_org_user, oauth_settings, monkeypatch
+    ):
+        org_id, user_a_id = seeded_org_user
+        user_b = User(
+            organization_id=org_id,
+            email="hr-oauth-b@example.com",
+            full_name="HR OAuth B",
+            role="recruiter",
+            status="active",
+            is_active=True,
+        )
+        db_session.add(user_b)
+        db_session.flush()
+        user_b_id = user_b.id
+        db_session.commit()
+
+        headers_a = auth_headers(org_id, user_a_id)
+        headers_b = auth_headers(org_id, user_b_id)
+        status_a = client.get("/api/v1/hr/google/status", headers=headers_a).json()
+        status_b = client.get("/api/v1/hr/google/status", headers=headers_b).json()
+        assert status_a["connected"] is False
+        assert status_b["connected"] is False
+
+        connect_a = client.get("/api/v1/hr/google/connect", headers=headers_a).json()
+        connect_b = client.get("/api/v1/hr/google/connect", headers=headers_b).json()
+        url_a = urlparse(connect_a["authorize_url"])
+        url_b = urlparse(connect_b["authorize_url"])
+        state_a = parse_qs(url_a.query)["state"][0]
+        state_b = parse_qs(url_b.query)["state"][0]
+        assert parse_qs(url_a.query)["prompt"] == ["consent select_account"]
+        assert parse_qs(url_b.query)["prompt"] == ["consent select_account"]
+        assert state_a != state_b
+
+        rows = list(db_session.scalars(select(HRGoogleOAuthState)))
+        state_hashes = {row.user_id: row.token_hash for row in rows}
+        assert state_hashes[user_a_id] != state_a
+        assert state_hashes[user_b_id] != state_b
+
+        payloads = {
+            "code-a": ("access-a", "refresh-a", "google-a@example.com"),
+            "code-b": ("access-b", "refresh-b", "google-b@example.com"),
+        }
+        monkeypatch.setattr(
+            GoogleOAuthService,
+            "exchange_code",
+            lambda self, code: {
+                "access_token": payloads[code][0],
+                "refresh_token": payloads[code][1],
+                "expires_in": 3600,
+            },
+        )
+        monkeypatch.setattr(
+            GoogleOAuthService,
+            "fetch_userinfo",
+            lambda self, token: {
+                "email": next(
+                    value[2] for value in payloads.values() if value[0] == token
+                )
+            },
+        )
+
+        for code, state in (("code-a", state_a), ("code-b", state_b)):
+            response = client.get(
+                "/api/v1/hr/google/callback",
+                params={"code": code, "state": state},
+                follow_redirects=False,
+            )
+            assert "google=connected" in response.headers["location"]
+
+        db_session.expire_all()
+        connection_a = db_session.scalar(
+            select(HRGoogleConnection).where(HRGoogleConnection.user_id == user_a_id)
+        )
+        connection_b = db_session.scalar(
+            select(HRGoogleConnection).where(HRGoogleConnection.user_id == user_b_id)
+        )
+        assert connection_a is not None and connection_a.google_email == "google-a@example.com"
+        assert connection_b is not None and connection_b.google_email == "google-b@example.com"
+        assert connection_a.access_token_encrypted != connection_b.access_token_encrypted
+        assert decrypt_secret(connection_a.access_token_encrypted) == "access-a"
+        assert decrypt_secret(connection_b.access_token_encrypted) == "access-b"
+
+        status_a = client.get("/api/v1/hr/google/status", headers=headers_a).json()
+        status_b = client.get("/api/v1/hr/google/status", headers=headers_b).json()
+        assert status_a["google_email"] == "google-a@example.com"
+        assert status_b["google_email"] == "google-b@example.com"
+        disconnected = client.delete("/api/v1/hr/google/disconnect", headers=headers_a)
+        assert disconnected.status_code == 200
+        status_a = client.get("/api/v1/hr/google/status", headers=headers_a).json()
+        assert status_a["connected"] is False
+        still_connected_b = client.get("/api/v1/hr/google/status", headers=headers_b).json()
+        assert still_connected_b["connected"] is True
+        assert still_connected_b["google_email"] == "google-b@example.com"
+
     def test_unauthenticated_callback_success_persists_tokens(self, client, db_session, seeded_org_user, oauth_settings, monkeypatch):
         org_id, user_id = seeded_org_user
         service = GoogleOAuthService()

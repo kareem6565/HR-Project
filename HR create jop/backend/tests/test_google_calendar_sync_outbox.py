@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from contextlib import contextmanager
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import select
@@ -160,6 +160,111 @@ def _seed_hr_scheduling(db, *, calendar_id="primary"):
 
 
 class TestGoogleCalendarSyncOutbox:
+    def test_calendar_update_and_cancellation_use_current_interviewer_account(
+        self, db_session, google_mode_settings, monkeypatch
+    ):
+        org, interviewer_a, _candidate, _job, application, _avail, _conn_a = _seed_hr_scheduling(
+            db_session
+        )
+        interviewer_b = User(
+            id=uuid.uuid4(),
+            organization_id=org.id,
+            email=f"hr-b-{uuid.uuid4().hex}@example.com",
+            full_name="HR Interviewer B",
+            role="recruiter",
+            roles=["recruiter"],
+            status="active",
+            is_active=True,
+        )
+        connection_b = HRGoogleConnection(
+            id=uuid.uuid4(),
+            organization_id=org.id,
+            user_id=interviewer_b.id,
+            google_email="hr-b-google@example.com",
+            calendar_id="calendar-b",
+            access_token_encrypted=encrypt_secret("access-token-b"),
+            refresh_token_encrypted=encrypt_secret("refresh-token-b"),
+            token_expiry=datetime.now(UTC) + timedelta(hours=2),
+            status="connected",
+        )
+        db_session.add_all([interviewer_b, connection_b])
+        db_session.flush()
+
+        interview = Interview(
+            id=uuid.uuid4(),
+            organization_id=org.id,
+            job_application_id=application.id,
+            interviewer_user_id=interviewer_b.id,
+            status="scheduled",
+            interview_type="technical",
+            scheduled_date=date.today() + timedelta(days=7),
+            scheduled_time="12:00",
+            scheduled_duration_minutes=30,
+            google_calendar_id="calendar-b",
+            google_event_id="evt-existing-b",
+            calendar_sync_status="pending",
+        )
+        db_session.add(interview)
+        db_session.flush()
+
+        # Simulate a delayed legacy outbox snapshot for interviewer A after the
+        # interview has been reassigned to interviewer B.
+        db_session.add(
+            CalendarSyncOutbox(
+                id=uuid.uuid4(),
+                organization_id=org.id,
+                interview_id=interview.id,
+                hr_user_id=interviewer_a.id,
+                operation="upsert_interview",
+                idempotency_key=f"stale-owner-{uuid.uuid4()}",
+                payload={"interview_id": str(interview.id), "hr_user_id": str(interviewer_a.id)},
+                status="pending",
+                attempts=0,
+                max_attempts=8,
+                next_attempt_at=datetime.now(UTC) - timedelta(seconds=1),
+            )
+        )
+        db_session.flush()
+
+        def responder(method, url, headers, body):
+            assert headers.get("Authorization") == "Bearer access-token-b"
+            if method == "POST" and url.endswith("/freeBusy"):
+                return FakeResponse(200, {"calendars": {"calendar-b": {"busy": []}}})
+            if method == "PATCH" and url.endswith("/calendars/calendar-b/events/evt-existing-b"):
+                return FakeResponse(200, {"id": "evt-updated-b"})
+            if method == "DELETE" and url.endswith("/calendars/calendar-b/events/evt-updated-b"):
+                return FakeResponse(204, {})
+            raise AssertionError(f"unexpected call {method} {url}")
+
+        with mock_google_http(monkeypatch, responder) as calls:
+            assigned_connection = GoogleCalendarService().ensure_hr_ready(
+                db_session,
+                organization_id=org.id,
+                interviewer_user_id=interviewer_b.id,
+            )
+            assert assigned_connection is not None
+            assert GoogleCalendarService().check_freebusy(
+                db_session,
+                assigned_connection,
+                start=datetime.now(UTC),
+                end=datetime.now(UTC) + timedelta(minutes=30),
+                calendar_id=assigned_connection.calendar_id,
+            )
+
+            assert CalendarOutboxService().process_one(db_session) is True
+            db_session.flush()
+            InterviewService().cancel(
+                db_session, interview_id=interview.id, organization_id=org.id
+            )
+            db_session.flush()
+            assert CalendarOutboxService().process_one(db_session) is True
+
+        assert [call[0] for call in calls] == ["POST", "PATCH", "DELETE"]
+        db_session.expire_all()
+        stored = db_session.get(Interview, interview.id)
+        assert stored is not None and stored.google_event_id == "evt-updated-b"
+        assert stored.calendar_sync_status == "cancelled"
+
     def test_freebusy_busy_and_calendar_errors_are_not_treated_as_free(
         self, db_session, google_mode_settings, monkeypatch
     ):

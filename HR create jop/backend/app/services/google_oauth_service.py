@@ -49,7 +49,9 @@ class GoogleOAuthService:
             "response_type": "code",
             "scope": " ".join(GOOGLE_SCOPES),
             "access_type": "offline",
-            "prompt": "consent",
+            # Always let each HERA user choose which Google account to connect.
+            # Browsers often silently reuse the last signed-in Google account.
+            "prompt": "consent select_account",
             "include_granted_scopes": "true",
             "state": state,
         }
