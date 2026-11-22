@@ -70,8 +70,10 @@ def test_public_application_worker_reuses_records_and_pinned_profile(monkeypatch
     )
 
     class FakeStorage:
-        def read(self, *, file_uri):
+        def read(self, *, file_uri, organization_id=None, file_id=None):
             assert file_uri == resume.file_uri
+            assert organization_id == item.batch.organization_id
+            assert file_id == resume.id
             return file_bytes
 
     class FakeSession:

@@ -16,6 +16,13 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from pathlib import Path
 
+from app.core.config import settings
+from app.core.crypto import (
+    StorageEncryptionError,
+    decrypt_storage_bytes,
+    encrypt_storage_bytes,
+    is_encrypted_file,
+)
 from app.services.errors import NotFoundError, StoragePathTraversalError
 
 
@@ -61,7 +68,13 @@ class StorageProvider(ABC):
         """Delete the file at ``file_uri``. Missing files are a no-op."""
 
     @abstractmethod
-    def read(self, *, file_uri: str) -> bytes:
+    def read(
+        self,
+        *,
+        file_uri: str,
+        organization_id: uuid.UUID | None = None,
+        file_id: uuid.UUID | None = None,
+    ) -> bytes:
         """Return the raw bytes of a previously persisted file."""
 
 
@@ -73,9 +86,42 @@ class LocalFileSystemStorage(StorageProvider):
     filesystem path leakage and directory traversal.
     """
 
-    def __init__(self, root_dir: str | Path) -> None:
+    def __init__(
+        self,
+        root_dir: str | Path,
+        *,
+        encryption_enabled: bool | None = None,
+        encryption_key_id: str | None = None,
+        encryption_keys: dict[str, str] | None = None,
+    ) -> None:
         self._root_dir = Path(root_dir).resolve()
         self._root_dir.mkdir(parents=True, exist_ok=True)
+        self._encryption_enabled = (
+            settings.resume_encryption_enabled if encryption_enabled is None else encryption_enabled
+        )
+        self._encryption_key_id = (
+            settings.resume_encryption_key_id if encryption_key_id is None else encryption_key_id
+        )
+        self._encryption_keys = (
+            settings.resume_encryption_keys if encryption_keys is None else encryption_keys
+        )
+        if self._encryption_enabled and (
+            not self._encryption_key_id or self._encryption_key_id not in self._encryption_keys
+        ):
+            raise StorageEncryptionError(
+                "Storage encryption is enabled but no active key is loaded."
+            )
+
+    def _encode_file(self, payload: bytes, organization_id: uuid.UUID, file_id: uuid.UUID) -> bytes:
+        if not self._encryption_enabled:
+            return payload
+        return encrypt_storage_bytes(
+            payload,
+            organization_id=organization_id,
+            file_id=file_id,
+            key_id=self._encryption_key_id,
+            encoded_keys=self._encryption_keys,
+        )
 
     def _resolve_path(self, file_uri: str) -> Path:
         """Resolve and validate that a storage key remains inside the storage root.
@@ -131,7 +177,9 @@ class LocalFileSystemStorage(StorageProvider):
             ) from None
 
         target_path.parent.mkdir(parents=True, exist_ok=True)
-        target_path.write_bytes(stream())
+        target_path.write_bytes(
+            self._encode_file(stream(), organization_id=organization_id, file_id=resume_id)
+        )
         return relative_key
 
     def save_batch_file(
@@ -158,7 +206,9 @@ class LocalFileSystemStorage(StorageProvider):
             ) from None
 
         target_path.parent.mkdir(parents=True, exist_ok=True)
-        target_path.write_bytes(stream())
+        target_path.write_bytes(
+            self._encode_file(stream(), organization_id=organization_id, file_id=item_id)
+        )
         return relative_key
 
     def save_job_file(
@@ -179,7 +229,9 @@ class LocalFileSystemStorage(StorageProvider):
                 "Access denied: target path escapes storage root."
             ) from None
         target_path.parent.mkdir(parents=True, exist_ok=True)
-        target_path.write_bytes(stream())
+        target_path.write_bytes(
+            self._encode_file(stream(), organization_id=organization_id, file_id=job_id)
+        )
         return relative_key
 
     def cleanup_orphaned_batches(
@@ -247,9 +299,32 @@ class LocalFileSystemStorage(StorageProvider):
             except OSError:
                 break
 
-    def read(self, *, file_uri: str) -> bytes:
+    def read(
+        self,
+        *,
+        file_uri: str,
+        organization_id: uuid.UUID | None = None,
+        file_id: uuid.UUID | None = None,
+    ) -> bytes:
         """Return the raw bytes of a previously persisted file inside storage root."""
         target_path = self._resolve_path(file_uri)
         if not target_path.exists() or not target_path.is_file():
             raise NotFoundError("Storage file not found.")
-        return target_path.read_bytes()
+        payload = target_path.read_bytes()
+        if is_encrypted_file(payload):
+            if organization_id is None or file_id is None:
+                raise StorageEncryptionError(
+                    "Encrypted storage reads require file ownership context."
+                )
+            plaintext, _ = decrypt_storage_bytes(
+                payload,
+                organization_id=organization_id,
+                file_id=file_id,
+                encoded_keys=self._encryption_keys,
+            )
+            return plaintext
+        if self._encryption_enabled:
+            raise StorageEncryptionError(
+                "Plaintext storage files are blocked while encryption is enabled."
+            )
+        return payload

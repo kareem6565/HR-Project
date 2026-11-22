@@ -85,7 +85,11 @@ def download_resume(
         db, resume_id=uuid.UUID(resume_id), organization_id=ctx.organization_id
     )
     storage = LocalFileSystemStorage(settings.storage_root_dir)
-    content = storage.read(file_uri=resume.file_uri)
+    content = storage.read(
+        file_uri=resume.file_uri,
+        organization_id=ctx.organization_id,
+        file_id=resume.id,
+    )
     media_type = resume.content_type or "application/octet-stream"
     filename = sanitize_download_filename(resume.original_filename)
 
@@ -100,7 +104,6 @@ def download_resume(
         entity_id=resume.id,
         metadata={
             "candidate_id": str(resume.candidate_id),
-            "filename": filename,
         },
         flush=True,
     )

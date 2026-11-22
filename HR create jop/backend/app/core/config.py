@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -19,6 +19,17 @@ class Settings(BaseSettings):
         validation_alias="TEST_DATABASE_URL",
     )
     storage_root_dir: str = Field(default="./storage", validation_alias="STORAGE_ROOT_DIR")
+    resume_encryption_enabled: bool = Field(
+        default=False, validation_alias="RESUME_ENCRYPTION_ENABLED"
+    )
+    resume_encryption_key_id: str = Field(default="", validation_alias="RESUME_ENCRYPTION_KEY_ID")
+    resume_encryption_keys: dict[str, str] = Field(
+        default_factory=dict, validation_alias="RESUME_ENCRYPTION_KEYS"
+    )
+    retention_enabled: bool = Field(default=False, validation_alias="RETENTION_ENABLED")
+    retention_max_deletions_per_run: int = Field(
+        default=100, ge=1, le=10000, validation_alias="RETENTION_MAX_DELETIONS_PER_RUN"
+    )
     ai_provider: Literal["fake", "soal", "ollama", "openrouter"] = Field(
         default="openrouter", validation_alias="AI_PROVIDER"
     )
@@ -111,6 +122,33 @@ class Settings(BaseSettings):
     )
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    @model_validator(mode="after")
+    def validate_storage_security(self) -> "Settings":
+        import base64
+        import binascii
+        import re
+
+        if self.app_env.lower() == "production" and not self.resume_encryption_enabled:
+            raise ValueError("RESUME_ENCRYPTION_ENABLED=true is required in production.")
+        if not self.resume_encryption_enabled:
+            return self
+        if not re.fullmatch(r"[A-Za-z0-9._-]{1,64}", self.resume_encryption_key_id):
+            raise ValueError(
+                "A valid RESUME_ENCRYPTION_KEY_ID is required when encryption is enabled."
+            )
+        encoded_key = self.resume_encryption_keys.get(self.resume_encryption_key_id)
+        if not encoded_key:
+            raise ValueError(
+                "RESUME_ENCRYPTION_KEYS must contain the active key id when encryption is enabled."
+            )
+        try:
+            active_key = base64.b64decode(encoded_key, validate=True)
+        except (ValueError, binascii.Error):
+            raise ValueError("The active resume encryption key must be valid base64.") from None
+        if len(active_key) != 32:
+            raise ValueError("The active resume encryption key must decode to exactly 32 bytes.")
+        return self
 
     def model_post_init(self, __context: object) -> None:
         from pathlib import Path

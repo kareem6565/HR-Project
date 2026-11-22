@@ -125,7 +125,11 @@ def download_job_source_file(
     job = JobService().get(db, job_id=uuid.UUID(job_id), organization_id=ctx.organization_id)
     if not job.source_file_uri:
         raise NotFoundError("This vacancy has no uploaded source file.")
-    content = LocalFileSystemStorage(settings.storage_root_dir).read(file_uri=job.source_file_uri)
+    content = LocalFileSystemStorage(settings.storage_root_dir).read(
+        file_uri=job.source_file_uri,
+        organization_id=job.organization_id,
+        file_id=job.id,
+    )
     filename = (job.source_file_name or "job-description").replace('"', "")
     filename = filename.replace("\r", "").replace("\n", "")
     return StreamingResponse(

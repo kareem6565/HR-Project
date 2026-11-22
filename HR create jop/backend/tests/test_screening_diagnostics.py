@@ -148,8 +148,10 @@ def test_worker_pipeline_failure_logs_actual_stage_without_sensitive_values(
     )
 
     class FakeStorage:
-        def read(self, *, file_uri):
+        def read(self, *, file_uri, organization_id=None, file_id=None):
             assert file_uri == item.storage_key
+            assert organization_id == item.batch.organization_id
+            assert file_id == item.id
             return b"synthetic document bytes"
 
         def save(self, **kwargs):

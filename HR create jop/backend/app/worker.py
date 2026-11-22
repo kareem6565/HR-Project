@@ -268,7 +268,11 @@ class ScreeningWorker:
 
         # Read stored file
         try:
-            raw_bytes = self.storage.read(file_uri=item.storage_key)
+            raw_bytes = self.storage.read(
+                file_uri=item.storage_key,
+                organization_id=org_id,
+                file_id=item.resume_id if item_source == "public_application" else item.id,
+            )
         except Exception as exc:
             self._log_item_failure(item, "storage_read", exc)
             self._record_permanent_failure(
