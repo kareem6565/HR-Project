@@ -74,7 +74,8 @@ class SchedulingWorkflowService:
             raise ValidationError("end_time must be after start_time.")
         if duration_minutes < 15 or duration_minutes > (end_min - start_min):
             raise ValidationError(
-                f"duration_minutes ({duration_minutes}) must be between 15 and the window size ({end_min - start_min})."
+                f"duration_minutes ({duration_minutes}) must be between 15 and "
+                f"the window size ({end_min - start_min})."
             )
 
         availability = InterviewAvailability(

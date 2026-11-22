@@ -755,7 +755,9 @@ def test_cross_tenant_update_and_delete_returns_404(client, admin_a, seeded_reso
 def test_cannot_link_cross_tenant_resources_in_job_application(
     client, recruiter_a, seeded_resources
 ) -> None:
-    """An organization cannot create an application linking its own resources to Org B's resources."""
+    """An organization cannot create an application linking its own resources to Org B's
+    resources.
+    """
     headers = auth_header(recruiter_a)
     res = seeded_resources
 
@@ -1119,7 +1121,9 @@ def test_runtime_ai_key_mutation_endpoints_are_disabled(client, admin_a) -> None
 def test_ai_chat_assistant_cannot_access_cross_tenant_application(
     client, recruiter_a, seeded_resources
 ) -> None:
-    """HERA chat tool execution rejects cross-tenant application lookups grounded in tenant scope."""
+    """HERA chat tool execution rejects cross-tenant application lookups grounded in tenant
+    scope.
+    """
     headers = auth_header(recruiter_a)
     res = seeded_resources
 

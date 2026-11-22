@@ -276,7 +276,8 @@ def _derive_question_payload(db: Session, *, application, organization_id: uuid.
             {
                 "category": "candidate_specific",
                 "text": (
-                    f"What is your experience with {skill}, and how have you applied it in a project?"
+                    "What is your experience with "
+                    f"{skill}, and how have you applied it in a project?"
                 ),
                 "topic": skill,
                 "requirement_key": None,

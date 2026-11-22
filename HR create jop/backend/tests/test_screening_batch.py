@@ -3,11 +3,14 @@
 Validates:
 - Batch submission via POST /api/v1/jobs/{job_id}/screening-batches returning 202 Accepted.
 - Input validation: max file count, size limits, required files, tenant authorization.
-- Duplicate CV detection: in-batch duplicate handling and historical duplicate handling without candidate merging.
+- Duplicate CV detection: in-batch duplicate handling and historical duplicate handling without
+  candidate merging.
 - Organization isolation for batch and item inspection.
-- Organization isolation and validation for item retry (POST /api/v1/screening-batch-items/{item_id}/retry).
+- Organization isolation and validation for item retry
+  (POST /api/v1/screening-batch-items/{item_id}/retry).
 - PostgreSQL worker claim semantics (SKIP LOCKED, claim tokens, lease timeouts).
-- Worker end-to-end processing: candidate creation, resume storage, application creation, evaluation.
+- Worker end-to-end processing: candidate creation, resume storage, application creation,
+  evaluation.
 - Per-file failure isolation on mixed batches (valid + corrupt files).
 - Safe provider guard refusing unapproved live AI providers in background worker.
 - Stale lease recovery for crashed or timed-out worker tasks.

@@ -184,7 +184,10 @@ class ScreeningBatchService:
                 elif extension not in ("pdf", "docx"):
                     status = "failed"
                     error_code = UPLOAD_ERROR_UNSUPPORTED_TYPE
-                    error_message = f"Unsupported file type: {extension or 'unknown'!r}. Only .pdf and .docx are allowed."
+                    error_message = (
+                        f"Unsupported file type: {extension or 'unknown'!r}. "
+                        "Only .pdf and .docx are allowed."
+                    )
                 elif extension == "pdf" and not payload.data.startswith(b"%PDF-"):
                     status = "failed"
                     error_code = UPLOAD_ERROR_UNSUPPORTED_TYPE

@@ -77,7 +77,8 @@ class EvidenceVerificationService:
                     req_name = req.text if req else req_key
                     candidate_evidence["explanation"] = (
                         f"No sufficient evidence found in the resume for '{req_name}'. "
-                        "This indicates absence of documented mention, not definitive proof of lack of skill."
+                        "This indicates absence of documented mention, not definitive "
+                        "proof of lack of skill."
                     )
                 verified_item["candidate_evidence"] = candidate_evidence
                 verified_items.append(verified_item)

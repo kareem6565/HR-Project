@@ -22,19 +22,27 @@ repo_root = Path(__file__).resolve().parent.parent.parent
 if str(repo_root) not in sys.path:
     sys.path.insert(0, str(repo_root))
 
-from tools.eval_quality import DEFAULT_JOB_PROFILE, SYNTHETIC_BENCHMARK, compute_metrics
+from tools.eval_quality import (  # noqa: E402
+    DEFAULT_JOB_PROFILE,
+    SYNTHETIC_BENCHMARK,
+    compute_metrics,
+)
 
-from app.ai.contracts import JobRequirement, normalize_job_profile_requirements, requirement_key
-from app.ai.providers.fake import FakeAIProvider
-from app.ai.workflows.candidate_evaluation import (
+from app.ai.contracts import (  # noqa: E402
+    JobRequirement,
+    normalize_job_profile_requirements,
+    requirement_key,
+)
+from app.ai.providers.fake import FakeAIProvider  # noqa: E402
+from app.ai.workflows.candidate_evaluation import (  # noqa: E402
     CandidateEvaluationPayload,
     CandidateEvaluationWorkflow,
 )
-from app.ai.workflows.candidate_profile_extraction import (
+from app.ai.workflows.candidate_profile_extraction import (  # noqa: E402
     CandidateProfileExtractionPayload,
     CandidateProfileExtractionWorkflow,
 )
-from app.models import (
+from app.models import (  # noqa: E402
     Candidate,
     CandidateEvaluation,
     CandidateProfile,
@@ -45,10 +53,10 @@ from app.models import (
     Resume,
     User,
 )
-from app.services.evidence_verification_service import EvidenceVerificationService
-from app.services.resume_details_service import derive_evidence_payload
-from app.services.scoring_service import ScoringService
-from app.services.text_normalization import (
+from app.services.evidence_verification_service import EvidenceVerificationService  # noqa: E402
+from app.services.resume_details_service import derive_evidence_payload  # noqa: E402
+from app.services.scoring_service import ScoringService  # noqa: E402
+from app.services.text_normalization import (  # noqa: E402
     find_quote_in_source,
     has_term_match,
     normalize_arabic,

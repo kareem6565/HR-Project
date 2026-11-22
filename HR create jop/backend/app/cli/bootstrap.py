@@ -1,8 +1,10 @@
 """Operational CLI for secure administrator bootstrap (Prompt 2).
 
 Usage:
-    python -m app.cli.bootstrap --org-name "Acme Corp" --email "admin@acme.com" --full-name "Acme Admin"
-    python -m app.cli.bootstrap --org-id "<UUID>" --email "admin@acme.com" --full-name "Acme Admin" --reset-existing
+    python -m app.cli.bootstrap --org-name "Acme Corp" --email "admin@acme.com"
+      --full-name "Acme Admin"
+    python -m app.cli.bootstrap --org-id "<UUID>" --email "admin@acme.com"
+      --full-name "Acme Admin" --reset-existing
 
 Requirements enforced:
 - Interactive password input via getpass (or HERA_BOOTSTRAP_PASSWORD for automated setups).
@@ -101,7 +103,8 @@ def bootstrap_admin(
             raise ValueError(f"Organization with ID {org_id} was not found.")
         if org_name and org.name.lower() != org_name.strip().lower():
             raise ValueError(
-                f"Organization name mismatch: specified ID belongs to {org.name!r}, not {org_name!r}."
+                "Organization name mismatch: specified ID belongs to "
+                f"{org.name!r}, not {org_name!r}."
             )
     elif org_name:
         org_name_clean = org_name.strip()
@@ -110,7 +113,8 @@ def bootstrap_admin(
         ).all()
         if len(matches) > 1:
             raise ValueError(
-                f"Multiple organizations match name {org_name_clean!r}. Specify --org-id explicitly."
+                f"Multiple organizations match name {org_name_clean!r}. "
+                "Specify --org-id explicitly."
             )
         if len(matches) == 1:
             org = matches[0]
@@ -163,7 +167,8 @@ def bootstrap_admin(
         raise ValueError(
             f"Organization {org.name!r} already has active administrator(s): {admin_emails}. "
             "To prevent duplicate rogue admins, bootstrap rejected. "
-            "Use the existing administrator account or pass --reset-existing with an existing user's email."
+            "Use the existing administrator account or pass --reset-existing "
+            "with an existing user's email."
         )
 
     # 3. Create fresh initial administrator
@@ -182,7 +187,7 @@ def bootstrap_admin(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="HERA Administrator Bootstrap: provision the initial organization administrator."
+        description="HERA Administrator Bootstrap: provision the initial organization admin."
     )
     parser.add_argument(
         "--org-name",
@@ -232,7 +237,8 @@ def main() -> None:
             reset_existing=args.reset_existing,
         )
         sys.stdout.write(
-            f"Successfully bootstrapped administrator {user.email!r} for organization {user.organization_id} (role: {user.role}).\n"
+            f"Successfully bootstrapped administrator {user.email!r} for organization "
+            f"{user.organization_id} (role: {user.role}).\n"
         )
     except Exception as exc:
         db.rollback()

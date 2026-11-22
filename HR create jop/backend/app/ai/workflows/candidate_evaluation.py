@@ -755,7 +755,7 @@ class CandidateEvaluationWorkflow:
                 input_reference=input_reference,
                 error=comp_err,
             )
-            raise comp_err.original_error
+            raise comp_err.original_error from comp_err
         except Exception as error:
             self._handle_generation_error(
                 db,

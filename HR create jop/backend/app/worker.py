@@ -359,7 +359,9 @@ class ScreeningWorker:
                         original_filename=item.filename,
                         content_type="application/pdf"
                         if extension == "pdf"
-                        else "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        else (
+                            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                        ),
                         file_size_bytes=len(raw_bytes),
                         checksum=item.sha256,
                         extracted_text=text,

@@ -222,7 +222,7 @@ class InterviewService:
 
     @staticmethod
     def _check_advance_gate(db: Session, application: JobApplication) -> None:
-        """Enforce that only candidates with an authoritative HR 'advance' decision can be scheduled."""
+        """Require an authoritative HR 'advance' decision before scheduling."""
         from app.models.hr_decision import HRDecision
 
         latest_decision = db.scalars(

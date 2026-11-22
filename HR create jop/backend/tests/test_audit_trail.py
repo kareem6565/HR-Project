@@ -282,7 +282,7 @@ def test_hr_decision_audited_and_atomic_with_transaction(
     user_id = ctx["recruiter"].id
     eval_id = ctx["eval_v1"].id
 
-    decision = DecisionService().create(
+    DecisionService().create(
         db_session,
         job_application_id=app_id,
         user_id=user_id,
@@ -488,7 +488,9 @@ def test_user_creation_role_change_and_deactivation_are_audited(
 def test_failed_login_records_safe_category_without_credentials(
     client: TestClient, db_session: Session, setup_org_and_users, monkeypatch
 ):
-    """Authentication failures log safe categories without exposing submitted passwords or emails."""
+    """Authentication failures log safe categories without exposing submitted passwords or
+    emails.
+    """
     org, admin, _, _, _ = setup_org_and_users
     # Password login is disabled in production; this test exercises its audit trail.
     monkeypatch.setattr(settings, "allow_local_login", True)
@@ -601,7 +603,9 @@ def test_decision_with_mismatched_organization_or_application_fails(
 def test_idempotent_repeated_decision_does_not_duplicate_records(
     db_session: Session, setup_application_and_eval
 ):
-    """Repeated identical decision request returns existing decision without appending a duplicate row."""
+    """Repeated identical decision request returns existing decision without appending a duplicate
+    row.
+    """
     ctx = setup_application_and_eval
     app_id = ctx["application"].id
     user_id = ctx["recruiter"].id

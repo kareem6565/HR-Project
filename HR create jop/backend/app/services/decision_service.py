@@ -145,7 +145,8 @@ class DecisionService:
         )
 
         # If an application is rejected or put on hold after an interview has been scheduled,
-        # apply documented transition policy: cancel scheduled interviews to prevent contradictory state.
+        # apply documented transition policy: cancel scheduled interviews to prevent
+        # contradictory state.
         if decision in ("hold", "reject"):
             from app.models.interview import Interview
 

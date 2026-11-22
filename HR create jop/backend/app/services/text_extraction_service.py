@@ -103,7 +103,8 @@ class PdfTextExtractor(TextExtractor):
 
         if num_pages > effective_max_pages:
             raise UploadValidationError(
-                f"PDF page count ({num_pages}) exceeds the maximum allowed limit of {effective_max_pages} pages.",
+                f"PDF page count ({num_pages}) exceeds the maximum allowed limit of "
+                f"{effective_max_pages} pages.",
                 code=UPLOAD_ERROR_PAGE_LIMIT_EXCEEDED,
             )
 
@@ -168,7 +169,8 @@ class DocxTextExtractor(TextExtractor):
                 namelist = zf.namelist()
                 if len(namelist) > effective_max_entries:
                     raise UploadValidationError(
-                        f"DOCX archive entry count ({len(namelist)}) exceeds limit of {effective_max_entries}.",
+                        f"DOCX archive entry count ({len(namelist)}) exceeds limit of "
+                        f"{effective_max_entries}.",
                         code=UPLOAD_ERROR_INVALID_ARCHIVE,
                     )
 
@@ -187,7 +189,8 @@ class DocxTextExtractor(TextExtractor):
                     total_uncompressed += info.file_size
                     if total_uncompressed > effective_max_uncompressed:
                         raise UploadValidationError(
-                            f"DOCX declared uncompressed size exceeds maximum limit of {effective_max_uncompressed} bytes.",
+                            "DOCX declared uncompressed size exceeds maximum limit of "
+                            f"{effective_max_uncompressed} bytes.",
                             code=UPLOAD_ERROR_TOO_LARGE,
                         )
 

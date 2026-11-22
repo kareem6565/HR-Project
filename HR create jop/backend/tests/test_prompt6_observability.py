@@ -4,10 +4,12 @@ Validates:
 - Server-generated request IDs (X-Request-ID header, no client override).
 - Request log correlation matching the response X-Request-ID.
 - Exactly one completion log per request (no duplicates).
-- Controlled HTTP 500 error responses with request ID and zero leakage of stack traces, paths, or secrets.
+- Controlled HTTP 500 error responses with request ID and zero leakage of stack traces,
+  paths, or secrets.
 - Redaction of sensitive tokens, API keys, passwords, candidate emails, phone numbers, and CV text.
 - Liveness (/health, /api/v1/health) succeeds without database queries.
-- Readiness (/health/ready, /api/v1/health/ready) returns 200 on DB availability and 503 on DB failure.
+- Readiness (/health/ready, /api/v1/health/ready) returns 200 on DB availability and 503 on DB
+  failure.
 - Database resource release upon readiness failure.
 - Preservation of 401/403/422 status codes without noisy server-error logs.
 """

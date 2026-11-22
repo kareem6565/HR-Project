@@ -78,7 +78,7 @@ def make_encrypted_pdf_bytes(password: str = "secret123") -> bytes:
 def make_multi_page_pdf_bytes(page_count: int) -> bytes:
     """Build a multi-page PDF using pypdf."""
     writer = PdfWriter()
-    for i in range(page_count):
+    for _ in range(page_count):
         writer.add_blank_page(width=612, height=792)
     buf = io.BytesIO()
     writer.write(buf)

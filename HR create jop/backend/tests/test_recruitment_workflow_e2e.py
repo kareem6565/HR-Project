@@ -385,7 +385,9 @@ def test_candidate_invitation_expires_and_withdrawn_availability_disappears(
 
 
 def test_candidate_portal_view_redacts_internal_data(db_session: Session) -> None:
-    """Stage H: Candidate view returns only safe role information, strictly redacting internal scores."""
+    """Stage H: Candidate view returns only safe role information, strictly redacting internal
+    scores.
+    """
     org, recruiter, _interviewer, job, candidate, application = seed_test_pipeline(db_session)
     workflow = SchedulingWorkflowService()
 
@@ -776,7 +778,9 @@ def test_feedback_learning_loop_records_corrections_and_analytics(
 def test_feedback_learning_propose_skill_alias_and_benchmark(
     db_session: Session,
 ) -> None:
-    """Stage K: Approved correction dynamically extends technical synonyms and evaluates benchmark."""
+    """Stage K: Approved correction dynamically extends technical synonyms and evaluates
+    benchmark.
+    """
     org, recruiter, _interviewer, _job, _candidate, _application = seed_test_pipeline(db_session)
     feedback_service = FeedbackLearningService()
 
