@@ -164,6 +164,7 @@ def make_workflow(
     explanation_payload: dict | None = None,
     evidence_failure: ProviderTimeoutError | ProviderRateLimitError | None = None,
     explanation_failure: ProviderTimeoutError | ProviderRateLimitError | None = None,
+    ai_mode: str | None = None,
 ) -> tuple[CandidateEvaluationWorkflow, FakeAIProvider, FakeAIProvider]:
     evidence_provider = FakeAIProvider(
         provider="fake",
@@ -188,8 +189,79 @@ def make_workflow(
     workflow = CandidateEvaluationWorkflow(
         evidence_provider=evidence_provider,
         explanation_provider=explanation_provider,
+        ai_mode=ai_mode,
     )
     return workflow, evidence_provider, explanation_provider
+
+
+def test_rules_mode_bypasses_providers_verifies_cv_quotes_and_has_distinct_cache() -> None:
+    workflow, evidence_provider, explanation_provider = make_workflow(ai_mode="rules")
+    evidence_provider.generate_structured = lambda _request: pytest.fail("provider called")
+    explanation_provider.generate_structured = lambda _request: pytest.fail("provider called")
+    resume_text = "I use Python daily. خبرة في machine learning وتقييم السير الذاتية."
+    requirements = [
+        {"text": "Python", "category": "must_have", "dimension": "skill"},
+        {
+            "text": "machine learning",
+            "category": "important",
+            "dimension": "skill",
+        },
+        {"text": "Kubernetes", "category": "nice_to_have", "dimension": "skill"},
+    ]
+    rules_payload = workflow.generate(
+        job_title="ML Engineer",
+        requirements_data=requirements,
+        candidate_skills=[],
+        resume_text=resume_text,
+        input_reference={"organization_id": "org-1", "entity_id": "app-1"},
+    )
+    llm_workflow, _, _ = make_workflow(ai_mode="llm")
+    llm_key = llm_workflow._cache_identity_key(
+        resume_text=resume_text,
+        input_reference={"organization_id": "org-1", "entity_id": "app-1"},
+    )
+
+    assert rules_payload.ai_mode == "rules"
+    assert rules_payload.generation_engine == "rules_v1"
+    assert rules_payload.cache_key != llm_key
+    evidence_by_text = {
+        item.requirement_ref["requirement_key"]: item for item in rules_payload.evidence.evidence_items
+    }
+    matched_items = [item for item in rules_payload.evidence.evidence_items if item.evidence_type == "matched"]
+    assert matched_items
+    assert all(item.candidate_evidence["quote_verified"] is True for item in matched_items)
+    assert any(item.evidence_type == "missing" for item in rules_payload.evidence.evidence_items)
+    assert len(evidence_by_text) == 3
+
+
+def test_rules_mode_persists_provenance_and_reuses_only_its_own_cache(
+    db_session: Session,
+) -> None:
+    organization, _user, application, _job_profile, _candidate_profile = create_parent_records(
+        db_session
+    )
+    workflow, evidence_provider, explanation_provider = make_workflow(ai_mode="rules")
+    evidence_provider.generate_structured = lambda _request: pytest.fail("provider called")
+    explanation_provider.generate_structured = lambda _request: pytest.fail("provider called")
+
+    first = workflow.run(
+        db_session,
+        job_application_id=application.id,
+        organization_id=organization.id,
+    )
+    db_session.commit()
+    evaluation = db_session.get(CandidateEvaluation, first.evaluation_id)
+    second = workflow.run(
+        db_session,
+        job_application_id=application.id,
+        organization_id=organization.id,
+    )
+
+    assert evaluation.provenance["ai_mode"] == "rules"
+    assert evaluation.provenance["generation_engine"] == "rules_v1"
+    assert evaluation.provenance["provider"] == "rules"
+    assert second.evaluation_id == first.evaluation_id
+    assert second.version_number == 1
 
 
 def count_rows(db_session: Session, model) -> int:

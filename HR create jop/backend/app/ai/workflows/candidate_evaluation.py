@@ -41,12 +41,14 @@ from app.ai.contracts import (
 from app.ai.markers import UNTRUSTED_SOURCE_SYSTEM_PROMPT, wrap_untrusted
 from app.ai.providers.base import AIProvider, StructuredGenerationRequest
 from app.ai.providers.errors import ProviderError
+from app.ai.results import StructuredAIResult
 from app.ai.workflows.result_cache import (
     cache_key,
     cached_trace_ids,
     normalized_resume_hash,
     provider_identity,
 )
+from app.core.config import settings
 from app.models import CandidateProfile, JobApplication, JobProfile
 from app.services.candidate_profile_service import CandidateProfileService
 from app.services.errors import NotFoundError, ValidationError
@@ -94,6 +96,8 @@ class CandidateEvaluationPayload:
     input_reference: dict[str, str]
     requirements: list
     cache_key: str | None
+    ai_mode: str = "llm"
+    generation_engine: str = EVIDENCE_ENGINE_VERSION
 
 
 class GenerationComponentError(Exception):
@@ -136,6 +140,7 @@ class CandidateEvaluationWorkflow:
         evaluation_service: EvaluationService | None = None,
         job_profile_service: JobProfileService | None = None,
         candidate_profile_service: CandidateProfileService | None = None,
+        ai_mode: str | None = None,
     ) -> None:
         self._evidence_provider = evidence_provider
         self._explanation_provider = explanation_provider
@@ -144,6 +149,7 @@ class CandidateEvaluationWorkflow:
         self._job_profile_service = job_profile_service or JobProfileService()
         self._candidate_profile_service = candidate_profile_service or CandidateProfileService()
         self._scoring_service = ScoringService()
+        self._ai_mode = ai_mode or settings.ai_mode
 
     def generate(
         self,
@@ -165,6 +171,14 @@ class CandidateEvaluationWorkflow:
 
         if not resume_text or not resume_text.strip():
             raise ValidationError("Extracted resume text is required to generate grounded evidence.")
+
+        if self._ai_mode == "rules":
+            return self._generate_rules(
+                job_title=job_title,
+                requirements=requirements,
+                resume_text=resume_text,
+                input_reference=ref,
+            )
 
         derived_profile_fields = {
             field: [
@@ -324,18 +338,93 @@ class CandidateEvaluationWorkflow:
                 resume_text=resume_text,
                 input_reference=ref,
             ),
+            ai_mode="llm",
+            generation_engine=EVIDENCE_ENGINE_VERSION,
+        )
+
+    def _generate_rules(
+        self,
+        *,
+        job_title: str | None,
+        requirements: list[JobRequirement],
+        resume_text: str,
+        input_reference: dict[str, str],
+    ) -> CandidateEvaluationPayload:
+        """Generate deterministic evidence and explanation without provider calls."""
+        from app.services.resume_details_service import (
+            derive_evidence_payload,
+            derive_explanation_payload,
+        )
+
+        evidence = derive_evidence_payload(resume_text=resume_text, requirements=requirements)
+        verified_items = EvidenceVerificationService().verify_evidence_items(
+            resume_text=resume_text,
+            source_corpus={"trust_level": "untrusted_source_data", "content": resume_text},
+            evidence_items=evidence["evidence_items"],
+            requirements=requirements,
+        )
+        # A positive classification is valid only when its exact quote passed
+        # EvidenceVerificationService against the original CV text.
+        for item in verified_items:
+            candidate_evidence = item.get("candidate_evidence") or {}
+            if item.get("evidence_type") == "matched" and candidate_evidence.get(
+                "quote_verified"
+            ) is not True:
+                item["evidence_type"] = "partial" if candidate_evidence.get("quote") else "missing"
+                item["strength"] = "moderate" if item["evidence_type"] == "partial" else "none"
+        verified = validate_match_evidence_list(
+            {"evidence_items": verified_items},
+            allowed_keys={requirement.key for requirement in requirements},
+        )
+        explanation = validate_evaluation_explanation(
+            derive_explanation_payload(
+                job_title=job_title,
+                requirements=requirements,
+                evidence_payload=verified.model_dump(),
+            )
+        )
+        rules_result = StructuredAIResult(
+            provider="rules",
+            model="rules_v1",
+            data={},
+            schema_version=AI_CONTRACT_SCHEMA_VERSION,
+            latency_ms=0,
+        )
+        return CandidateEvaluationPayload(
+            evidence=verified,
+            evidence_result=rules_result,
+            explanation=explanation,
+            explanation_result=rules_result,
+            score_result=self._scoring_service.compute(
+                requirements, build_evidence_by_key(verified.evidence_items)
+            ),
+            input_reference=input_reference,
+            requirements=requirements,
+            cache_key=self._cache_identity_key(
+                resume_text=resume_text,
+                input_reference=input_reference,
+            ),
+            ai_mode="rules",
+            generation_engine="rules_v1",
         )
 
     def _cache_identity_key(
         self, *, resume_text: str, input_reference: dict[str, str]
     ) -> str | None:
-        evidence_identity = provider_identity(self._evidence_provider)
-        explanation_identity = provider_identity(self._explanation_provider)
-        if not evidence_identity or not explanation_identity:
-            return None
+        if self._ai_mode == "rules":
+            evidence_identity = explanation_identity = ("rules", "rules_v1")
+        else:
+            evidence_identity = provider_identity(self._evidence_provider)
+            explanation_identity = provider_identity(self._explanation_provider)
+            if not evidence_identity or not explanation_identity:
+                return None
         return cache_key(
             {
                 "kind": WORKFLOW_TYPE,
+                "ai_mode": self._ai_mode,
+                "generation_engine": (
+                    "rules_v1" if self._ai_mode == "rules" else EVIDENCE_ENGINE_VERSION
+                ),
                 "organization_id": input_reference.get("organization_id"),
                 "job_application_id": input_reference.get("entity_id"),
                 "resume_sha256": normalized_resume_hash(resume_text),
@@ -347,10 +436,16 @@ class CandidateEvaluationWorkflow:
                 "candidate_profile_sha256": input_reference.get("candidate_profile_sha256"),
                 "prompt_version": PROMPT_VERSION,
                 "schema_version": AI_CONTRACT_SCHEMA_VERSION,
-                "evidence_provider": evidence_identity[0],
-                "evidence_model": evidence_identity[1],
-                "explanation_provider": explanation_identity[0],
-                "explanation_model": explanation_identity[1],
+                "evidence_provider": (
+                    "rules" if self._ai_mode == "rules" else evidence_identity[0]
+                ),
+                "evidence_model": "rules_v1" if self._ai_mode == "rules" else evidence_identity[1],
+                "explanation_provider": (
+                    "rules" if self._ai_mode == "rules" else explanation_identity[0]
+                ),
+                "explanation_model": (
+                    "rules_v1" if self._ai_mode == "rules" else explanation_identity[1]
+                ),
                 "evidence_engine_version": EVIDENCE_ENGINE_VERSION,
             }
         )
@@ -506,6 +601,8 @@ class CandidateEvaluationWorkflow:
             evidence_engine_version=EVIDENCE_ENGINE_VERSION,
             provenance={
                 "workflow": WORKFLOW_TYPE,
+                "ai_mode": payload.ai_mode,
+                "generation_engine": payload.generation_engine,
                 "provider": payload.explanation_result.provider,
                 "model": payload.explanation_result.model,
                 "schema_version": payload.explanation_result.schema_version

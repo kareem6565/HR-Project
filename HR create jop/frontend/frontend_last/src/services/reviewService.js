@@ -20,6 +20,7 @@ import { getResume, listCandidateProfiles } from "./resumeService";
 export async function getReviewBundle(applicationId) {
   const { data } = await apiClient.get(`/job-applications/${applicationId}/review-bundle`);
   return {
+    aiMode: data.ai_mode || "llm",
     application: data.application,
     candidate: data.candidate,
     job: data.job,

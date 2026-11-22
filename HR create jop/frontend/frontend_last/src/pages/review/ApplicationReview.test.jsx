@@ -76,6 +76,16 @@ describe("ApplicationReview pipeline decision", () => {
     createCandidateInterviewInvitation.mockResolvedValue({ token: "opaque-test-token" });
   });
 
+  it("shows the rules-only notice before an evaluation is run", async () => {
+    getReviewWorkspace.mockResolvedValueOnce({ ...workspace, aiMode: "rules" });
+    renderPage();
+
+    await screen.findByRole("heading", { name: "Ada Lovelace" });
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Rules-only mode is active. New evaluations use deterministic CV evidence without calling an AI model."
+    );
+  });
+
   it("submits { decision: 'hold', reason } via the shared component and confirmation modal", async () => {
     const user = userEvent.setup();
     renderPage();

@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     ai_provider: Literal["fake", "soal", "ollama", "openrouter"] = Field(
         default="openrouter", validation_alias="AI_PROVIDER"
     )
+    ai_mode: Literal["llm", "rules"] = Field(default="llm", validation_alias="AI_MODE")
     allow_fake_ai: bool = Field(default=False, validation_alias="ALLOW_FAKE_AI")
     soal_api_key: str | None = Field(default=None, validation_alias="SOAL_API_KEY")
     soal_base_url: str = Field(default="https://soal.help/api/v1", validation_alias="SOAL_BASE_URL")

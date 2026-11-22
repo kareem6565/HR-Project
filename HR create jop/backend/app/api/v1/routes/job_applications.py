@@ -15,6 +15,7 @@ from app.api.v1.schemas.job_applications import (
     RequirementEvidenceSummary,
 )
 from app.api.v1.schemas.review import ReviewBundleResponse, ReviewCandidateInfo
+from app.core.config import settings
 from app.core.database import get_db
 from app.models import ScreeningBatch, ScreeningBatchItem
 from app.services.job_application_service import JobApplicationService
@@ -244,6 +245,7 @@ def get_review_bundle(
         phone=bundle.candidate.phone,
     )
     return ReviewBundleResponse(
+        ai_mode=settings.ai_mode,
         application={
             **JobApplicationResponse.model_validate(bundle.application).model_dump(),
             "screening_status": _screening_status(

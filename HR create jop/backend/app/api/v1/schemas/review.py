@@ -35,6 +35,7 @@ class ReviewBundleResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+    ai_mode: str = "llm"
     application: JobApplicationResponse
     candidate: ReviewCandidateInfo
     job: JobResponse

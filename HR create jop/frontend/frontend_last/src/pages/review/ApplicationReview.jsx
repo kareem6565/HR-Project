@@ -217,7 +217,7 @@ export default function ApplicationReview() {
     );
   }
 
-  const { application, candidate, job, evaluation, evidence, poolRow, resume, profile, decisionHistory = [] } = bundle;
+  const { application, candidate, job, evaluation, evidence, poolRow, resume, profile, decisionHistory = [], aiMode = "llm" } = bundle;
 
   const hasEvaluation = !!evaluation;
   const score = parseScore(evaluation?.score);
@@ -746,9 +746,20 @@ export default function ApplicationReview() {
             <h3>AI Evaluation</h3>
           </div>
           <span className="flag flag-ai">
-            <Sparkles size={12} /> AI Generated
+            <Sparkles size={12} />
+            {evaluation?.provenance?.ai_mode === "rules" || (!evaluation && aiMode === "rules")
+              ? "Rules Only"
+              : "AI Generated"}
           </span>
         </div>
+
+        {(aiMode === "rules" || evaluation?.provenance?.ai_mode === "rules") && (
+          <p className="rules-only-notice" role="status">
+            {evaluation?.provenance?.ai_mode === "rules"
+              ? "Rules-only evaluation: deterministic CV evidence was used; no AI model was called."
+              : "Rules-only mode is active. New evaluations use deterministic CV evidence without calling an AI model."}
+          </p>
+        )}
 
         {!hasEvaluation ? (
           <EmptyState

@@ -1,7 +1,7 @@
 # Agent Progress
 
 ## CURRENT
-- Task: A3 [AUTO] complete. Next in Section 5: A1 [GATE + NEEDS-HUMAN], blocked until local LLM base URL, exact model, and structured-output support are supplied.
+- Task: A6 [GATE] complete. Next: authorized T0.4 (CI baseline repairs, no unrelated behavior changes).
 - Branch: `agent/recruitment-work` (created from the existing `feat/public-candidate-application` tree).
 - Housekeeping commits: `6bdf7a5` frontend readability; `8f14d0a` HERA brand mark; `167a4f1` HR Manager workspace/branding; `b827907` startup helper; `a35b6ab` change log.
 - S8 plan: (1) use the repository root `.github/workflows` and canonical backend/frontend; (2) add one CI workflow for Gitleaks, pip-audit, npm audit (high+), Ruff, pytest, Vitest, and build; (3) document exact local commands here; (4) validate workflow structure and record limitations. No secrets, dependencies, application changes, or data migrations planned.
@@ -43,13 +43,32 @@
 - Second focused test run after updating that expectation: 61 passed, 7 skipped, 1 failed. Root cause: the new job-profile version-miss test referenced `user` while its fixture unpacked the value as `_user`; fix the fixture binding and rerun.
 - Focused Ruff check excluding pre-existing E501/B904 diagnostics passed. Strict Ruff still finds 9 diagnostics on untouched lines in the two existing workflow/test files; the new helper passes strict check and format check. `py_compile` and `git diff --check` passed.
 - The first repeat-evaluation test expectation and a fixture binding were corrected; final focused run: 62 passed, 7 skipped. No live provider calls.
+
+## A6 PLAN [GATE] — approved with conditions on 2026-11-22
+1. Add `AI_MODE` with the existing AI path as the default and an explicit `rules` option; rules mode must bypass all AI provider calls.
+2. Reuse and harden existing deterministic matching/quote recovery helpers for English, Arabic, and mixed-language requirement text; do not change official scoring semantics.
+3. Route rules evidence through the existing `EvidenceVerificationService`; unverified quotes stay non-positive and HR decisions remain human-controlled.
+4. Persist `rules_v1` provenance and a clear rules-only label in the existing evaluation response and review UI so HR can distinguish it from LLM output.
+5. Keep changes within backend config/workflow/service/schema, focused backend tests, the review page/tests, and this progress file; no new dependency or database migration planned.
+6. Add golden cases for exact/alias matches, partial and missing evidence, Arabic/mixed-language input, and fabricated quote rejection; assert providers are never called in rules mode.
+7. Run focused backend/frontend checks and review scoring, evidence verification, and normal AI mode for regressions; commit only A6 files after approval.
+8. Owner conditions: use a distinct cache identity containing `ai_mode=rules` and engine `rules_v1`; `matched` requires a quote verified against CV text; default remains the AI path; show an explicit rules-only review notice.
+
+### A6 checkpoint
+- Reusing existing deterministic evidence and explanation helpers; they normalize Arabic/English and already route quotes through `EvidenceVerificationService`.
+- Added `AI_MODE=llm|rules` with `llm` default. Rules mode bypasses provider generation, uses deterministic matching, re-verifies quotes against the extracted CV, and persists `ai_mode=rules` / `generation_engine=rules_v1`.
+- Cache identity includes `ai_mode` and generation engine; rules identity is explicitly `rules`/`rules_v1`, preventing cross-reuse with provider-derived results. Scoring remains the existing deterministic scorer and HR decisions remain human-controlled.
+- Review bundle exposes active mode; the review UI labels rules output and explains the mode. Added offline evidence/cache persistence tests and `docs/rules-only-evidence.md`. No migration or dependency.
+- Validation: backend workflow + review API selection: 51 passed, 3 skipped, 99 deselected. Frontend review tests: 13 passed. Vite build passed with existing large-chunk warning; targeted Oxlint reports one pre-existing unused `EVALUATION_STATUS_TONE` warning. Ruff check passes with pre-existing E501/B904 ignored; existing format-check drift remains in the two large workflow/test files. `git diff --check` passed. No live provider/API calls.
+- Commit: pending.
 ## TASK STATUS
 - S1: done (`b7903e7`).
 - S2: done (`e796dba`); no confirmed real secrets found, so no key rotation is pending.
 - S3: done (`98a72ce`).
 - S4: done (`17da746`; follow-up metering fix `e99d445`).
 - S5: done (`1725d09`).
-- A3: done; cache metadata lives in existing versioned artifacts, with no migration or dependency. Repeat extraction/evaluation reuses current artifacts and traces; resume content, profile version, prompt/schema, or effective provider/model changes miss. Focused tests: 62 passed, 7 skipped. No live AI calls.
+- A3: done (`a6881eb`); cache metadata lives in existing versioned artifacts, with no migration or dependency. Repeat extraction/evaluation reuses current artifacts and traces; resume content, profile version, prompt/schema, or effective provider/model changes miss. Focused tests: 62 passed, 7 skipped. No live AI calls.
+- A6: done (implementation validated; commit pending).
 - S6: pending [GATE] design approval.
 - S7: pending [GATE] design approval.
 
