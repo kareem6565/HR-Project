@@ -20,6 +20,7 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
+from app.ai.actor_context import ai_actor_context
 from app.core.logging import request_id_context, sanitize_log_value, set_request_id
 
 logger = logging.getLogger("app.request")
@@ -49,6 +50,7 @@ class RequestCorrelationMiddleware(BaseHTTPMiddleware):
         # Set in request state and async context
         request.state.request_id = request_id
         token = set_request_id(request_id)
+        actor_token = ai_actor_context.set(None)
         start_time = time.perf_counter()
 
         response: Response | None = None
@@ -107,3 +109,4 @@ class RequestCorrelationMiddleware(BaseHTTPMiddleware):
                     logger.info("Request completed successfully", extra=extra_data)
 
             request_id_context.reset(token)
+            ai_actor_context.reset(actor_token)

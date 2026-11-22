@@ -142,7 +142,9 @@ def json_payload() -> str:
 
 def _structured_provider(completions: _FakeCompletions) -> SoalProvider:
     with _patch_client(completions):
-        return SoalProvider(api_key="test-key", model="gemini-3.5-flash")
+        provider = SoalProvider(api_key="test-key", model="gemini-3.5-flash")
+        provider.cost_policy_enabled = False  # Isolated adapter tests; production remains guarded.
+        return provider
 
 
 def _count(db: Session, model) -> int:
@@ -391,7 +393,11 @@ def test_factory_returns_ollama_cloud_with_key() -> None:
 
 
 def test_factory_returns_openrouter_with_key() -> None:
-    settings = Settings(ai_provider="openrouter", openrouter_api_key="test-key")
+    settings = Settings(
+        ai_provider="openrouter",
+        openrouter_api_key="test-key",
+        openrouter_model="openrouter/free",
+    )
     with mock.patch(
         "app.ai.providers.openai_compatible.OpenAI",
         return_value=_FakeOpenAI(_FakeCompletions()),
@@ -400,7 +406,7 @@ def test_factory_returns_openrouter_with_key() -> None:
 
     assert isinstance(provider, OpenRouterProvider)
     assert provider.provider_name == "openrouter"
-    assert provider.model_name == "deepseek/deepseek-v4.1-flash-1017"
+    assert provider.model_name == "openrouter/free"
     assert provider.base_url == "https://openrouter.ai/api/v1"
     assert provider.max_tokens == settings.openrouter_max_tokens
 
@@ -409,6 +415,7 @@ def test_openrouter_sends_configured_output_token_limit() -> None:
     completions = _FakeCompletions(completion=_completion("OK"))
     with _patch_client(completions):
         provider = OpenRouterProvider(api_key="test-key", max_tokens=64)
+    provider.cost_policy_enabled = False  # Isolated SDK-adapter test; no database policy setup.
 
     provider.generate_text(TextGenerationRequest(input="reply OK"))
 
@@ -437,12 +444,11 @@ def test_factory_returns_fake_in_fake_mode() -> None:
     assert isinstance(provider, FakeAIProvider)
 
 
-def test_factory_falls_back_to_fake_when_key_missing() -> None:
+def test_factory_does_not_fall_back_to_fake_when_soal_key_missing() -> None:
     settings = Settings(ai_provider="soal", soal_api_key=None)
 
-    provider = get_provider(settings)
-
-    assert isinstance(provider, FakeAIProvider)
+    with pytest.raises(ProviderConfigurationError, match="SOAL_API_KEY"):
+        get_provider(settings)
 
 
 def test_factory_forwards_kwargs_only_to_fake() -> None:

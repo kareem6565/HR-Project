@@ -1,17 +1,7 @@
-"""Provider factory: selects a concrete ``AIProvider`` from application settings.
+"""Select the configured provider; all live providers receive the free-first guard.
 
-``get_provider`` returns the configured live provider. Ollama Cloud is the
-default; it requires ``OLLAMA_API_KEY`` and fails clearly when it is missing.
-Fake mode remains explicit for tests and offline development.
-
-A runtime API key override (see ``app.core.runtime_config``) takes precedence
-over the ``SOAL_API_KEY`` env var and implicitly enables the Soal provider
-even when ``AI_PROVIDER`` is unset — this is how the app surfaces Soal live in
-dev/demo mode without a server restart.
-
-Keyword arguments are forwarded only to ``FakeAIProvider``; the Soal branch
-ignores them. This preserves the deterministic fake payloads the backend routes
-rely on while keeping the real provider path free of domain specifics.
+Explicit fake mode remains available to tests and offline development. A missing
+provider key raises a configuration error rather than silently selecting Fake.
 """
 
 from __future__ import annotations
@@ -23,11 +13,9 @@ from app.ai.providers.ollama_cloud import OllamaCloudProvider
 from app.ai.providers.openrouter import OpenRouterProvider
 from app.ai.providers.soal import SoalProvider
 from app.core.config import Settings
-from app.core.runtime_config import get_api_key as runtime_api_key
 
 API_KEY_SOURCE_NONE = "none"
 API_KEY_SOURCE_ENVIRONMENT = "environment"
-API_KEY_SOURCE_RUNTIME = "runtime"
 
 
 def resolve_ai_config(settings: Settings) -> dict:
@@ -38,27 +26,17 @@ def resolve_ai_config(settings: Settings) -> dict:
     - ``model``: the active model ("" when fake)
     - ``base_url``: the active endpoint ("" when fake)
     - ``api_key``: the active API key ("" when none)
-    - ``api_key_source``: "runtime", "environment" or "none"
+    - ``api_key_source``: "environment" or "none"
     - ``is_fake``: True only when the deterministic fake provider is active
     """
-    runtime_key = runtime_api_key()
-    if runtime_key is not None or settings.ai_provider == "soal":
-        api_key = runtime_key or settings.soal_api_key
-        if not api_key:
-            return {
-                "provider": "fake",
-                "model": "",
-                "base_url": "",
-                "api_key": "",
-                "api_key_source": API_KEY_SOURCE_NONE,
-                "is_fake": True,
-            }
+    if settings.ai_provider == "soal":
+        api_key = settings.soal_api_key
         return {
             "provider": "soal",
             "model": settings.soal_model,
             "base_url": settings.soal_base_url,
             "api_key": api_key,
-            "api_key_source": API_KEY_SOURCE_RUNTIME if runtime_key else API_KEY_SOURCE_ENVIRONMENT,
+            "api_key_source": API_KEY_SOURCE_ENVIRONMENT if api_key else API_KEY_SOURCE_NONE,
             "is_fake": False,
         }
     if settings.ai_provider == "ollama":
@@ -96,31 +74,39 @@ def resolve_ai_config(settings: Settings) -> dict:
 
 
 def get_provider(settings: Settings, **fake_kwargs) -> AIProvider:
-    """Return the configured provider, requiring credentials for live Ollama."""
+    """Return the configured provider, requiring credentials for live providers."""
     config = resolve_ai_config(settings)
     if config["provider"] == "soal":
-        return SoalProvider(
+        if not config["api_key"]:
+            raise ProviderConfigurationError("SOAL_API_KEY is required when AI_PROVIDER=soal.")
+        provider = SoalProvider(
             api_key=config["api_key"],
             model=config["model"],
             base_url=config["base_url"],
         )
+        provider.cost_policy_enabled = True
+        return provider
     if config["provider"] == "ollama":
         if not config["api_key"]:
             raise ProviderConfigurationError("OLLAMA_API_KEY is required when AI_PROVIDER=ollama.")
-        return OllamaCloudProvider(
+        provider = OllamaCloudProvider(
             api_key=config["api_key"],
             model=config["model"],
             base_url=config["base_url"],
         )
+        provider.cost_policy_enabled = True
+        return provider
     if config["provider"] == "openrouter":
         if not config["api_key"]:
             raise ProviderConfigurationError(
                 "OPENROUTER_API_KEY is required when AI_PROVIDER=openrouter."
             )
-        return OpenRouterProvider(
+        provider = OpenRouterProvider(
             api_key=config["api_key"],
             model=config["model"],
             base_url=config["base_url"],
             max_tokens=settings.openrouter_max_tokens,
         )
+        provider.cost_policy_enabled = True
+        return provider
     return FakeAIProvider(**fake_kwargs)

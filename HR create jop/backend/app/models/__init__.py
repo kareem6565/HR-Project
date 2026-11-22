@@ -1,4 +1,5 @@
 from app.models.ai_trace import AITrace
+from app.models.ai_usage import AIPolicyControl, AIUsageCounter, AIUsageEvent
 from app.models.audit_log import AuditLog
 from app.models.candidate import Candidate
 from app.models.candidate_evaluation import CandidateEvaluation
@@ -31,6 +32,9 @@ from app.models.workflow_step_trace import WorkflowStepTrace
 
 __all__ = [
     "AITrace",
+    "AIUsageEvent",
+    "AIUsageCounter",
+    "AIPolicyControl",
     "AuditLog",
     "Candidate",
     "CandidateEvaluation",

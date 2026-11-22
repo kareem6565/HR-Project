@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     )
     storage_root_dir: str = Field(default="./storage", validation_alias="STORAGE_ROOT_DIR")
     ai_provider: Literal["fake", "soal", "ollama", "openrouter"] = Field(
-        default="ollama", validation_alias="AI_PROVIDER"
+        default="openrouter", validation_alias="AI_PROVIDER"
     )
     soal_api_key: str | None = Field(default=None, validation_alias="SOAL_API_KEY")
     soal_base_url: str = Field(default="https://soal.help/api/v1", validation_alias="SOAL_BASE_URL")
@@ -34,11 +34,23 @@ class Settings(BaseSettings):
     openrouter_base_url: str = Field(
         default="https://openrouter.ai/api/v1", validation_alias="OPENROUTER_BASE_URL"
     )
-    openrouter_model: str = Field(
-        default="deepseek/deepseek-v4.1-flash-1017", validation_alias="OPENROUTER_MODEL"
-    )
+    openrouter_model: str = Field(default="openrouter/free", validation_alias="OPENROUTER_MODEL")
     openrouter_max_tokens: int = Field(
         default=4096, gt=0, le=32768, validation_alias="OPENROUTER_MAX_TOKENS"
+    )
+    ai_free_model_allowlist: str = Field(default="", validation_alias="AI_FREE_MODEL_ALLOWLIST")
+    ai_paid_mode_enabled: bool = Field(default=False, validation_alias="AI_PAID_MODE_ENABLED")
+    ai_paid_budget_usd: float = Field(default=0.0, ge=0, validation_alias="AI_PAID_BUDGET_USD")
+    ai_global_rpm_limit: int = Field(default=15, gt=0, validation_alias="AI_GLOBAL_RPM_LIMIT")
+    ai_global_daily_limit: int = Field(default=40, gt=0, validation_alias="AI_GLOBAL_DAILY_LIMIT")
+    ai_user_rpm_limit: int = Field(default=5, gt=0, validation_alias="AI_USER_RPM_LIMIT")
+    ai_user_daily_limit: int = Field(default=20, gt=0, validation_alias="AI_USER_DAILY_LIMIT")
+    ai_tester_user_ids: str = Field(default="", validation_alias="AI_TESTER_USER_IDS")
+    ai_tester_user_rpm_limit: int = Field(
+        default=10, gt=0, validation_alias="AI_TESTER_USER_RPM_LIMIT"
+    )
+    ai_tester_user_daily_limit: int = Field(
+        default=60, gt=0, validation_alias="AI_TESTER_USER_DAILY_LIMIT"
     )
     max_upload_bytes: int = Field(default=5 * 1024 * 1024, validation_alias="MAX_UPLOAD_BYTES")
     max_batch_files: int = Field(default=20, validation_alias="MAX_BATCH_FILES")
