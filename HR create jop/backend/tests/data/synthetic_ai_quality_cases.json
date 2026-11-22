@@ -89,5 +89,17 @@
       "Docker": "Deployed the service in Docker containers."
     },
     "expected_score": 100
+  },
+  {
+    "id": "arabic_only_supported_and_missing_evidence",
+    "cv_text": "مهندس برمجيات. أستخدم بايثون في بناء الخدمات، وأصمم قواعد البيانات وأحسن الاستعلامات.",
+    "requirements": [
+      {"text": "Python", "category": "must_have", "dimension": "skill"},
+      {"text": "SQL Database", "category": "important", "dimension": "skill"},
+      {"text": "Kubernetes", "category": "must_have", "dimension": "skill"}
+    ],
+    "expected_evidence": {"Python": "matched", "SQL Database": "matched", "Kubernetes": "missing"},
+    "expected_quote_fragments": {"Python": "بايثون", "SQL Database": "قواعد البيانات"},
+    "expected_score": 62.5
   }
 ]

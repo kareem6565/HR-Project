@@ -1,7 +1,7 @@
 # Agent Progress
 
 ## CURRENT
-- Task: A2 [AUTO] complete. Next in Section 5: A4 [AUTO].
+- Task: A4 [AUTO] complete. Next in Section 5: A3 [AUTO].
 - Branch: `agent/recruitment-work` (created from the existing `feat/public-candidate-application` tree).
 - Housekeeping commits: `6bdf7a5` frontend readability; `8f14d0a` HERA brand mark; `167a4f1` HR Manager workspace/branding; `b827907` startup helper; `a35b6ab` change log.
 - S8 plan: (1) use the repository root `.github/workflows` and canonical backend/frontend; (2) add one CI workflow for Gitleaks, pip-audit, npm audit (high+), Ruff, pytest, Vitest, and build; (3) document exact local commands here; (4) validate workflow structure and record limitations. No secrets, dependencies, application changes, or data migrations planned.
@@ -19,6 +19,14 @@
 - The requested path `HR create jop/AGENT_TASKS.md` is absent; the full task plan was read from `HR create jop/docs/AGENT_TASKS.md`. No files were moved.
 - T0.0 acceptance pointer in `HR create jop/AGENTS.md` is pending owner action; this agent will not edit that file.
 
+## A4 PLAN [AUTO]
+1. Extend `tools/eval_quality.py` to benchmark the configured AI provider through the existing in-memory `CandidateEvaluationWorkflow`; keep the deterministic report mode available.
+2. Inspect and reuse the synthetic fixture approach in `tools/eval_ollama_quality.py`; add pure Arabic and mixed-language synthetic CV/JD cases with expected evidence and quote fragments.
+3. Meter provider structured calls and per-CV elapsed time without recording prompts, CV text, API keys, or other PII.
+4. Report valid structured-JSON rate, evidence precision/recall against the fixture labels, verified grounded-quote rate, average latency, and calls per CV in a compact table.
+5. Add offline unit tests for metric calculations and formatting/failure accounting; never call a live or paid provider in tests.
+6. Run the benchmark once using only a local deterministic/fake path where feasible, focused tests, Ruff, and `git diff --check`; document that live-provider runs are opt-in and operator initiated.
+7. Commit only A4 code, fixtures/tests, and this progress update.
 ## TASK STATUS
 - S1: done (`b7903e7`).
 - S2: done (`e796dba`); no confirmed real secrets found, so no key rotation is pending.
@@ -49,6 +57,7 @@
 - S5 | Added AES-GCM file encryption, verified resumable storage migration, candidate anonymization/deletion, legal holds, retention settings/job, and documentation. Full backend suite: 1105 passed, 1 skipped, 12 deselected; focused S5/storage/Alembic suite: 38 passed. No live migration or retention deletion executed.
 - S8 | Added `.github/workflows/security-ci.yml` at the Git repository root. It redacts Gitleaks output and scans only incoming commits (avoids known historical report-only matches); runs Python dependency audit, Ruff, PostgreSQL-backed pytest, production npm audit at high/critical, Oxlint, Vitest, and Vite build. No application files or dependencies changed. Commit: `df7c6e5` (workflow only).
 - A2 | Production rejects `AI_PROVIDER=fake` unless `ALLOW_FAKE_AI=true`; startup logs provider/model/demo only; admin settings expose `is_demo`, with a visible simulated-response notice for Fake. Added config/API/UI regression tests and documented the override in both env examples. No dependencies. Backend focused tests: 14 passed, 1 skipped; frontend settings tests: 4 passed; Ruff check+format passed; targeted Oxlint passed; Vite build passed (existing chunk-size warning). `npm run lint` could not resolve its binary because the Windows workspace path contains `&`; direct Oxlint on both changed UI files passed.
+- A4 | Added configured-provider synthetic benchmarking with JSON-rate, evidence precision/recall, grounded quote rate, latency and provider-call metrics; shared fixtures now include English, Arabic, mixed-language, missing-evidence, and injection cases. Reused the in-memory candidate-evaluation workflow; reports never print CVs, prompts, keys, or provider messages. Added offline metric, failure, report, and Fake-mode guard tests. No dependencies. Focused tests: 9 passed; Ruff check excluding pre-existing E501 warnings passed; tests format check and `py_compile` passed. Default deterministic run: 9 cases, deterministic=True, stuffing delta=0. No live provider request was made. Provider command: `python tools/eval_quality.py --provider-benchmark` (configured provider in `backend/.env`; sends only synthetic fixtures). Strict Ruff still reports 12 pre-existing E501 lines in `tools/eval_quality.py`, and the legacy file-wide format check proposes unrelated formatting changes.
 
 ### S8 local run
 
@@ -115,3 +124,8 @@ Frontend, from `HR create jop/frontend/frontend_last`:
 - S3 validation: focused pytest on candidate profile extraction, candidate evaluation, OpenRouter adapter, and evidence engine: 92 passed, 7 skipped. `git diff --check` passed. Ruff checks excluding the baseline `E501`/`B904` findings passed; strict Ruff still reports 9 pre-existing style/error findings in the already-dirty evaluation workflow/test files. Formatter check passes for the cleanly modified files; the evaluation workflow/test files have pre-existing formatting drift, left intact to avoid reformatting owner changes. No live AI call was made.
 - S3 environment issue: the first pytest invocation used `..\\.venv` while already in `backend/` and failed to locate Python; confirmed `.venv` exists locally, corrected to `.\\.venv`, and the focused suite passed.
 - S3 committed as `98a72ce`; migration dependency revision 027 was committed with the preceding free-first task (`43b7886`).
+- A4 checkpoint: first Ruff audit found the new benchmark helpers were inserted before the existing `compute_metrics` function body ended, leaving its remaining statements unreachable/out of scope. Root cause was patch placement at the wrong closing brace; moving the original body back under its function before continuing.
+- A4 checkpoint: fixture score test found the new Arabic synthetic case expected 60 while the unchanged weighted scorer computes 62.5 (must-have 3 + important 2, with a third missing must-have weight 3). Update only the fixture expectation to the verified deterministic score and rerun the focused suite.
+- A4 checkpoint: the expectation edit matched the first occurrence of `60` and changed the pre-existing sparse case instead of the new Arabic case. Restore the sparse case score to 60 and set 62.5 only on the Arabic case by ID.
+
+- A4 resolved checkpoints: moved benchmark helpers below the existing deterministic metric function after a placement error; corrected the Arabic fixture expectation to the scorer-verified 62.5 and restored the existing sparse-case expectation to 60 after an initially broad replacement.

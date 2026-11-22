@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Explainable AI Evaluation and Quality Measurement Tool (HERA Prompt 8).
 
-Measures evaluation quality, deterministic reproducibility, language robustness,
-and keyword-stuffing resistance on synthetic benchmark datasets.
+Measures deterministic evidence-engine quality or, with ``--provider-benchmark``,
+the configured AI provider against synthetic English, Arabic, and mixed-language cases.
 
-All evaluations are executed using the local deterministic evidence engine (v2.0)
-and ScoringService. No candidate data is sent to external AI providers.
+The default evaluation uses the local deterministic evidence engine (v2.0) and
+ScoringService. Provider benchmarking sends only the synthetic fixtures to the
+operator-configured provider and never reads real candidate records.
 """
 
 from __future__ import annotations
@@ -13,8 +14,9 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from pathlib import Path
 import sys
+import time
+from pathlib import Path
 from typing import Any
 
 # Ensure default JWT_SECRET_KEY for offline quality measurement
@@ -25,9 +27,17 @@ backend_path = Path(__file__).resolve().parent.parent / "backend"
 if str(backend_path) not in sys.path:
     sys.path.insert(0, str(backend_path))
 
-from app.ai.contracts import normalize_job_profile_requirements
-from app.services.resume_details_service import derive_screening_payloads
-from app.services.scoring_service import ScoringService
+from app.ai.contracts import normalize_job_profile_requirements  # noqa: E402
+from app.ai.providers.base import AIProvider, StructuredGenerationRequest, TextGenerationRequest  # noqa: E402
+from app.ai.providers.factory import get_provider, resolve_ai_config  # noqa: E402
+from app.ai.results import StructuredAIResult, TextAIResult  # noqa: E402
+from app.ai.workflows import CandidateEvaluationWorkflow  # noqa: E402
+from app.core.config import Settings  # noqa: E402
+from app.services.resume_details_service import derive_screening_payloads  # noqa: E402
+from app.services.scoring_service import ScoringService  # noqa: E402
+from app.services.text_normalization import find_quote_in_source  # noqa: E402
+
+PROVIDER_CASES_PATH = backend_path / "tests" / "data" / "synthetic_ai_quality_cases.json"
 
 # ---------------------------------------------------------------------------
 # Synthetic Benchmark Dataset
@@ -226,7 +236,10 @@ def compute_metrics(
         # Run 2 (Determinism & consistency check)
         eval_2 = run_evaluation(item["cv_text"], requirements)
 
-        if eval_1["score"] != eval_2["score"] or eval_1["recommendation"] != eval_2["recommendation"]:
+        if (
+            eval_1["score"] != eval_2["score"]
+            or eval_1["recommendation"] != eval_2["recommendation"]
+        ):
             consistency_passed = False
 
         system_shortlist = eval_1["score"] >= shortlist_threshold
@@ -251,16 +264,24 @@ def compute_metrics(
             if is_agreed:
                 by_language[lang]["correct"] += 1
 
-        results.append({
-            "id": item["id"],
-            "language": lang,
-            "score": eval_1["score"],
-            "recommendation": eval_1["recommendation"],
-            "expected_label": item["ground_truth_label"],
-            "matched_requirements": sum(1 for e in eval_1["evidence_items"] if e["evidence_type"] == "matched"),
-            "partial_requirements": sum(1 for e in eval_1["evidence_items"] if e["evidence_type"] == "partial"),
-            "missing_requirements": sum(1 for e in eval_1["evidence_items"] if e["evidence_type"] == "missing"),
-        })
+        results.append(
+            {
+                "id": item["id"],
+                "language": lang,
+                "score": eval_1["score"],
+                "recommendation": eval_1["recommendation"],
+                "expected_label": item["ground_truth_label"],
+                "matched_requirements": sum(
+                    e["evidence_type"] == "matched" for e in eval_1["evidence_items"]
+                ),
+                "partial_requirements": sum(
+                    e["evidence_type"] == "partial" for e in eval_1["evidence_items"]
+                ),
+                "missing_requirements": sum(
+                    e["evidence_type"] == "missing" for e in eval_1["evidence_items"]
+                ),
+            }
+        )
 
     total_samples = len(dataset)
     precision = (tp / (tp + fp)) if (tp + fp) > 0 else 0.0
@@ -291,6 +312,189 @@ def compute_metrics(
         "by_language": by_language,
         "per_candidate_results": results,
     }
+
+
+class MeteredProvider(AIProvider):
+    """Count provider-interface calls and structured responses without storing inputs."""
+
+    def __init__(self, provider: AIProvider) -> None:
+        self.provider = provider
+        self.calls = 0
+        self.valid_json_responses = 0
+        self.failed_calls = 0
+
+    def generate_structured(self, request: StructuredGenerationRequest) -> StructuredAIResult:
+        self.calls += 1
+        try:
+            result = self.provider.generate_structured(request)
+        except Exception:
+            self.failed_calls += 1
+            raise
+        if isinstance(result.data, (dict, list)):
+            self.valid_json_responses += 1
+        return result
+
+    def generate_text(self, request: TextGenerationRequest) -> TextAIResult:
+        self.calls += 1
+        try:
+            return self.provider.generate_text(request)
+        except Exception:
+            self.failed_calls += 1
+            raise
+
+
+def evidence_metrics(
+    cases: list[dict[str, Any]], predictions: list[dict[str, dict[str, Any]] | None]
+) -> dict[str, float | int]:
+    """Compare positive evidence and grounded quotes with synthetic expected labels."""
+    true_positive = false_positive = false_negative = 0
+    predicted_positive = verified_quotes = 0
+
+    for case, prediction in zip(cases, predictions, strict=True):
+        actual = prediction or {}
+        for requirement_text, expected_type in case["expected_evidence"].items():
+            expected_positive = expected_type in {"matched", "partial"}
+            item = actual.get(requirement_text) or {}
+            predicted_positive_for_item = item.get("evidence_type") in {"matched", "partial"}
+            if expected_positive and predicted_positive_for_item:
+                true_positive += 1
+            elif predicted_positive_for_item:
+                false_positive += 1
+            elif expected_positive:
+                false_negative += 1
+
+            if predicted_positive_for_item:
+                predicted_positive += 1
+                candidate_evidence = item.get("candidate_evidence") or {}
+                quote = str(candidate_evidence.get("quote") or "")
+                grounded, _location = find_quote_in_source(quote, case["cv_text"])
+                expected_fragment = case.get("expected_quote_fragments", {}).get(requirement_text)
+                if (
+                    candidate_evidence.get("quote_verified") is True
+                    and quote
+                    and grounded
+                    and (expected_fragment is None or expected_fragment in quote)
+                ):
+                    verified_quotes += 1
+
+    precision = (
+        true_positive / (true_positive + false_positive)
+        if true_positive + false_positive
+        else 0.0
+    )
+    recall = (
+        true_positive / (true_positive + false_negative)
+        if true_positive + false_negative
+        else 0.0
+    )
+    quote_rate = verified_quotes / predicted_positive if predicted_positive else 0.0
+    return {
+        "evidence_precision": precision,
+        "evidence_recall": recall,
+        "verified_quote_rate": quote_rate,
+        "evidence_true_positive": true_positive,
+        "evidence_false_positive": false_positive,
+        "evidence_false_negative": false_negative,
+        "predicted_positive_evidence": predicted_positive,
+    }
+
+
+def run_provider_benchmark(settings: Settings, *, json_output: bool = False) -> int:
+    """Evaluate configured provider in memory using synthetic cases only."""
+    provider_config = resolve_ai_config(settings)
+    if provider_config["is_fake"]:
+        print(
+            "AI_PROVIDER=fake returns a fixed offline stub and cannot benchmark a model. "
+            "Configure a provider to run the synthetic provider benchmark.",
+            file=sys.stderr,
+        )
+        return 2
+
+    cases = json.loads(PROVIDER_CASES_PATH.read_text(encoding="utf-8"))
+    metered_provider = MeteredProvider(get_provider(settings))
+    workflow = CandidateEvaluationWorkflow(
+        evidence_provider=metered_provider,
+        explanation_provider=metered_provider,
+    )
+    predictions: list[dict[str, dict[str, Any]] | None] = []
+    latency_ms = 0.0
+    failures = 0
+
+    for case in cases:
+        requirements = [
+            {**requirement, "key": f"req-{index + 1:016x}"}
+            for index, requirement in enumerate(case["requirements"])
+        ]
+        started = time.perf_counter()
+        try:
+            result = workflow.generate(
+                job_title=f"Synthetic benchmark {case['id']}",
+                requirements_data=requirements,
+                candidate_skills=[],
+                resume_text=case["cv_text"],
+            )
+            text_by_key = {requirement.key: requirement.text for requirement in result.requirements}
+            predictions.append(
+                {
+                    text_by_key[item.requirement_ref["requirement_key"]]: {
+                        "evidence_type": item.evidence_type,
+                        "candidate_evidence": item.candidate_evidence or {},
+                    }
+                    for item in result.evidence.evidence_items
+                }
+            )
+        except Exception as error:
+            failures += 1
+            predictions.append(None)
+            # Error type is safe to show; provider messages can contain request details.
+            print(f"Case {case['id']}: failed ({type(error).__name__})", file=sys.stderr)
+        finally:
+            latency_ms += (time.perf_counter() - started) * 1000
+
+    metrics = evidence_metrics(cases, predictions)
+    case_count = len(cases)
+    summary = {
+        "provider": provider_config["provider"],
+        "model": provider_config["model"],
+        "cases": case_count,
+        "valid_json_rate": metered_provider.valid_json_responses / metered_provider.calls
+        if metered_provider.calls
+        else 0.0,
+        **metrics,
+        "average_latency_ms": latency_ms / case_count if case_count else 0.0,
+        "provider_calls_per_cv": metered_provider.calls / case_count if case_count else 0.0,
+        "provider_failures": metered_provider.failed_calls,
+        "case_failures": failures,
+    }
+    if json_output:
+        print(json.dumps(summary, indent=2, ensure_ascii=False))
+    else:
+        print(render_provider_report(summary))
+    return 1 if failures else 0
+
+
+def render_provider_report(summary: dict[str, Any]) -> str:
+    """Format aggregate benchmark metrics without exposing synthetic CV text."""
+    rows = [
+        ("Cases", str(summary["cases"])),
+        ("Valid JSON rate", f"{summary['valid_json_rate']:.1%}"),
+        ("Evidence precision", f"{summary['evidence_precision']:.1%}"),
+        ("Evidence recall", f"{summary['evidence_recall']:.1%}"),
+        ("Verified quote rate", f"{summary['verified_quote_rate']:.1%}"),
+        ("Average latency / CV", f"{summary['average_latency_ms']:.0f} ms"),
+        ("Provider calls / CV", f"{summary['provider_calls_per_cv']:.2f}"),
+        ("Provider failures", str(summary["provider_failures"])),
+        ("Case failures", str(summary["case_failures"])),
+    ]
+    lines = [
+        f"Synthetic AI benchmark · {summary['provider']} / {summary['model'] or 'n/a'}",
+        "Metric                    Result",
+        "------------------------  --------",
+    ]
+    lines.extend(f"{label:<25} {value}" for label, value in rows)
+    return "\n".join(lines)
+
+
 
 
 def print_report(metrics: dict[str, Any]) -> None:
@@ -335,7 +539,16 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Evaluate HERA Evidence Engine Quality")
     parser.add_argument("--threshold", type=float, default=70.0, help="Shortlist score threshold (default: 70.0)")
     parser.add_argument("--json", action="store_true", help="Output machine-readable JSON")
+    parser.add_argument(
+        "--provider-benchmark",
+        action="store_true",
+        help="Run the synthetic cases against the provider configured in backend .env.",
+    )
     args = parser.parse_args()
+
+    if args.provider_benchmark:
+        settings = Settings(_env_file=backend_path / ".env")
+        raise SystemExit(run_provider_benchmark(settings, json_output=args.json))
 
     requirements = DEFAULT_JOB_PROFILE["requirements"]
     metrics = compute_metrics(
