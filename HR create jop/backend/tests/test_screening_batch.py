@@ -25,6 +25,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from sqlalchemy.dialects import postgresql
 from starlette.testclient import TestClient
 
 from app.core.config import settings
@@ -496,6 +497,29 @@ class TestItemRetry:
 
 
 class TestWorkerProcessing:
+    def test_processing_query_locks_claimed_item_until_transaction_finishes(self):
+        statement = ScreeningWorker._processing_item_query(uuid.uuid4())
+
+        assert "FOR UPDATE" in str(statement.compile(dialect=postgresql.dialect()))
+
+    def test_worker_logs_resume_cleanup_failure_without_logging_file_path(self, caplog):
+        class FailingStorage:
+            def delete(self, *, file_uri):
+                raise OSError(f"cannot delete {file_uri}")
+
+        file_uri = "private/candidate-resume.pdf"
+        worker = ScreeningWorker(storage=FailingStorage())
+        worker._cleanup_created_resume_file(file_uri, item_id=uuid.uuid4())
+
+        assert "Failed to clean up a resume file after screening failure." in caplog.text
+        assert file_uri not in caplog.text
+        record = next(
+            record
+            for record in caplog.records
+            if record.message == "Failed to clean up a resume file after screening failure."
+        )
+        assert record.exception_class == "OSError"
+
     def test_worker_claims_and_screens_item_successfully(
         self, client, db_session, job_a, recruiter_a
     ):

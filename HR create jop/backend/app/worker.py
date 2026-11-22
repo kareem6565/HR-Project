@@ -196,6 +196,16 @@ class ScreeningWorker:
             logger.warning("Recovered %d stale screening batch items.", recovered)
         return recovered
 
+    @staticmethod
+    def _processing_item_query(item_id: uuid.UUID):
+        """Lock an active item so lease recovery cannot reclaim live work."""
+        return (
+            select(ScreeningBatchItem)
+            .where(ScreeningBatchItem.id == item_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+
     def process_item(
         self,
         db: Session,
@@ -203,7 +213,7 @@ class ScreeningWorker:
         claim_token: str,
     ) -> bool:
         """Process a single claimed item end-to-end with failure isolation."""
-        item = db.get(ScreeningBatchItem, item_id)
+        item = db.scalar(self._processing_item_query(item_id))
         if item is None or item.claim_token != claim_token or item.status != "running":
             logger.warning("Claim lost or item reclaimed by another worker: %s", item_id)
             return False
@@ -451,10 +461,7 @@ class ScreeningWorker:
             }
             db.rollback()
             if created_resume_uri:
-                try:
-                    self.storage.delete(file_uri=created_resume_uri)
-                except Exception:
-                    pass
+                self._cleanup_created_resume_file(created_resume_uri, item_id=item_id)
 
             self._log_item_failure(
                 item,
@@ -470,6 +477,16 @@ class ScreeningWorker:
                 processing_stage=processing_stage,
             )
             return False
+
+    def _cleanup_created_resume_file(self, file_uri: str, *, item_id: uuid.UUID) -> None:
+        """Attempt failed-item cleanup without hiding storage deletion errors or file paths."""
+        try:
+            self.storage.delete(file_uri=file_uri)
+        except Exception as exc:
+            logger.warning(
+                "Failed to clean up a resume file after screening failure.",
+                extra={"item_id": str(item_id), "exception_class": type(exc).__name__},
+            )
 
     @staticmethod
     def _log_item_failure(

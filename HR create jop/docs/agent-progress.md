@@ -1,7 +1,7 @@
 # Agent Progress
 
 ## CURRENT
-- Task: T0.4 complete. Next: B1 [AUTO] worker audit.
+- Task: B1 complete. Next: A1 [GATE + NEEDS-HUMAN]; plan is posted below and awaits approval.
 - Branch: `agent/recruitment-work` (created from the existing `feat/public-candidate-application` tree).
 - Housekeeping commits: `6bdf7a5` frontend readability; `8f14d0a` HERA brand mark; `167a4f1` HR Manager workspace/branding; `b827907` startup helper; `a35b6ab` change log.
 - S8 plan: (1) use the repository root `.github/workflows` and canonical backend/frontend; (2) add one CI workflow for Gitleaks, pip-audit, npm audit (high+), Ruff, pytest, Vitest, and build; (3) document exact local commands here; (4) validate workflow structure and record limitations. No secrets, dependencies, application changes, or data migrations planned.
@@ -60,7 +60,7 @@
 - Cache identity includes `ai_mode` and generation engine; rules identity is explicitly `rules`/`rules_v1`, preventing cross-reuse with provider-derived results. Scoring remains the existing deterministic scorer and HR decisions remain human-controlled.
 - Review bundle exposes active mode; the review UI labels rules output and explains the mode. Added offline evidence/cache persistence tests and `docs/rules-only-evidence.md`. No migration or dependency.
 - Validation: backend workflow + review API selection: 51 passed, 3 skipped, 99 deselected. Frontend review tests: 13 passed. Vite build passed with existing large-chunk warning; targeted Oxlint reports one pre-existing unused `EVALUATION_STATUS_TONE` warning. Ruff check passes with pre-existing E501/B904 ignored; existing format-check drift remains in the two large workflow/test files. `git diff --check` passed. No live provider/API calls.
-- Commit: pending.
+- Commit: `2290230`.
 ## TASK STATUS
 - S1: done (`b7903e7`).
 - S2: done (`e796dba`); no confirmed real secrets found, so no key rotation is pending.
@@ -69,6 +69,7 @@
 - S5: done (`1725d09`).
 - A3: done (`a6881eb`); cache metadata lives in existing versioned artifacts, with no migration or dependency. Repeat extraction/evaluation reuses current artifacts and traces; resume content, profile version, prompt/schema, or effective provider/model changes miss. Focused tests: 62 passed, 7 skipped. No live AI calls.
 - A6: done (`2290230`).
+- B1: done (worker lock and cleanup logging fixes; commit pending).
 - S6: pending [GATE] design approval.
 - S7: pending [GATE] design approval.
 
@@ -87,8 +88,23 @@
 3. Run focused worker tests first; make only a minimal fix for verified lost or silent failures and add a regression test.
 4. Run the focused checks, document limitations, update task status, and commit only B1 changes.
 
+### B1 checkpoint
+- Screening batch work uses PostgreSQL `FOR UPDATE SKIP LOCKED` when claiming; claims commit a token and 5-minute lease before processing. Automatic retries are capped at 3 with 30s exponential backoff; expired leases are immediately requeued until attempts are exhausted, then marked failed. Batch polling is every 2s. Public GitHub evidence work uses SKIP LOCKED, a 5-minute lease, 3 attempts, and records terminal failures; rate limits expose retry-after and manual retry is organization-scoped and consent-aware.
+- Verified race: after claim commit, both worker paths previously processed without holding the row lock, so stale-lease recovery could reclaim work that was still actively processing after the 5-minute lease. Processing now locks and refreshes the claimed row for the duration of its DB transaction; stale recovery already uses SKIP LOCKED and skips that active lock. Added PostgreSQL-dialect SQL assertions for both paths.
+- Verified swallowed failure: cleanup of a newly created resume file suppressed deletion exceptions. It now emits a safe warning with item ID and exception class only; regression test verifies the path is not logged.
+- `services/outbox_worker.py` is absent and no outbox worker implementation exists in the backend; audited the actual screening and GitHub analysis queues instead. Unexpected loop exceptions are logged by type and polling continues; item-level failures remain persisted or recover through their lease.
+- Focused backend checks: 26 passed, 1 deselected; Ruff check passed; format check passed (4 files); `git diff --check` passed. No dependencies or schema changes.
+## A1 PLAN [GATE] — updated owner scope
+1. Verify OpenAI-compatible local server request semantics from official Ollama/vLLM documentation before implementation; do not assume endpoint behavior.
+2. Implement the `local` provider by reusing the existing OpenAI-compatible provider and configuration patterns; verify structured requests, retries, safe error mapping, and quota/ledger behavior against a mocked HTTP server only.
+3. Add configurable `num_ctx` for the self-hosted Ollama path without changing current provider defaults or external-provider policy.
+4. Update settings/status surfaces and tests only where needed for selecting and identifying the local provider; mark live verification as pending.
+5. Document that real-hardware speed and quantization effects are unmeasured pending a rented-GPU test.
+6. Separately propose (do not implement) a paid OpenRouter benchmark policy: explicit model allow-list, hard monthly spend cap, and warning at 80%; synthetic CVs only. Wait for approval before policy changes.
+7. Keep provider code, tests, docs, and progress changes in one A1 commit; run mocked tests, focused Ruff, and applicable checks.
+
 ## DONE
-- T0.4 | Verified current filters UI was introduced intentionally in `3867aad`; updated only three ApplicationsList tests and the MatchingResults comparison test using accessible roles/names, preserving status/search/filter/compare assertions and keyboard operation. Full frontend suite: 53 files, 339 passed. Ruff: clean; format: 298 files formatted. Commits: format `05b3997`, safe Ruff fixes `4c6ff26`, remaining Ruff `cc67a15`; T0.4 tests/progress commit pending.
+- T0.4 | Verified current filters UI was introduced intentionally in `3867aad`; updated only three ApplicationsList tests and the MatchingResults comparison test using accessible roles/names, preserving status/search/filter/compare assertions and keyboard operation. Full frontend suite: 53 files, 339 passed. Ruff: clean; format: 298 files formatted. Commits: format `05b3997`, safe Ruff fixes `4c6ff26`, remaining Ruff `cc67a15`; T0.4 tests/progress commit `807a1a5`.
 - T0.0 | Created this progress log; no dependencies.
 - T0.1 | Baseline complete; no files changed and no dependencies added.
 - T0.2 | Corrected architecture provider list, PostgreSQL screening queue/worker description, and canonical frontend path. Text-only; no dependencies.

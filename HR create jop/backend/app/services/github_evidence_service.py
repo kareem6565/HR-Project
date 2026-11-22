@@ -39,6 +39,16 @@ def _utc(value: datetime) -> datetime:
 
 
 class GitHubEvidenceService:
+    @staticmethod
+    def _processing_analysis_query(analysis_id: uuid.UUID):
+        """Lock claimed work while processing so stale recovery cannot reclaim it."""
+        return (
+            select(GitHubEvidenceAnalysis)
+            .where(GitHubEvidenceAnalysis.id == analysis_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+
     def create_consent_link(
         self,
         db: Session,
@@ -244,7 +254,7 @@ class GitHubEvidenceService:
         return row.id
 
     def process_claimed(self, db: Session, analysis_id: uuid.UUID) -> bool:
-        row = db.get(GitHubEvidenceAnalysis, analysis_id)
+        row = db.scalar(self._processing_analysis_query(analysis_id))
         if row is None or row.status != "in_progress":
             return False
         app = db.get(JobApplication, row.application_id)
