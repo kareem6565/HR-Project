@@ -202,7 +202,7 @@ export default function InterviewAvailability() {
         <div className="availability-list-heading">
           <div>
             <p className="eyebrow">GOOGLE CALENDAR</p>
-            <h2 id="google-connection-title">Per-HR Google connection</h2>
+            <h2 id="google-connection-title">Your Google Calendar</h2>
           </div>
           <Link2 size={18} aria-hidden="true" />
         </div>
@@ -210,11 +210,11 @@ export default function InterviewAvailability() {
           Status: <strong>{googleStatus?.connected ? `Connected${googleStatus.google_email ? ` (${googleStatus.google_email})` : ""}` : (googleStatus?.status || "Not connected")}</strong>
         </p>
         {!googleStatus?.connected && (
-          <p className="availability-help">Development may use clearly warned HERA-only mode when configured; production requires a valid Google Calendar connection for the interviewer.</p>
+          <p className="availability-help">Connect your own Google account. HERA stores it separately for your user and uses it only for interviews where you are assigned as the interviewer.</p>
         )}
         <div className="btn-row">
           <button type="button" className="btn btn-primary" onClick={connectGoogle} disabled={googleBusy}>
-            <PlugZap size={16} /> {googleBusy ? "Working…" : "Connect Google Calendar"}
+            <PlugZap size={16} /> {googleBusy ? "Working…" : googleStatus?.connected ? "Reconnect Google Calendar" : "Connect Google Calendar"}
           </button>
           {googleStatus?.connected && (
             <button type="button" className="btn btn-secondary" onClick={disconnectGoogle} disabled={googleBusy}>

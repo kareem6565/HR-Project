@@ -8,6 +8,7 @@ import {
   Users,
   ClipboardList,
   CalendarClock,
+  CalendarCheck2,
   Star,
   BarChart3,
   Settings,
@@ -29,6 +30,7 @@ const PRIMARY_NAV_ITEMS = [
 // Secondary operations and pipeline tools
 const SECONDARY_NAV_ITEMS = [
   { to: "/interviews", label: "Interviews", icon: CalendarClock },
+  { to: "/interviews/availability", label: "Connect Google Calendar", icon: CalendarCheck2 },
   { to: "/talent-pool", label: "Talent Pool", icon: Star },
   { to: "/analytics", label: "Analytics", icon: BarChart3 },
 ];

@@ -8,6 +8,11 @@ import {
   getPublishedAvailability,
   publishInterviewAvailability,
 } from "../../services/interviewService";
+import {
+  disconnectGoogleConnection,
+  getGoogleConnectUrl,
+  getGoogleConnectionStatus,
+} from "../../services/googleCalendarService";
 
 vi.mock("../../services/interviewService", () => ({
   getInterviewers: vi.fn(),
@@ -16,14 +21,36 @@ vi.mock("../../services/interviewService", () => ({
   withdrawInterviewAvailability: vi.fn(),
 }));
 
+vi.mock("../../services/googleCalendarService", () => ({
+  disconnectGoogleConnection: vi.fn(),
+  getGoogleConnectUrl: vi.fn(),
+  getGoogleConnectionStatus: vi.fn(),
+}));
+
 beforeEach(() => {
   vi.clearAllMocks();
   getInterviewers.mockResolvedValue([{ id: "person-1", name: "Grace Hopper" }]);
   getPublishedAvailability.mockResolvedValue([]);
   publishInterviewAvailability.mockResolvedValue({ id: "availability-1" });
+  getGoogleConnectionStatus.mockResolvedValue({ connected: false, status: "not_connected" });
+  getGoogleConnectUrl.mockResolvedValue({ authorize_url: "https://accounts.google.com/authorize" });
+  disconnectGoogleConnection.mockResolvedValue({ status: "disconnected" });
 });
 
 describe("InterviewAvailability", () => {
+  it("shows this user's Google account and offers reconnect and disconnect", async () => {
+    getGoogleConnectionStatus.mockResolvedValue({
+      connected: true,
+      status: "connected",
+      google_email: "interviewer@example.com",
+    });
+    render(<MemoryRouter><InterviewAvailability /></MemoryRouter>);
+
+    expect(await screen.findByText(/Connected \(interviewer@example.com\)/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reconnect Google Calendar" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Disconnect/ })).toBeInTheDocument();
+  });
+
   it("renders all days in the month so HR chooses the dates that are truly free", async () => {
     render(<MemoryRouter><InterviewAvailability /></MemoryRouter>);
     const grid = await screen.findByRole("group", { name: /Choose an availability date/i });
