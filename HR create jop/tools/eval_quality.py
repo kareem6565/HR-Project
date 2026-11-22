@@ -19,6 +19,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+import httpx
+
 # Ensure default JWT_SECRET_KEY for offline quality measurement
 os.environ.setdefault("JWT_SECRET_KEY", "dummy-secret-for-offline-eval-tool-32-chars-long")
 
@@ -453,16 +455,29 @@ def run_provider_benchmark(settings: Settings, *, json_output: bool = False) -> 
 
     metrics = evidence_metrics(cases, predictions)
     case_count = len(cases)
+    is_ollama_local = provider_config["provider"] == "ollama_local"
+    valid_json_rate = metered_provider.valid_json_responses / metered_provider.calls
+    valid_json_rate = valid_json_rate if metered_provider.calls else 0.0
+    seconds_per_cv = latency_ms / case_count / 1000 if case_count else 0.0
+    calls_per_cv = metered_provider.calls / case_count if case_count else 0.0
     summary = {
         "provider": provider_config["provider"],
         "model": provider_config["model"],
+        "num_ctx": settings.ollama_local_num_ctx if is_ollama_local else None,
+        "device": (
+            ollama_runtime_device(settings.ollama_local_base_url, provider_config["model"])
+            if is_ollama_local
+            else "n/a"
+        ),
         "cases": case_count,
-        "valid_json_rate": metered_provider.valid_json_responses / metered_provider.calls
-        if metered_provider.calls
-        else 0.0,
+        "valid_json_rate": valid_json_rate,
+        "valid_structured_json_rate": valid_json_rate,
         **metrics,
         "average_latency_ms": latency_ms / case_count if case_count else 0.0,
-        "provider_calls_per_cv": metered_provider.calls / case_count if case_count else 0.0,
+        "seconds_per_cv": seconds_per_cv,
+        "provider_calls_per_cv": calls_per_cv,
+        "calls_per_cv": calls_per_cv,
+        "grounded_quote_rate": metrics["verified_quote_rate"],
         "provider_failures": metered_provider.failed_calls,
         "case_failures": failures,
     }
@@ -473,21 +488,66 @@ def run_provider_benchmark(settings: Settings, *, json_output: bool = False) -> 
     return 1 if failures else 0
 
 
+def ollama_runtime_device(base_url: str, model_name: str) -> str:
+    """Classify the selected model's current CPU/GPU placement via Ollama's /api/ps."""
+    try:
+        response = httpx.get(f"{base_url.rstrip('/')}/api/ps", timeout=3.0)
+        response.raise_for_status()
+        running_models = response.json().get("models", [])
+    except (httpx.HTTPError, ValueError, AttributeError):
+        return "unknown (Ollama /api/ps unavailable)"
+
+    expected_names = {model_name, f"{model_name}:latest" if ":" not in model_name else model_name}
+    model = next(
+        (
+            item
+            for item in running_models
+            if isinstance(item, dict)
+            and expected_names.intersection({item.get("name"), item.get("model")})
+        ),
+        None,
+    )
+    if model is None:
+        return "unknown (model not listed as running)"
+
+    size = model.get("size")
+    size_vram = model.get("size_vram")
+    if not isinstance(size, int) or not isinstance(size_vram, int) or size_vram < 0:
+        return "unknown (Ollama runtime placement unavailable)"
+    if size_vram == 0:
+        return "CPU"
+    if size_vram >= size:
+        return "GPU"
+    return "Mixed CPU/GPU"
+
+
 def render_provider_report(summary: dict[str, Any]) -> str:
     """Format aggregate benchmark metrics without exposing synthetic CV text."""
     rows = [
+        ("Model name", str(summary.get("model") or "n/a")),
         ("Cases", str(summary["cases"])),
-        ("Valid JSON rate", f"{summary['valid_json_rate']:.1%}"),
+        (
+            "Valid structured-JSON rate",
+            f"{summary.get('valid_structured_json_rate', summary['valid_json_rate']):.1%}",
+        ),
         ("Evidence precision", f"{summary['evidence_precision']:.1%}"),
         ("Evidence recall", f"{summary['evidence_recall']:.1%}"),
-        ("Verified quote rate", f"{summary['verified_quote_rate']:.1%}"),
-        ("Average latency / CV", f"{summary['average_latency_ms']:.0f} ms"),
-        ("Provider calls / CV", f"{summary['provider_calls_per_cv']:.2f}"),
+        (
+            "Grounded quote rate",
+            f"{summary.get('grounded_quote_rate', summary['verified_quote_rate']):.1%}",
+        ),
+        (
+            "Seconds / CV",
+            f"{summary.get('seconds_per_cv', summary['average_latency_ms'] / 1000):.2f} s",
+        ),
+        ("Calls / CV", f"{summary.get('calls_per_cv', summary['provider_calls_per_cv']):.2f}"),
+        ("num_ctx", str(summary.get("num_ctx") or "n/a")),
+        ("Runtime device", summary.get("device", "unknown")),
         ("Provider failures", str(summary["provider_failures"])),
         ("Case failures", str(summary["case_failures"])),
     ]
     lines = [
-        f"Synthetic AI benchmark · {summary['provider']} / {summary['model'] or 'n/a'}",
+        f"Synthetic AI benchmark | {summary['provider']} / {summary['model'] or 'n/a'}",
         "Metric                    Result",
         "------------------------  --------",
     ]
