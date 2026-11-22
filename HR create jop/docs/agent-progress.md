@@ -212,4 +212,3 @@ Frontend, from `HR create jop/frontend/frontend_last`:
 - A4 resolved checkpoints: moved benchmark helpers below the existing deterministic metric function after a placement error; corrected the Arabic fixture expectation to the scorer-verified 62.5 and restored the existing sparse-case expectation to 60 after an initially broad replacement.
 
 - T0.4 broader backend run (outside approved frontend-only edits): 1114 passed, 1 skipped, 12 deselected, 3 failed. The rate-limit case is order-dependent because prior public-application requests persist a shared TestClient-IP bucket; two worker cases can claim stale queued rows whose temporary files expired. No backend tests/code changed in this authorized frontend task.
-
