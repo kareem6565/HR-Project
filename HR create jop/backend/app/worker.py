@@ -255,6 +255,13 @@ class ScreeningWorker:
             )
             return False
 
+        if settings.a5_prerank_enabled:
+            from app.services.advisory_preranking_service import rank_worker_cohort
+
+            rank_worker_cohort(
+                db, job=job, batch=batch, approved_profile=approved_profile, storage=self.storage
+            )
+
         # Public applications already own a private Resume file; manual batches own a batch copy.
         if item_source == "public_application":
             app = db.get(JobApplication, item.application_id) if item.application_id else None
@@ -410,23 +417,31 @@ class ScreeningWorker:
                         resume_id=resume.id,
                     )
 
-                # 5. Candidate evaluation
+                application.advisory_rank = item.advisory_rank
+                application.advisory_score = item.advisory_score
+                application.advisory_status = item.advisory_status
+                application.advisory_message = item.advisory_message
+
+                # Outside the advisory top N, defer only AI evidence evaluation.
                 processing_stage = "candidate_evaluation"
-                eval_result = CandidateEvaluationWorkflow(
-                    evidence_provider=get_provider(
-                        settings,
-                        structured_payload=evidence_payload,
-                    ),
-                    explanation_provider=get_provider(
-                        settings,
-                        structured_payload=explanation_payload,
-                    ),
-                ).run(
-                    db,
-                    job_application_id=application.id,
-                    organization_id=org_id,
-                    job_profile_id=approved_profile.id,
-                )
+                if item.advisory_status == "not_evaluated":
+                    eval_result = None
+                else:
+                    eval_result = CandidateEvaluationWorkflow(
+                        evidence_provider=get_provider(
+                            settings,
+                            structured_payload=evidence_payload,
+                        ),
+                        explanation_provider=get_provider(
+                            settings,
+                            structured_payload=explanation_payload,
+                        ),
+                    ).run(
+                        db,
+                        job_application_id=application.id,
+                        organization_id=org_id,
+                        job_profile_id=approved_profile.id,
+                    )
 
                 # Re-verify claim token before finalizing item state
                 if item.claim_token != claim_token:
@@ -437,7 +452,7 @@ class ScreeningWorker:
                 item.candidate_id = candidate.id
                 item.resume_id = resume.id
                 item.application_id = application.id
-                item.evaluation_id = eval_result.evaluation_id
+                item.evaluation_id = eval_result.evaluation_id if eval_result else None
                 item.status = "done"
                 item.stage = "done"
                 item.claim_token = None

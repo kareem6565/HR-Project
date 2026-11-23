@@ -761,10 +761,17 @@ export default function ApplicationReview() {
           </p>
         )}
 
+        {application?.advisory_status === "ranked" && !hasEvaluation && (
+          <p className="rules-only-notice" role="status">Advisory rank #{application.advisory_rank}; this ranking does not change the official score or HR decision.</p>
+        )}
+        {application?.advisory_status === "unavailable" && (
+          <p className="rules-only-notice" role="status">{application.advisory_message}</p>
+        )}
+
         {!hasEvaluation ? (
           <EmptyState
             icon={Sparkles}
-            message="Evaluation not run yet. Running the AI evaluation analyzes the candidate profile against job requirements to produce a score, explanation, breakdown, and evidence."
+            message={application?.advisory_status === "not_evaluated" ? application.advisory_message : "Evaluation not run yet. Running the AI evaluation analyzes the candidate profile against job requirements to produce a score, explanation, breakdown, and evidence."}
             action={
               <button type="button" className="primary" onClick={handleEvaluate} disabled={evaluating}>
                 {evaluating ? (
@@ -773,7 +780,7 @@ export default function ApplicationReview() {
                   </>
                 ) : (
                   <>
-                    <Sparkles size={16} /> Evaluate Candidate
+                    <Sparkles size={16} /> {application?.advisory_status === "not_evaluated" ? "Run AI evidence evaluation" : "Evaluate Candidate"}
                   </>
                 )}
               </button>

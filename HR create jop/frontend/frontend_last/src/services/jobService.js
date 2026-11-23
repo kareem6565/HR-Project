@@ -48,6 +48,7 @@ function toBackendCreate(job) {
     experience: job.experience,
     requirements: job.requirements || [],
     required_skills: job.requiredSkills || [],
+    prerank_top_n: Number(job.prerankTopN || 20),
   };
 }
 
@@ -64,6 +65,7 @@ function toBackendUpdate(updates) {
   if (updates.experience !== undefined) body.experience = updates.experience;
   if (updates.requirements !== undefined) body.requirements = updates.requirements;
   if (updates.requiredSkills !== undefined) body.required_skills = updates.requiredSkills;
+  if (updates.prerankTopN !== undefined) body.prerank_top_n = Number(updates.prerankTopN);
   if (
     updates.description !== undefined ||
     updates.requirements !== undefined ||
@@ -92,6 +94,7 @@ function adaptFromBackend(job) {
     experience: job.experience || "",
     requirements: job.requirements || [],
     requiredSkills: job.required_skills || [],
+    prerankTopN: job.prerank_top_n ?? 20,
     createdAt: job.created_at,
     applicants: job._applicantCount ?? 0,
     sourceFileName: job.source_file_name || "",

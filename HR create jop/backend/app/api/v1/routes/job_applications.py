@@ -150,6 +150,10 @@ def list_org_applications(
                 group=row.group,
                 status=row.application.status,
                 screening_status=row.screening_status,
+                advisory_rank=row.application.advisory_rank,
+                advisory_score=row.application.advisory_score,
+                advisory_status=row.application.advisory_status,
+                advisory_message=row.application.advisory_message,
                 decision_status=(
                     {"advance": "advanced", "reject": "rejected"}.get(
                         row.latest_decision.decision, row.latest_decision.decision

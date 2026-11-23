@@ -534,8 +534,10 @@ describe("JobForm AI-assisted creation", () => {
         "requirements",
         "requiredSkills",
         "workMode",
+        "prerankTopN",
       ].sort()
     );
+    expect(payload.prerankTopN).toBe(20);
     expect(payload).not.toHaveProperty("confidence");
     expect(payload).not.toHaveProperty("score");
     expect(payload).not.toHaveProperty("match_percent");

@@ -28,6 +28,7 @@ const EMPTY_JOB = {
   description: "",
   requirementsText: "",
   requiredSkillsText: "",
+  prerankTopN: 20,
   sourceName: "",
   sourceUrl: "",
   sourceCompany: "",
@@ -128,6 +129,7 @@ export default function JobForm() {
         description: data.description || "",
         requirementsText: (data.requirements || []).join("\n"),
         requiredSkillsText: (data.requiredSkills || []).join(", "),
+        prerankTopN: data.prerankTopN || 20,
         sourceFileName: data.sourceFileName || "",
         sourceFileStatus: data.sourceFileStatus || "",
         sourceFileError: data.sourceFileError || "",
@@ -524,6 +526,7 @@ export default function JobForm() {
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean),
+      prerankTopN: Number(job.prerankTopN || 20),
     };
     const linkedInImportConfirmed = Boolean(
       linkedinImport && linkedinImportStatus === "succeeded" && creationMethod === "pasted_external"
@@ -1073,6 +1076,11 @@ export default function JobForm() {
               onChange={onChange}
               placeholder="C#, .NET, SQL Server, Docker"
             />
+          </label>
+          <label>
+            Advisory pre-ranking
+            <input name="prerankTopN" type="number" min="1" max="100" step="1" value={job.prerankTopN} onChange={onChange} />
+            <small className="muted-note">When advisory pre-ranking is enabled by the system, this sets how many applicants enter AI evidence evaluation (default 20). It never changes the official score or HR decision.</small>
           </label>
           <fieldset className="job-source-fields">
             <legend>Listing source (optional)</legend>

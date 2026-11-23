@@ -46,10 +46,13 @@ class JobService:
         experience: str | None = None,
         requirements: list[str] | None = None,
         required_skills: list[str] | None = None,
+        prerank_top_n: int = 20,
         created_by_user_id: uuid.UUID | None = None,
         idempotency_key: str | None = None,
     ) -> Job:
         """Create a draft vacancy, replaying requests with the same scoped key."""
+        if not 1 <= prerank_top_n <= 100:
+            raise ValidationError("Pre-ranking top N must be between 1 and 100.")
         if idempotency_key:
             existing = db.scalar(
                 select(Job).where(
@@ -75,6 +78,7 @@ class JobService:
             experience=experience,
             requirements=requirements or [],
             required_skills=required_skills or [],
+            prerank_top_n=prerank_top_n,
             idempotency_key=idempotency_key,
         )
         db.add(job)
@@ -152,6 +156,7 @@ class JobService:
         experience: str | None = None,
         requirements: list[str] | None = None,
         required_skills: list[str] | None = None,
+        prerank_top_n: int | None = None,
     ) -> Job:
         """Update a job's mutable fields."""
         job = self.get(db, job_id=job_id, organization_id=organization_id)
@@ -177,6 +182,10 @@ class JobService:
             job.requirements = requirements
         if required_skills is not None:
             job.required_skills = required_skills
+        if prerank_top_n is not None:
+            if not 1 <= prerank_top_n <= 100:
+                raise ValidationError("Pre-ranking top N must be between 1 and 100.")
+            job.prerank_top_n = prerank_top_n
         if status is not None:
             if status == "active":
                 self.validate_for_activation(db, job)

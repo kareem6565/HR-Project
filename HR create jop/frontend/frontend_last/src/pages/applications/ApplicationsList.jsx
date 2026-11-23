@@ -95,7 +95,8 @@ export default function ApplicationsList() {
     { key: "source", header: <span className="applications-column-heading"><Link2 size={14} aria-hidden="true" /> Reported source</span>, render: (row) => <div className="application-source-cell"><strong>{row.source || "Unspecified"}</strong>{row.sourceMedium && <small>{row.sourceMedium}{row.sourceCampaign ? ` · ${row.sourceCampaign}` : ""}</small>}</div> },
     { key: "screeningStatus", header: <span className="applications-column-heading"><Activity size={14} aria-hidden="true" /> CV screening</span>, render: (row) => <span className={`application-status-pill is-${row.screeningStatus || "pending"}`}><span className="application-status-dot" />{SCREENING_LABELS[row.screeningStatus] || "Pending"}</span> },
     { key: "score", header: <span className="applications-column-heading"><Gauge size={14} aria-hidden="true" /> Screening result</span>, render: (row) => {
-      if (row.screeningStatus !== "completed") return "—";
+      if (row.advisoryStatus === "not_evaluated") return <span title={row.advisoryMessage || "LLM evaluation not run; ranking is advisory only"}>LLM not run · rank #{row.advisoryRank}</span>;
+      if (row.screeningStatus !== "completed" || row.score == null) return "—";
       const evidence = Array.isArray(row.evidence) ? row.evidence : [];
       const matched = evidence.filter((entry) => entry.evidence_type === "matched").length;
       const partial = evidence.filter((entry) => entry.evidence_type === "partial").length;

@@ -24,6 +24,10 @@ class JobApplicationResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     screening_status: str = "not_started"
+    advisory_rank: int | None = None
+    advisory_score: float | None = None
+    advisory_status: str | None = None
+    advisory_message: str | None = None
     source: str | None = None
     source_medium: str | None = None
     source_campaign: str | None = None
@@ -74,6 +78,10 @@ class ApplicationSummaryResponse(BaseModel):
     source_medium: str | None = None
     source_campaign: str | None = None
     screening_status: str = "not_started"
+    advisory_rank: int | None = None
+    advisory_score: float | None = None
+    advisory_status: str | None = None
+    advisory_message: str | None = None
     decision_status: str = "pending_review"
     decision_created_at: datetime | None = None
 

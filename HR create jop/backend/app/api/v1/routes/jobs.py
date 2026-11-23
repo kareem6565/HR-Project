@@ -51,6 +51,7 @@ def create_job(
         experience=body.experience,
         requirements=body.requirements,
         required_skills=body.required_skills,
+        prerank_top_n=body.prerank_top_n,
         created_by_user_id=ctx.user_id,
         idempotency_key=idempotency_key,
     )
@@ -192,6 +193,7 @@ def update_job(
         experience=body.experience,
         requirements=body.requirements,
         required_skills=body.required_skills,
+        prerank_top_n=body.prerank_top_n,
     )
 
 

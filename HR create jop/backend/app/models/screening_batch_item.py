@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import (
     CheckConstraint,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -75,6 +76,10 @@ class ScreeningBatchItem(Base):
     )
     error_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    advisory_rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    advisory_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    advisory_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    advisory_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     candidate_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("candidates.id", ondelete="SET NULL"), nullable=True

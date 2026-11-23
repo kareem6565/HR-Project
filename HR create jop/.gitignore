@@ -50,3 +50,6 @@ build/
 # Local archives and snapshots
 archive/
 checkpoint_snapshots/
+
+# Build-time ONNX model bundles (fetch with tools/fetch_preranker_assets.py)
+backend/models/multilingual-e5-small/

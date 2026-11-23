@@ -34,6 +34,18 @@ class Settings(BaseSettings):
         default="openrouter", validation_alias="AI_PROVIDER"
     )
     ai_mode: Literal["llm", "rules"] = Field(default="llm", validation_alias="AI_MODE")
+    a5_prerank_enabled: bool = Field(default=False, validation_alias="A5_PRERANK_ENABLED")
+    a5_prerank_model_dir: str = Field(
+        default="./models/multilingual-e5-small", validation_alias="A5_PRERANK_MODEL_DIR"
+    )
+    a5_prerank_threads: int = Field(default=2, ge=1, le=32, validation_alias="A5_PRERANK_THREADS")
+    a5_prerank_max_chunks_per_cv: int = Field(
+        default=24, ge=1, le=256, validation_alias="A5_PRERANK_MAX_CHUNKS_PER_CV"
+    )
+    a5_prerank_timeout_seconds: int = Field(
+        default=45, ge=1, le=600, validation_alias="A5_PRERANK_TIMEOUT_SECONDS"
+    )
+    a5_prerank_quantized: bool = Field(default=False, validation_alias="A5_PRERANK_QUANTIZED")
     allow_fake_ai: bool = Field(default=False, validation_alias="ALLOW_FAKE_AI")
     soal_api_key: str | None = Field(default=None, validation_alias="SOAL_API_KEY")
     soal_base_url: str = Field(default="https://soal.help/api/v1", validation_alias="SOAL_BASE_URL")

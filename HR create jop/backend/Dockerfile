@@ -12,8 +12,11 @@ COPY pyproject.toml .
 COPY app ./app
 COPY alembic ./alembic
 COPY alembic.ini .
+COPY requirements-a5.lock .
+COPY models ./models
 
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir . \
+    && pip install --no-cache-dir --require-hashes -r requirements-a5.lock
 
 EXPOSE 8000
 

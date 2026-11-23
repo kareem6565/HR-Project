@@ -7,8 +7,10 @@ from typing import TYPE_CHECKING
 from sqlalchemy import (
     CheckConstraint,
     DateTime,
+    Float,
     ForeignKey,
     Index,
+    Integer,
     String,
     Text,
     UniqueConstraint,
@@ -89,6 +91,10 @@ class JobApplication(Base):
         DateTime(timezone=True), nullable=True
     )
     public_contact_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    advisory_rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    advisory_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    advisory_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    advisory_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     organization: Mapped[Organization] = relationship()
     job: Mapped[Job] = relationship(back_populates="applications")
