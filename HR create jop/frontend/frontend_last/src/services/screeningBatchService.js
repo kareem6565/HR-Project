@@ -5,7 +5,7 @@ import apiClient from "./apiClient";
  * Endpoint: POST /jobs/{jobId}/screening-batches
  * Returns 202 Accepted with batch details.
  */
-export async function createScreeningBatch({ jobId, files }) {
+export async function createScreeningBatch({ jobId, files = [], archive = null }) {
   if (!jobId) {
     throw new Error("A job must be selected before screening can start.");
   }
@@ -13,9 +13,10 @@ export async function createScreeningBatch({ jobId, files }) {
   for (const file of files) {
     formData.append("files", file, file.name);
   }
+  if (archive) formData.append("archive", archive, archive.name);
   const { data } = await apiClient.post(`/jobs/${jobId}/screening-batches`, formData, {
     headers: { "Content-Type": "multipart/form-data" },
-    timeout: 60000,
+    timeout: 600000,
   });
   return data;
 }
@@ -24,6 +25,11 @@ export async function createScreeningBatch({ jobId, files }) {
  * Retrieve batch progress and items status.
  * Endpoint: GET /screening-batches/{batchId}
  */
+export async function getScreeningUploadConfig() {
+  const { data } = await apiClient.get("/screening-upload-config");
+  return data;
+}
+
 export async function getScreeningBatch(batchId) {
   if (!batchId) {
     throw new Error("A batchId must be provided to fetch screening batch status.");

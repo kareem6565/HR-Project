@@ -12,9 +12,9 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import PurePosixPath
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -32,7 +32,7 @@ from app.services.errors import (
     ValidationError,
 )
 from app.services.storage_service import StorageProvider
-from app.services.upload_stream_service import BoundedFilePayload
+from app.services.upload_stream_service import BoundedFilePayload, detect_resume_format
 
 
 class ScreeningBatchService:
@@ -83,6 +83,25 @@ class ScreeningBatchService:
         db.flush()
         return item
 
+    @staticmethod
+    def reserve_org_batch_slot(db: Session, *, organization_id: uuid.UUID, limit: int) -> None:
+        """Serialize per-organization batch admission and enforce the active cap."""
+        if db.get_bind().dialect.name == "postgresql":
+            db.execute(select(func.pg_advisory_xact_lock(func.hashtext(str(organization_id)))))
+        active = (
+            db.scalar(
+                select(func.count(ScreeningBatch.id)).where(
+                    ScreeningBatch.organization_id == organization_id,
+                    ScreeningBatch.status.in_(("queued", "running")),
+                )
+            )
+            or 0
+        )
+        if active >= limit:
+            raise ValidationError(
+                "This organization already has the maximum number of active screening batches."
+            )
+
     def create_batch(
         self,
         db: Session,
@@ -92,6 +111,7 @@ class ScreeningBatchService:
         user_id: uuid.UUID | None,
         payloads: list[BoundedFilePayload],
         storage: StorageProvider,
+        max_concurrent_batches: int = 2,
     ) -> ScreeningBatch:
         """Create a new screening batch and enqueue its items.
 
@@ -99,6 +119,9 @@ class ScreeningBatchService:
         and per-file failure isolation. On storage/database failure, created
         files are cleaned up so no orphaned files remain.
         """
+        self.reserve_org_batch_slot(
+            db, organization_id=organization_id, limit=max_concurrent_batches
+        )
         job = db.get(Job, job_id)
         if job is None or job.organization_id != organization_id:
             raise NotFoundError("Job was not found.")
@@ -147,8 +170,15 @@ class ScreeningBatchService:
         try:
             for payload in payloads:
                 item_id = uuid.uuid4()
-                filename = payload.filename.strip()
-                extension = Path(filename).suffix.lower().lstrip(".")
+                filename = PurePosixPath(payload.filename.strip().replace("\\", "/")).name
+                detected_extension = payload.detected_extension or detect_resume_format(
+                    payload.data
+                )
+                extension = detected_extension or "bin"
+                if detected_extension:
+                    base_name = filename.rsplit(".", 1)[0] if "." in filename else filename
+                    suffix = f".{detected_extension}"
+                    filename = f"{(base_name or 'resume')[: 255 - len(suffix)]}{suffix}"
 
                 # Save raw upload into batch storage prefix
                 storage_key = storage.save_batch_file(
@@ -181,21 +211,10 @@ class ScreeningBatchService:
                     error_message = "An identical resume has already been applied to this job."
 
                 # 3. Check obvious permanent format invalidity per Prompt 5
-                elif extension not in ("pdf", "docx"):
+                elif detected_extension not in ("pdf", "docx"):
                     status = "failed"
                     error_code = UPLOAD_ERROR_UNSUPPORTED_TYPE
-                    error_message = (
-                        f"Unsupported file type: {extension or 'unknown'!r}. "
-                        "Only .pdf and .docx are allowed."
-                    )
-                elif extension == "pdf" and not payload.data.startswith(b"%PDF-"):
-                    status = "failed"
-                    error_code = UPLOAD_ERROR_UNSUPPORTED_TYPE
-                    error_message = "File content does not match PDF signature."
-                elif extension == "docx" and not payload.data.startswith(b"PK"):
-                    status = "failed"
-                    error_code = UPLOAD_ERROR_UNSUPPORTED_TYPE
-                    error_message = "File content does not match DOCX/ZIP signature."
+                    error_message = "File content is not a supported PDF or DOCX document."
                 else:
                     seen_batch_checksums[checksum] = item_id
 

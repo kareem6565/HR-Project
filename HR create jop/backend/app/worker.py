@@ -24,6 +24,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.ai.providers import get_provider
+from app.ai.providers.errors import ProviderRateLimitError
 from app.ai.workflows import CandidateEvaluationWorkflow, CandidateProfileExtractionWorkflow
 from app.core.config import settings
 from app.core.database import SessionLocal
@@ -484,13 +485,18 @@ class ScreeningWorker:
                 exc,
                 context=failure_context,
             )
-            self._handle_transient_failure(
-                item_id,
-                claim_token,
-                str(type(exc).__name__),
-                db=db,
-                processing_stage=processing_stage,
-            )
+            if self._caused_by_rate_limit(exc):
+                self._record_quota_wait(
+                    item_id, claim_token, db=db, processing_stage=processing_stage
+                )
+            else:
+                self._handle_transient_failure(
+                    item_id,
+                    claim_token,
+                    str(type(exc).__name__),
+                    db=db,
+                    processing_stage=processing_stage,
+                )
             return False
 
     def _cleanup_created_resume_file(self, file_uri: str, *, item_id: uuid.UUID) -> None:
@@ -526,6 +532,46 @@ class ScreeningWorker:
                 "processing_stage": processing_stage,
                 "exception_class": type(error).__name__,
                 **_safe_exception_diagnostics(error),
+            },
+        )
+
+    @staticmethod
+    def _caused_by_rate_limit(error: BaseException) -> bool:
+        seen: set[int] = set()
+        current: BaseException | None = error
+        while current is not None and id(current) not in seen:
+            if isinstance(current, ProviderRateLimitError):
+                return True
+            seen.add(id(current))
+            current = current.__cause__ or current.__context__
+        return False
+
+    def _record_quota_wait(
+        self, item_id: uuid.UUID, claim_token: str, *, db: Session, processing_stage: str
+    ) -> None:
+        """Keep rate-limited work queued indefinitely with bounded retry delay."""
+        item = db.get(ScreeningBatchItem, item_id)
+        if item is None or item.claim_token != claim_token:
+            return
+        delay = min(
+            300, self.initial_retry_delay_seconds * (2 ** min(max(0, item.attempts - 1), 5))
+        )
+        item.status = "queued"
+        item.stage = "waiting_for_quota"
+        item.error_code = "WAITING_FOR_QUOTA"
+        item.error_message = "Waiting for provider quota; this file will resume automatically."
+        item.claim_token = None
+        item.lease_expires_at = None
+        item.next_attempt_at = datetime.now(UTC) + timedelta(seconds=delay)
+        ScreeningBatchService._update_batch_state(item.batch)
+        db.commit()
+        logger.info(
+            "Screening batch item waiting for provider quota.",
+            extra={
+                "batch_id": str(item.batch_id),
+                "item_id": str(item.id),
+                "processing_stage": processing_stage,
+                "retry_delay_seconds": delay,
             },
         )
 

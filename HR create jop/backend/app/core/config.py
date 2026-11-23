@@ -102,7 +102,20 @@ class Settings(BaseSettings):
         default=60, gt=0, validation_alias="AI_TESTER_USER_DAILY_LIMIT"
     )
     max_upload_bytes: int = Field(default=5 * 1024 * 1024, validation_alias="MAX_UPLOAD_BYTES")
-    max_batch_files: int = Field(default=20, validation_alias="MAX_BATCH_FILES")
+    max_batch_files: int = Field(default=300, ge=1, le=1000, validation_alias="MAX_BATCH_FILES")
+    max_zip_entries: int = Field(default=500, ge=1, le=2000, validation_alias="MAX_ZIP_ENTRIES")
+    max_zip_total_bytes: int = Field(
+        default=100 * 1024 * 1024, ge=1, validation_alias="MAX_ZIP_TOTAL_BYTES"
+    )
+    max_zip_archive_bytes: int = Field(
+        default=50 * 1024 * 1024, ge=1, validation_alias="MAX_ZIP_ARCHIVE_BYTES"
+    )
+    max_zip_compression_ratio: int = Field(
+        default=100, ge=1, le=1000, validation_alias="MAX_ZIP_COMPRESSION_RATIO"
+    )
+    max_concurrent_batches_per_org: int = Field(
+        default=2, ge=1, le=20, validation_alias="MAX_CONCURRENT_BATCHES_PER_ORG"
+    )
     max_batch_bytes: int = Field(default=50 * 1024 * 1024, validation_alias="MAX_BATCH_BYTES")
     max_pdf_pages: int = Field(default=50, validation_alias="MAX_PDF_PAGES")
     max_docx_uncompressed_bytes: int = Field(

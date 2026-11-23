@@ -1,7 +1,3 @@
-// Explicit UI constant consistent with backend default settings.max_upload_bytes (5 MB = 5,242,880 bytes).
-// Note on drift risk: If the backend MAX_UPLOAD_BYTES configuration changes,
-// this frontend limit must be updated to maintain parity.
-export const MAX_SINGLE_FILE_BYTES = 5 * 1024 * 1024; // 5 MB
 export const ACCEPTED_EXTENSIONS = [".pdf", ".docx"];
 export const ACCEPTED_MIME_TYPES = [
   "application/pdf",
@@ -22,7 +18,7 @@ export function getFileFingerprint(file) {
   return `${name}:${size}:${lastMod}`;
 }
 
-export function validateFile(file, existingFingerprints = new Set()) {
+export function validateFile(file, existingFingerprints = new Set(), maxFileBytes = null) {
   const name = (file?.name || "").toLowerCase();
   const hasValidExt = ACCEPTED_EXTENSIONS.some((ext) => name.endsWith(ext));
 
@@ -34,10 +30,10 @@ export function validateFile(file, existingFingerprints = new Set()) {
     };
   }
 
-  if (file.size > MAX_SINGLE_FILE_BYTES) {
+  if (Number.isFinite(maxFileBytes) && file.size > maxFileBytes) {
     return {
       valid: false,
-      reason: `File exceeds the 5 MB maximum size limit (${formatFileSize(file.size)}).`,
+      reason: `File exceeds the ${formatFileSize(maxFileBytes)} maximum size limit (${formatFileSize(file.size)}).`,
       code: "size_limit",
     };
   }

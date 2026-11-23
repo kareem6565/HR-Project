@@ -9,7 +9,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { getJobs } from "../../services/jobService";
-import { createScreeningBatch, getJobBatches } from "../../services/screeningBatchService";
+import { createScreeningBatch, getJobBatches, getScreeningUploadConfig } from "../../services/screeningBatchService";
 import ScreeningBatchProgress from "../../components/screening/ScreeningBatchProgress";
 import LoadingSpinner from "../../components/common/LoadingSpinner";
 import ErrorState from "../../components/common/ErrorState";
@@ -23,7 +23,10 @@ const RECENT_BATCH_LIMIT = 3;
 export default function ScreenCandidates() {
   const [jobs, setJobs] = useState([]);
   const [jobId, setJobId] = useState("");
-  const [files, setFiles] = useState([]); // Array of { file, fingerprint, name, size, status: 'ready' }
+  const [files, setFiles] = useState([]);
+  const [archiveFile, setArchiveFile] = useState(null);
+  const [uploadConfig, setUploadConfig] = useState(null);
+  const [configError, setConfigError] = useState(""); // Array of { file, fingerprint, name, size, status: 'ready' }
   const [rejectedFiles, setRejectedFiles] = useState([]); // Array of { id, name, size, reason, code }
   const [isDragging, setIsDragging] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -75,6 +78,9 @@ export default function ScreenCandidates() {
 
   useEffect(() => {
     loadJobs();
+    getScreeningUploadConfig().then(setUploadConfig).catch(() => {
+      setConfigError("Upload limits could not be loaded. Retry before uploading.");
+    });
   }, []);
 
   useEffect(() => {
@@ -86,14 +92,31 @@ export default function ScreenCandidates() {
   const handleIncomingFiles = (incomingList) => {
     const incoming = Array.from(incomingList || []);
     if (!incoming.length) return;
+    setArchiveFile(null);
 
     const currentFingerprints = new Set(files.map((f) => f.fingerprint));
     const newValid = [];
     const newRejected = [];
 
     for (const file of incoming) {
-      const validation = validateFile(file, currentFingerprints);
+      const validation = validateFile(file, currentFingerprints, uploadConfig?.max_file_bytes);
       if (validation.valid) {
+        const selectedBytes = files.reduce((sum, entry) => sum + entry.size, 0);
+        const incomingBytes = newValid.reduce((sum, entry) => sum + entry.size, 0);
+        const countLimitReached = files.length + newValid.length >= (uploadConfig?.max_batch_files ?? Infinity);
+        const batchSizeExceeded = selectedBytes + incomingBytes + file.size > (uploadConfig?.max_batch_bytes ?? Infinity);
+        if (countLimitReached || batchSizeExceeded) {
+          newRejected.push({
+            id: `${file.name}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            name: file.name,
+            size: file.size,
+            reason: countLimitReached
+              ? `Batch limit reached (${uploadConfig.max_batch_files} files).`
+              : `Batch exceeds the ${formatFileSize(uploadConfig.max_batch_bytes)} upload limit.`,
+            code: "batch_limit",
+          });
+          continue;
+        }
         currentFingerprints.add(validation.fingerprint);
         newValid.push({
           file,
@@ -168,7 +191,7 @@ export default function ScreenCandidates() {
       setError("Pick a job to screen candidates against first.");
       return;
     }
-    if (!files.length) {
+    if (!files.length && !archiveFile) {
       setError("Please upload at least one valid PDF or DOCX CV.");
       return;
     }
@@ -177,10 +200,12 @@ export default function ScreenCandidates() {
       const data = await createScreeningBatch({
         jobId,
         files: files.map((item) => item.file),
+        archive: archiveFile,
       });
       setActiveBatchId(data.batch_id || data.id);
       setBatchData(data);
       setFiles([]);
+      setArchiveFile(null);
       loadBatches(jobId);
     } catch (err) {
       const isRateLimit =
@@ -434,7 +459,7 @@ export default function ScreenCandidates() {
               <p className="eyebrow">STEP 2 · CANDIDATE CVS</p>
               <h3>Add resumes</h3>
             </div>
-            <span className="count">{files.length} valid file{files.length === 1 ? "" : "s"}</span>
+            <span className="count">{archiveFile ? archiveFile.name : `${files.length} / ${uploadConfig?.max_batch_files ?? "loading"} selected`}</span>
           </div>
 
           <label
@@ -448,15 +473,38 @@ export default function ScreenCandidates() {
               accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
               multiple
               onChange={onFileInputChange}
-              disabled={submitting}
+              disabled={submitting || !uploadConfig || !!configError}
               aria-label="Upload candidate CV files"
             />
             <div className="upload-icon">
               <UploadCloud size={25} aria-hidden="true" />
             </div>
             <strong>Drop PDF or DOCX CVs here</strong>
-            <span>or click to browse · Max 5 MB per file · PDF and DOCX only</span>
+            <span>or click to browse · Max {uploadConfig ? formatFileSize(uploadConfig.max_file_bytes) : "loading limits"} per file</span>
           </label>
+          <label className="field-label" style={{ display: "block", marginTop: 12 }}>
+            Or upload a ZIP archive
+            <input
+              type="file"
+              accept=".zip,application/zip"
+              aria-label="Upload CV ZIP archive"
+              disabled={submitting || !uploadConfig || !!configError}
+              onChange={(event) => {
+                const selected = event.target.files?.[0] || null;
+                if (selected && selected.size > uploadConfig.max_zip_archive_bytes) {
+                  setError(`ZIP exceeds the ${formatFileSize(uploadConfig.max_zip_archive_bytes)} compressed upload limit.`);
+                  setArchiveFile(null);
+                  event.target.value = "";
+                  return;
+                }
+                setError("");
+                setArchiveFile(selected);
+                if (selected) setFiles([]);
+                event.target.value = "";
+              }}
+            />
+          </label>
+          {configError && <ErrorState message={configError} onRetry={() => getScreeningUploadConfig().then((value) => { setUploadConfig(value); setConfigError(""); }).catch(() => setConfigError("Upload limits could not be loaded. Retry before uploading."))} />}
 
           {files.length > 0 && (
             <div style={{ marginTop: 12 }}>
@@ -609,7 +657,7 @@ export default function ScreenCandidates() {
           <button
             className="primary wide"
             onClick={start}
-            disabled={submitting || loadingJobs || !!loadError || !jobs.length || files.length === 0}
+            disabled={submitting || loadingJobs || !!loadError || !!configError || !uploadConfig || !jobs.length || (files.length === 0 && !archiveFile)}
             type="button"
           >
             <Sparkles size={18} aria-hidden="true" />{" "}

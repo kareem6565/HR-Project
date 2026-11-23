@@ -8,7 +8,16 @@ calculation on the fly with immediate abort upon exceeding limits.
 from __future__ import annotations
 
 import hashlib
+import io
 import logging
+import os
+import shutil
+import stat
+import tempfile
+import unicodedata
+import zipfile
+import zlib
+from pathlib import Path, PurePosixPath
 from typing import BinaryIO
 
 from fastapi import UploadFile
@@ -18,6 +27,7 @@ from app.services.errors import (
     UPLOAD_ERROR_BATCH_LIMIT_EXCEEDED,
     UPLOAD_ERROR_NO_TEXT,
     UPLOAD_ERROR_TOO_LARGE,
+    UPLOAD_ERROR_UNSUPPORTED_TYPE,
     UploadValidationError,
 )
 
@@ -92,6 +102,7 @@ class BoundedFilePayload:
         data: bytes,
         size: int,
         checksum: str,
+        detected_extension: str | None = None,
     ) -> None:
         self.upload_file = upload_file
         self.filename = filename
@@ -99,6 +110,7 @@ class BoundedFilePayload:
         self.data = data
         self.size = size
         self.checksum = checksum
+        self.detected_extension = detected_extension
 
 
 def read_batch_bounded(
@@ -214,3 +226,203 @@ def read_batch_bounded(
         )
 
     return results
+
+
+def detect_resume_format(payload: bytes) -> str | None:
+    """Identify supported resumes from contents, including valid DOCX containers."""
+    if payload.startswith(b"%PDF-"):
+        return "pdf"
+    try:
+        with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+            names = set(archive.namelist())
+            if {"[Content_Types].xml", "word/document.xml"}.issubset(names):
+                return "docx"
+    except (zipfile.BadZipFile, OSError):
+        return None
+    return None
+
+
+def _normalized_zip_name(name: str) -> str:
+    normalized = unicodedata.normalize("NFC", name).replace("\\", "/")
+    if not normalized or normalized.startswith("/") or normalized.startswith("//"):
+        raise UploadValidationError(
+            "ZIP contains an absolute or empty path.", code="INVALID_ARCHIVE"
+        )
+    parts = PurePosixPath(normalized).parts
+    if any(part in ("..", "") for part in parts) or any(":" in part for part in parts):
+        raise UploadValidationError("ZIP contains a path traversal entry.", code="INVALID_ARCHIVE")
+    reserved = {
+        "con",
+        "prn",
+        "aux",
+        "nul",
+        *(f"com{i}" for i in range(1, 10)),
+        *(f"lpt{i}" for i in range(1, 10)),
+    }
+    for part in parts:
+        stem = part.rstrip(" .").split(".")[0].casefold()
+        if part.endswith((" ", ".")) or stem in reserved:
+            raise UploadValidationError(
+                "ZIP contains a Windows-reserved path.", code="INVALID_ARCHIVE"
+            )
+    return "/".join(parts).casefold()
+
+
+def read_zip_batch_bounded(
+    upload: UploadFile,
+    *,
+    max_entries: int,
+    max_files: int,
+    max_file_bytes: int,
+    max_total_bytes: int,
+    max_compression_ratio: int,
+    max_archive_bytes: int,
+    staging_root: str,
+    chunk_size: int = CHUNK_SIZE,
+) -> list[BoundedFilePayload]:
+    """Extract supported entries to private temporary files under actual-byte limits."""
+    if shutil.disk_usage(staging_root).free < max_total_bytes + max_archive_bytes + 1024 * 1024:
+        raise UploadValidationError(
+            "Insufficient free disk space for safe archive extraction.", code="INVALID_ARCHIVE"
+        )
+    with tempfile.TemporaryDirectory(prefix="hera-zip-", dir=staging_root) as temp_dir:
+        archive_path = os.path.join(temp_dir, "upload.zip")
+        compressed_size = 0
+        try:
+            upload.file.seek(0)
+        except (AttributeError, OSError):
+            pass
+        with open(archive_path, "wb") as archive_file:
+            while True:
+                chunk = upload.file.read(chunk_size)
+                if not chunk:
+                    break
+                compressed_size += len(chunk)
+                if compressed_size > max_archive_bytes:
+                    raise UploadValidationError(
+                        "ZIP upload exceeds the compressed size limit.", code=UPLOAD_ERROR_TOO_LARGE
+                    )
+                archive_file.write(chunk)
+        if compressed_size == 0:
+            raise UploadValidationError("ZIP upload is empty.", code="INVALID_ARCHIVE")
+        results: list[BoundedFilePayload] = []
+        actual_total = 0
+        seen_names: set[str] = set()
+        file_count = 0
+        try:
+            with zipfile.ZipFile(archive_path) as archive:
+                entries = archive.infolist()
+                if not entries or len(entries) > max_entries:
+                    raise UploadValidationError(
+                        "ZIP entry count is outside the allowed limit.", code="BATCH_LIMIT_EXCEEDED"
+                    )
+                for index, info in enumerate(entries):
+                    normalized = _normalized_zip_name(info.filename)
+                    if normalized in seen_names:
+                        raise UploadValidationError(
+                            "ZIP contains duplicate normalized entry names.", code="INVALID_ARCHIVE"
+                        )
+                    seen_names.add(normalized)
+                    if info.is_dir():
+                        continue
+                    file_count += 1
+                    if file_count > max_files:
+                        raise UploadValidationError(
+                            "ZIP file count exceeds the batch limit.", code="BATCH_LIMIT_EXCEEDED"
+                        )
+                    if info.flag_bits & 0x1:
+                        raise UploadValidationError(
+                            "Encrypted ZIP entries are not accepted.", code="ENCRYPTED"
+                        )
+                    if stat.S_ISLNK(info.external_attr >> 16):
+                        raise UploadValidationError(
+                            "ZIP symbolic links are not accepted.", code="INVALID_ARCHIVE"
+                        )
+                    entry_path = os.path.join(temp_dir, f"entry-{index:05d}.part")
+                    checksum = hashlib.sha256()
+                    actual_size = 0
+                    with archive.open(info, "r") as source, open(entry_path, "wb") as target:
+                        while True:
+                            data = source.read(chunk_size)
+                            if not data:
+                                break
+                            actual_size += len(data)
+                            actual_total += len(data)
+                            if actual_size > max_file_bytes:
+                                raise UploadValidationError(
+                                    "A ZIP entry exceeds the per-file size limit.",
+                                    code=UPLOAD_ERROR_TOO_LARGE,
+                                )
+                            if actual_total > max_total_bytes:
+                                raise UploadValidationError(
+                                    "ZIP exceeds the total uncompressed size limit.",
+                                    code="BATCH_LIMIT_EXCEEDED",
+                                )
+                            if actual_size / max(info.compress_size, 1) > max_compression_ratio:
+                                raise UploadValidationError(
+                                    "ZIP entry exceeds the compression-ratio limit.",
+                                    code="INVALID_ARCHIVE",
+                                )
+                            checksum.update(data)
+                            target.write(data)
+                    if actual_size != info.file_size:
+                        raise UploadValidationError(
+                            "ZIP entry size does not match its directory record.",
+                            code="INVALID_ARCHIVE",
+                        )
+                    content = Path(entry_path).read_bytes()
+                    resume_format = detect_resume_format(content)
+                    if resume_format is None and zipfile.is_zipfile(io.BytesIO(content)):
+                        try:
+                            with zipfile.ZipFile(io.BytesIO(content)) as nested:
+                                nested_names = set(nested.namelist())
+                        except (
+                            zipfile.BadZipFile,
+                            OSError,
+                            RuntimeError,
+                            EOFError,
+                            NotImplementedError,
+                            zlib.error,
+                        ) as exc:
+                            raise UploadValidationError(
+                                "ZIP contains an invalid nested archive.", code="INVALID_ARCHIVE"
+                            ) from exc
+                        if {"[Content_Types].xml", "word/document.xml"}.issubset(nested_names):
+                            resume_format = "docx"
+                        else:
+                            raise UploadValidationError(
+                                "Nested archives are not accepted.", code="INVALID_ARCHIVE"
+                            )
+                    if resume_format is None:
+                        raise UploadValidationError(
+                            "ZIP contains an unsupported file based on its contents.",
+                            code=UPLOAD_ERROR_UNSUPPORTED_TYPE,
+                        )
+                    original_name = PurePosixPath(info.filename.replace("\\", "/")).name
+                    results.append(
+                        BoundedFilePayload(
+                            upload_file=upload,
+                            filename=original_name,
+                            content_type="",
+                            data=content,
+                            size=actual_size,
+                            checksum=checksum.hexdigest(),
+                            detected_extension=resume_format,
+                        )
+                    )
+        except (
+            zipfile.BadZipFile,
+            OSError,
+            RuntimeError,
+            EOFError,
+            NotImplementedError,
+            zlib.error,
+        ) as exc:
+            raise UploadValidationError(
+                "Uploaded file is not a valid ZIP archive.", code="INVALID_ARCHIVE"
+            ) from exc
+        if not results:
+            raise UploadValidationError(
+                "ZIP contains no supported resume files.", code=UPLOAD_ERROR_NO_TEXT
+            )
+        return results
