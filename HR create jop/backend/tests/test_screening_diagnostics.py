@@ -165,6 +165,10 @@ def test_worker_pipeline_failure_logs_actual_stage_without_sensitive_values(
                 return job
             raise AssertionError("Unexpected model access in synthetic worker test.")
 
+        def scalar(self, query):
+            assert "FOR UPDATE" in str(query)
+            return self.get(ScreeningBatchItem, item.id)
+
         def begin_nested(self):
             return nullcontext()
 

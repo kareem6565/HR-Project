@@ -37,7 +37,8 @@ def public_client(db_session: Session) -> Generator[TestClient, None, None]:
         yield db_session
 
     app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as client:
+    test_client_host = f"testclient-{uuid.uuid4()}"
+    with TestClient(app, client=(test_client_host, 50000)) as client:
         yield client
     app.dependency_overrides.pop(get_db, None)
 

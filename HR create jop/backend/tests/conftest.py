@@ -62,6 +62,17 @@ def _force_fake_ai_provider() -> Generator[None, None, None]:
         settings.ai_provider = original
 
 
+@pytest.fixture(autouse=True)
+def _disable_background_screening_worker(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep TestClient lifespans from polling the application database.
+
+    Worker behavior is exercised directly by worker tests. Starting the real
+    polling thread here bypasses the TEST_DATABASE_URL dependency override and
+    can claim uploads or emit errors from the developer database during tests.
+    """
+    monkeypatch.setattr(settings, "enable_screening_worker", False)
+
+
 def _is_postgres_reachable(test_database_url: str) -> bool:
     import socket
 

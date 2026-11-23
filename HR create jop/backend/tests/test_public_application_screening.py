@@ -42,6 +42,10 @@ def test_public_application_worker_reuses_records_and_pinned_profile(monkeypatch
         job_id=job_id,
         candidate_id=candidate_id,
         resume_id=resume_id,
+        advisory_rank=None,
+        advisory_score=None,
+        advisory_status=None,
+        advisory_message=None,
     )
     batch = SimpleNamespace(
         id=batch_id,
@@ -58,6 +62,10 @@ def test_public_application_worker_reuses_records_and_pinned_profile(monkeypatch
         sha256=hashlib.sha256(file_bytes).hexdigest(),
         source="public_application",
         job_profile_id=profile_id,
+        advisory_rank=None,
+        advisory_score=None,
+        advisory_status=None,
+        advisory_message=None,
         candidate_id=candidate_id,
         resume_id=resume_id,
         application_id=application_id,
@@ -89,6 +97,10 @@ def test_public_application_worker_reuses_records_and_pinned_profile(monkeypatch
                 Candidate: candidate,
             }
             return records[model]
+
+        def scalar(self, query):
+            assert "FOR UPDATE" in str(query)
+            return self.get(ScreeningBatchItem, item.id)
 
         def begin_nested(self):
             return nullcontext()

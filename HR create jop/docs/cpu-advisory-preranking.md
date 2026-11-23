@@ -27,9 +27,16 @@ below is passed to the ranking model.
 - Portable default: `model_O4.onnx` (235,052,531 bytes) plus `tokenizer.json`
   (17,082,730 bytes); FP32 ONNX export is used for broad CPU compatibility.
 - The pinned files are checksum-verified by `tools/fetch_preranker_assets.py`.
-  Fetch them at install/build time, then bundle them in the backend image. The
-  running application never downloads model files, uses `trust_remote_code`, or
-  sends CV content to an embedding service.
+  They are excluded from Git by the repository `.gitignore`, so a clean clone
+  does not contain the weights. The release build must fetch the pinned files
+  before building the backend image; `backend/Dockerfile` then copies
+  `backend/models/` into `/app/models/` in the image. A customer deploys that
+  complete image, which already contains the verified model and tokenizer.
+  For a non-Docker offline install, ship the same
+  `models/multilingual-e5-small/` directory beside the backend package and set
+  `A5_PRERANK_MODEL_DIR` to that directory. Do not fetch assets on application
+  startup or at request time. The application never uses `trust_remote_code`
+  or sends CV content to an embedding service.
 - `onnxruntime==1.31.0` occupies 48.2 MB installed; the three new direct
   dependencies together occupy 114.5 MB installed in the measured Windows
   environment (`numpy==2.3.4`, `onnxruntime==1.31.0`, `tokenizers==0.23.3`).
@@ -81,8 +88,27 @@ optional additional file:
 ```
 
 Build the backend image only after fetching assets so Docker bundles the pinned
-files. To test locally, set these variables in the backend environment and
+files. This is the required customer-image packaging sequence from
+`HR create jop`:
+
+```powershell
+.\backend\.venv\Scripts\python.exe .\tools\fetch_preranker_assets.py --output .\backend\models\multilingual-e5-small
+docker compose build backend
+```
+
+The asset script checks the pinned revision and SHA-256 values before writing
+the files; the Dockerfile copies those files into `/app/models`. A clean Git
+checkout without the fetched assets cannot produce the A5-enabled image, by
+design. The release pipeline must retain and publish the resulting image (or
+include the verified model directory in its offline installer artifact).
+Runtime deployments need no Hugging Face access. The feature still defaults
+to OFF. To test locally, set these variables in the backend environment and
 restart the worker:
+
+The A5 migration can be checked without touching the app or test database:
+`.\.venv\Scripts\python.exe ..\tools\verify_a5_migration.py` creates a
+randomly named local PostgreSQL database, verifies upgrade and downgrade, and
+drops that throw-away database. The script refuses non-local database hosts.
 
 ```powershell
 $env:A5_PRERANK_ENABLED = "true"
@@ -101,13 +127,28 @@ verified.
 
 ## Evaluation and parity
 
-`tools/eval_a5_preranking.py` reads only the known-label synthetic cohort and
-job profile in `tools/eval_quality.py` (A4). It prints recall@20, elapsed CPU
-seconds per CV, model revision, and execution provider. Current run on Windows
-x64 with ONNX Runtime 1.31.0, two CPU threads, and the FP32 model: **3/3 known
-strong candidates in top 20 (100% recall@20)**; cohort size is 9, so top 20
-includes all candidates and this is only a smoke-check upper bound. Measured
-CPU time: **0.0295 seconds/CV**.
+`tools/eval_a5_preranking.py` creates two independently labeled cohorts with
+120 synthetic applicants each (Senior Backend Engineer and Data Analyst). Each
+cohort contains 24 strong candidates known by construction, 48 partial matches,
+and 48 unrelated applicants; English and Arabic CVs are balanced. CVs range
+from 690–913 words (about 2–3 pages) and 1,193–1,452 E5 input tokens across
+their <=512-token chunks. No real CVs or LLM judgments are used.
+
+Run on Windows 11 x64, Intel Core i7-13700HX (16 cores / 24 logical processors),
+15.7 GiB RAM, ONNX Runtime 1.31.0, FP32 `model_O4.onnx`, and 2 CPU threads:
+
+| Synthetic job | Recall@20 | CPU seconds/CV | Wall seconds/CV |
+|---|---:|---:|---:|
+| Senior Backend Engineer | 20/24 (83.3%) | 1.1055 | 0.9634 |
+| Data Analyst | 12/24 (50.0%) | 1.2099 | 0.9702 |
+
+These are advisory ranking measurements only. Recall is modest for the Data
+Analyst cohort; keep A5 OFF until the owner reviews the results. At roughly
+0.97 wall seconds per CV, a 120-applicant pass takes about 116 seconds on this
+machine, longer than the current 45-second default timeout. The guard therefore
+marks that run unavailable unless the operator deliberately raises the
+configurable timeout (up to 600 seconds); it does not return partial results.
+Re-measure on customer hardware before enabling the feature for large jobs.
 
 `tests/test_a5_onnx_parity.py` compares the pinned ONNX output against a
 `sentence-transformers` reference generated from the same model revision and
