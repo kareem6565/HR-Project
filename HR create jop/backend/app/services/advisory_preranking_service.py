@@ -117,6 +117,20 @@ class PreRankingTimedOut(PreRankingUnavailable):
     pass
 
 
+def ranking_timeout_for_cohort(
+    candidate_count: int,
+    *,
+    base_timeout_seconds: float,
+    applicants_per_budget: int = 20,
+    max_timeout_seconds: float = 600,
+) -> float:
+    """Scale the configured timeout in bounded applicant-count increments."""
+    if candidate_count < 0 or applicants_per_budget < 1 or base_timeout_seconds <= 0:
+        raise ValueError("Ranking timeout inputs must be positive.")
+    multiplier = max(1, (candidate_count + applicants_per_budget - 1) // applicants_per_budget)
+    return min(max_timeout_seconds, base_timeout_seconds * multiplier)
+
+
 def _mark_unavailable(db, applications, items, message: str) -> None:
     for application, *_ in applications:
         application.advisory_status = "unavailable"
@@ -257,18 +271,21 @@ def rank_candidates(
 ) -> list[AdvisoryRank]:
     """Rank by mean best requirement-to-CV-chunk cosine; never an official score."""
     started = time.monotonic()
+    deadline = started + timeout_seconds
     req_chunks = build_requirement_chunks(requirements, tokenizer)
     if not req_chunks:
         raise PreRankingUnavailable("No approved job requirements are available for ranking.")
     candidate_chunks: dict[str, list[str]] = {}
     all_texts = list(req_chunks)
     for candidate in candidates:
+        if time.monotonic() >= deadline:
+            raise PreRankingTimedOut("Advisory pre-ranking exceeded its configured time limit.")
         chunks = build_candidate_chunks(candidate.cv_text, tokenizer, max_chunks=max_chunks_per_cv)
         candidate_chunks[candidate.identity] = chunks
         all_texts.extend(chunks)
     if not any(candidate_chunks.values()):
         raise PreRankingUnavailable("No eligible experience, skills, or education text found.")
-    remaining = timeout_seconds - (time.monotonic() - started)
+    remaining = deadline - time.monotonic()
     if remaining <= 0:
         raise PreRankingTimedOut("Advisory pre-ranking exceeded its configured time limit.")
     embed_with_timeout = getattr(embedder, "embed_with_timeout", None)
@@ -277,7 +294,7 @@ def rank_candidates(
         if callable(embed_with_timeout)
         else embedder.embed(all_texts)
     )
-    if time.monotonic() - started > timeout_seconds:
+    if time.monotonic() > deadline:
         raise PreRankingTimedOut("Advisory pre-ranking exceeded its configured time limit.")
     if len(vectors) != len(all_texts):
         raise PreRankingUnavailable("Embedding runtime returned an incomplete result.")
@@ -589,7 +606,10 @@ def rank_worker_cohort(db, *, job, batch, approved_profile, storage) -> None:
             tokenizer=model.tokenizer,
             embedder=model,
             max_chunks_per_cv=settings.a5_prerank_max_chunks_per_cv,
-            timeout_seconds=settings.a5_prerank_timeout_seconds,
+            timeout_seconds=ranking_timeout_for_cohort(
+                len(candidates),
+                base_timeout_seconds=settings.a5_prerank_timeout_seconds,
+            ),
         )
         by_identity = {result.identity: result for result in ranked}
         for identity, result in by_identity.items():

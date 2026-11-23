@@ -133,6 +133,11 @@ cohort contains 24 strong candidates known by construction, 48 partial matches,
 and 48 unrelated applicants; English and Arabic CVs are balanced. CVs range
 from 690–913 words (about 2–3 pages) and 1,193–1,452 E5 input tokens across
 their <=512-token chunks. No real CVs or LLM judgments are used.
+Run from `HR create jop/backend` with the pinned assets already installed:
+
+```powershell
+.\.venv\Scripts\python.exe ..\tools\eval_a5_preranking.py
+```
 
 Run on Windows 11 x64, Intel Core i7-13700HX (16 cores / 24 logical processors),
 15.7 GiB RAM, ONNX Runtime 1.31.0, FP32 `model_O4.onnx`, and 2 CPU threads:
@@ -142,13 +147,50 @@ Run on Windows 11 x64, Intel Core i7-13700HX (16 cores / 24 logical processors),
 | Senior Backend Engineer | 20/24 (83.3%) | 1.1055 | 0.9634 |
 | Data Analyst | 12/24 (50.0%) | 1.2099 | 0.9702 |
 
-These are advisory ranking measurements only. Recall is modest for the Data
-Analyst cohort; keep A5 OFF until the owner reviews the results. At roughly
-0.97 wall seconds per CV, a 120-applicant pass takes about 116 seconds on this
-machine, longer than the current 45-second default timeout. The guard therefore
-marks that run unavailable unless the operator deliberately raises the
-configurable timeout (up to 600 seconds); it does not return partial results.
-Re-measure on customer hardware before enabling the feature for large jobs.
+These are advisory ranking measurements only. The configured timeout is a
+base budget per 20 applicants and scales by `ceil(applicants / 20)`, bounded at
+600 seconds; a 120-applicant cohort receives 270 seconds. A timed-out run still
+reports unavailable and never returns a partial ranking. Re-measure on customer
+hardware before enabling the feature for large jobs.
+
+### A5b lexical baseline comparison
+
+The benchmark validates its Data Analyst labels before scoring: all 24 strong
+CVs contain SQL, Python, Tableau, and Microsoft Excel; the 48 partial CVs
+contain Python and Excel but omit SQL and Tableau. English and Arabic labels are
+balanced (12 strong CVs per language). On Data Analyst R-precision@24, E5
+retrieves 0/12 English and 12/12 Arabic strong CVs; TF-IDF retrieves 12/12 in
+each language. The synthetic construction is deliberately keyword-separated,
+which favors exact-match retrieval; it does not test broad paraphrase or
+real-world vocabulary variation.
+
+On the same 120 synthetic CVs/job, Windows 11 x64, Intel Core i7-13700HX (16
+cores / 24 logical processors), 15.7 GiB RAM, FP32 `model_O4.onnx`, and one ONNX
+CPU thread (simulated low-thread configuration):
+
+| Job | Ranker | Recall@20 | R-precision@24 | CPU seconds/CV |
+|---|---|---:|---:|---:|
+| Senior Backend Engineer | E5 embedding | 20/24 (83.3%) | 21/24 (87.5%) | 1.1628 |
+| Senior Backend Engineer | stdlib TF-IDF | 20/24 (83.3%) | 24/24 (100%) | 0.0117 |
+| Data Analyst | E5 embedding | 12/24 (50.0%) | 12/24 (50.0%) | 1.0921 |
+| Data Analyst | stdlib TF-IDF | 20/24 (83.3%) | 24/24 (100%) | 0.0105 |
+
+The lexical baseline is about 100x faster per CV and equals or exceeds E5 on
+both known-label cohorts. For Data Analyst at R-precision@24, E5 retrieves 0/12
+English strong CVs and 12/12 Arabic strong CVs; the lexical baseline retrieves
+12/12 for both languages. The label sets are balanced, so this disparity is not
+caused by a language-count imbalance. The current generator uses exact tool names
+in all strong CVs and omits SQL/Tableau from partial CVs; this is coherent with
+the constructed ground truth but makes the lexical baseline unusually strong.
+
+These synthetic results do not justify making the roughly 252.1 MB
+model/tokenizer assets and 114.5 MB installed runtime dependency set mandatory.
+Recommendation: keep A5 OFF and make E5 an opt-in extra, rather than a default
+install dependency. A standard-library lexical baseline is a cheaper candidate
+for a future advisory implementation, but would require a separate owner review
+before switching production ranking behavior. No dependency or packaging changes
+are applied in A5b. Add paraphrase-focused synthetic cohorts before making any
+claim about real-world ranking quality or enabling ranking for customer hiring.
 
 `tests/test_a5_onnx_parity.py` compares the pinned ONNX output against a
 `sentence-transformers` reference generated from the same model revision and

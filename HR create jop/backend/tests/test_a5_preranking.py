@@ -19,6 +19,7 @@ from app.services.advisory_preranking_service import (
     cpu_supports_avx512_vnni,
     rank_candidates,
     rank_worker_cohort,
+    ranking_timeout_for_cohort,
     redact_institution_names,
 )
 
@@ -281,6 +282,37 @@ def test_ranking_timeout_is_visible_and_does_not_return_a_partial_ranking():
             max_chunks_per_cv=4,
             timeout_seconds=0.001,
         )
+
+
+def test_ranking_timeout_covers_candidate_chunk_preparation(monkeypatch):
+    import app.services.advisory_preranking_service as service
+
+    def slow_chunks(*_args, **_kwargs):
+        time.sleep(0.02)
+        return ["passage: Python backend"]
+
+    monkeypatch.setattr(service, "build_candidate_chunks", slow_chunks)
+    with pytest.raises(PreRankingTimedOut):
+        rank_candidates(
+            ["Python backend"],
+            [CandidateText("first", "synthetic"), CandidateText("second", "synthetic")],
+            tokenizer=WordTokenizer(),
+            embedder=LookupEmbedder(),
+            max_chunks_per_cv=4,
+            timeout_seconds=0.01,
+        )
+
+
+@pytest.mark.parametrize(
+    ("count", "expected"), [(1, 45), (20, 45), (21, 90), (120, 270), (300, 600)]
+)
+def test_ranking_timeout_scales_with_cohort_and_respects_configured_cap(count, expected):
+    assert ranking_timeout_for_cohort(count, base_timeout_seconds=45) == expected
+
+
+def test_ranking_timeout_rejects_invalid_budget_inputs():
+    with pytest.raises(ValueError):
+        ranking_timeout_for_cohort(10, base_timeout_seconds=0)
 
 
 def test_onnx_run_is_cancelled_when_the_per_run_deadline_expires():

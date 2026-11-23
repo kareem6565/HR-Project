@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+import math
+import re
 import statistics
 import sys
 import time
@@ -15,6 +17,7 @@ sys.path.insert(0, str(BACKEND_DIR))
 
 APPLICANTS_PER_JOB = 120
 TOP_N = 20
+_TOKEN_RE = re.compile(r"[a-z0-9+#.]+|[\u0600-\u06ff]+", re.IGNORECASE)
 
 _EN_FILLER = (
     "Coordinated quarterly delivery plans with product, operations, and support teams, kept clear decision records, and followed agreed release and review procedures.",
@@ -182,24 +185,93 @@ def synthetic_cohort(job_key: str) -> tuple[list, set[str], dict]:
     return candidates, positives, _profile_for_job(job_key)
 
 
+def _terms(text: str) -> list[str]:
+    return [token.casefold() for token in _TOKEN_RE.findall(text)]
+
+
+def lexical_rank(candidates: list, requirements: list[str]) -> list[str]:
+    """Simple TF-IDF cosine baseline across the eligible experience/skills chunks."""
+    from app.services.advisory_preranking_service import build_candidate_chunks
+
+    # The offline baseline uses whitespace chunks; prefixes remain part of the same
+    # eligible-text construction used by the embedding ranker.
+    class WordTokenizer:
+        def encode(self, text: str):
+            return type("Encoding", (), {"ids": text.split()})()
+
+    documents = [
+        _terms(" ".join(build_candidate_chunks(candidate.cv_text, WordTokenizer(), max_chunks=24)))
+        for candidate in candidates
+    ]
+    document_frequency: dict[str, int] = {}
+    for terms in documents:
+        for term in set(terms):
+            document_frequency[term] = document_frequency.get(term, 0) + 1
+    idf = {
+        term: math.log(1 + (len(documents) + 1) / (count + 1))
+        for term, count in document_frequency.items()
+    }
+
+    def vector(terms: list[str]) -> dict[str, float]:
+        counts: dict[str, int] = {}
+        for term in terms:
+            if term in idf:
+                counts[term] = counts.get(term, 0) + 1
+        values = {term: (1 + math.log(count)) * idf[term] for term, count in counts.items()}
+        norm = math.sqrt(sum(value * value for value in values.values())) or 1.0
+        return {term: value / norm for term, value in values.items()}
+
+    doc_vectors = [vector(terms) for terms in documents]
+    query_vectors = [vector(_terms(requirement)) for requirement in requirements]
+    scores = []
+    for candidate, document in zip(candidates, doc_vectors, strict=True):
+        per_requirement = [
+            sum(weight * document.get(term, 0.0) for term, weight in query.items())
+            for query in query_vectors
+        ]
+        scores.append((candidate.identity, sum(per_requirement) / len(per_requirement)))
+    return [identity for identity, _score in sorted(scores, key=lambda pair: (-pair[1], pair[0]))]
+
+
+def r_precision(ranked: list[str], positives: set[str]) -> tuple[int, int, float]:
+    n = len(positives)
+    hits = len(set(ranked[:n]) & positives)
+    return hits, n, hits / n if n else 0.0
+
+
+def validate_analytics_labels(candidates: list, positives: set[str]) -> None:
+    """Check known-by-construction target/partial skill separation before ranking."""
+    by_id = {candidate.identity: candidate.cv_text.casefold() for candidate in candidates}
+    target_terms = ("sql", "python", "tableau", "microsoft excel")
+    assert all(all(term in by_id[identity] for term in target_terms) for identity in positives)
+    partial = [
+        text for identity, text in by_id.items() if "analytics-025" <= identity <= "analytics-072"
+    ]
+    assert partial and all("tableau" not in text and "sql" not in text for text in partial)
+
+
 def main() -> int:
     from app.services.advisory_preranking_service import (
         MODEL_REVISION,
         OnnxE5Embedder,
         build_candidate_chunks,
         rank_candidates,
+        ranking_timeout_for_cohort,
     )
 
     model_dir = BACKEND_DIR / "models/multilingual-e5-small"
+    threads = 1
     embedder = OnnxE5Embedder(
         Path(model_dir) / "model_O4.onnx",
         Path(model_dir) / "tokenizer.json",
-        threads=2,
+        threads=threads,
     )
     print(f"model=intfloat/multilingual-e5-small revision={MODEL_REVISION}")
-    print("device=CPUExecutionProvider threads=2 quantized=false")
+    print(f"device=CPUExecutionProvider threads={threads} quantized=false")
     for job_key in ("backend", "analytics"):
         candidates, positives, profile = synthetic_cohort(job_key)
+        if job_key == "analytics":
+            validate_analytics_labels(candidates, positives)
         requirements = profile["requirements"]
         started_wall = time.perf_counter()
         started_cpu = time.process_time()
@@ -209,11 +281,20 @@ def main() -> int:
             tokenizer=embedder.tokenizer,
             embedder=embedder,
             max_chunks_per_cv=24,
-            timeout_seconds=600,
+            timeout_seconds=ranking_timeout_for_cohort(len(candidates), base_timeout_seconds=45),
         )
         cpu_seconds = time.process_time() - started_cpu
         wall_seconds = time.perf_counter() - started_wall
-        retrieved = {row.identity for row in ranked[:TOP_N]} & positives
+        ranked_ids = [row.identity for row in ranked]
+        retrieved = set(ranked_ids[:TOP_N]) & positives
+        r_hits, r_n, r_value = r_precision(ranked_ids, positives)
+        lexical_started_wall = time.perf_counter()
+        lexical_started_cpu = time.process_time()
+        lexical_ids = lexical_rank(candidates, requirements)
+        lexical_cpu_seconds = time.process_time() - lexical_started_cpu
+        lexical_wall_seconds = time.perf_counter() - lexical_started_wall
+        lexical_hits, _, lexical_r = r_precision(lexical_ids, positives)
+        lexical_recall20 = len(set(lexical_ids[:TOP_N]) & positives)
         word_counts = [len(candidate.cv_text.split()) for candidate in candidates]
         model_token_counts = [
             sum(
@@ -236,8 +317,37 @@ def main() -> int:
         )
         print(
             f"  recall@{TOP_N}={len(retrieved)}/{len(positives)} "
-            f"({len(retrieved) / len(positives):.1%})"
+            f"({len(retrieved) / len(positives):.1%}); "
+            f"R-precision@{r_n}={r_hits}/{r_n} ({r_value:.1%})"
         )
+        print(
+            f"  lexical_tfidf recall@{TOP_N}={lexical_recall20}/{len(positives)} "
+            f"({lexical_recall20 / len(positives):.1%}); "
+            f"R-precision@{r_n}={lexical_hits}/{r_n} ({lexical_r:.1%})"
+        )
+        print(
+            f"  lexical_cpu_seconds_per_cv={lexical_cpu_seconds / len(candidates):.4f} "
+            f"lexical_wall_seconds_per_cv={lexical_wall_seconds / len(candidates):.4f}"
+        )
+        for language in ("english", "arabic"):
+            language_ids = {
+                candidate.identity
+                for candidate in candidates
+                if any("\u0600" <= char <= "\u06ff" for char in candidate.cv_text)
+                == (language == "arabic")
+            }
+            language_positives = positives & language_ids
+            embedding_hits = len(set(ranked_ids[:TOP_N]) & language_positives)
+            embedding_r_hits = len(set(ranked_ids[:r_n]) & language_positives)
+            lexical_language_hits = len(set(lexical_ids[:TOP_N]) & language_positives)
+            lexical_r_hits = len(set(lexical_ids[:r_n]) & language_positives)
+            print(
+                f"  language={language} strong={len(language_positives)} "
+                f"embedding_recall@{TOP_N}={embedding_hits}/{len(language_positives)} "
+                f"embedding_R_precision@{r_n}={embedding_r_hits}/{len(language_positives)} "
+                f"lexical_recall@{TOP_N}={lexical_language_hits}/{len(language_positives)} "
+                f"lexical_R_precision@{r_n}={lexical_r_hits}/{len(language_positives)}"
+            )
         print(
             f"  cpu_seconds_per_cv={cpu_seconds / len(candidates):.4f} "
             f"wall_seconds_per_cv={wall_seconds / len(candidates):.4f}"
