@@ -36,3 +36,19 @@ def test_lexical_baseline_reports_r_precision_at_known_positive_count():
     assert n == len(positives)
     assert hits == n
     assert precision == 1.0
+
+
+def test_bilingual_skill_aliases_retrieve_cross_language_known_positive_cases():
+    for _case_id, requirements, candidates, positives in _EVAL.cross_language_cases():
+        ranked = _EVAL.lexical_rank(candidates, requirements, bilingual_aliases=True)
+        assert ranked[0] in positives
+
+
+def test_synonym_case_matches_accountant_and_arabic_mohaseb():
+    _case_id, requirements, candidates, positives = _EVAL.cross_language_cases()[2]
+
+    raw = _EVAL.lexical_rank(candidates, requirements)
+    bilingual = _EVAL.lexical_rank(candidates, requirements, bilingual_aliases=True)
+
+    assert raw[0] not in positives
+    assert bilingual[0] in positives

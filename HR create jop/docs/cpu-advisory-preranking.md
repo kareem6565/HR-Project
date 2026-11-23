@@ -199,3 +199,37 @@ dependency. Maximum absolute difference: **0.00028401613** (limit: 5e-4).
 
 The feature remains disabled until the owner reviews these measurements and
 enables the flag in the intended environment.
+
+### A5 follow-up: cross-language diagnosis
+
+The Data Analyst English result was investigated before attributing it to a
+preprocessing defect. In the pinned synthetic cohort, the first English strong
+CV produces four chunks of 512, 508, 190, and 37 tokens; every chunk has the
+required `passage:` prefix, all four required skill strings are present, and
+requirements use `query:`. The Arabic strong CV produces 511, 486, 184, and 41
+tokens with the same prefix and skill checks. No truncation or missing-section
+bug was found. On a controlled same-language subset, representative strong
+English and Arabic CVs scored 0.8132 and 0.8249 respectively against the
+English requirements. The full-cohort 0/12 English result is a ranking
+competition effect: Arabic strong CVs score slightly higher and consume the
+limited top 20 slots while there are 24 positives. It is not a zero embedding
+or a missing-skills issue.
+
+Three additional known-by-construction checks cover an English job with an
+Arabic CV, an Arabic job with an English CV, and `Accountant` vs `محاسب`. On
+the pinned E5 model, the positive CV ranked first in all three (scores 0.848,
+0.838, and 0.875). Plain TF-IDF missed the Arabic-job/English-CV case and the
+synonym case; a lexical baseline with a small bilingual alias table ranked the
+positive first in all three. This is a small synthetic sanity set, not a broad
+quality claim. These cases and checks are kept in `tools/eval_a5_preranking.py`
+and `backend/tests/test_a5_evaluation.py`.
+
+The broad synthetic results still favor the lexical baseline: on both 120-CV
+cohorts its R-precision equals or exceeds E5 and its CPU cost is about 100x
+lower. Proposed packaging change is pending owner review: remove NumPy,
+ONNX Runtime, and Tokenizers from mandatory backend dependencies and the
+default image; expose them as an optional `prerank-e5` extra with the existing
+hash lock; build a separate opt-in E5 image target that bundles the pinned
+model/tokenizer files; and keep lexical ranking as the default when A5 is
+enabled. The standard image would need no model files or runtime download.
+No packaging or production ranking change has been applied; A5 remains OFF.

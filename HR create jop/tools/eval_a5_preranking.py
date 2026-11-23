@@ -18,6 +18,15 @@ sys.path.insert(0, str(BACKEND_DIR))
 APPLICANTS_PER_JOB = 120
 TOP_N = 20
 _TOKEN_RE = re.compile(r"[a-z0-9+#.]+|[\u0600-\u06ff]+", re.IGNORECASE)
+_BILINGUAL_SKILL_ALIASES = {
+    "accountant": ("accountant", "محاسب", "محاسبة", "محاسبي"),
+    "accounts payable": ("accounts payable", "الحسابات الدائنة", "حسابات الموردين"),
+    "microsoft excel": ("microsoft excel", "excel", "إكسل", "اكسل"),
+    "data analysis": ("data analysis", "تحليل البيانات", "تحليل بيانات", "محلل بيانات"),
+    "python": ("python", "بايثون"),
+    "sql": ("sql", "اس كيو ال"),
+    "tableau": ("tableau", "تابلو"),
+}
 
 _EN_FILLER = (
     "Coordinated quarterly delivery plans with product, operations, and support teams, kept clear decision records, and followed agreed release and review procedures.",
@@ -185,12 +194,78 @@ def synthetic_cohort(job_key: str) -> tuple[list, set[str], dict]:
     return candidates, positives, _profile_for_job(job_key)
 
 
-def _terms(text: str) -> list[str]:
+def cross_language_cases() -> list[tuple[str, list[str], list, set[str]]]:
+    """Small known-positive cases for language crossing and Arabic skill aliases."""
+    from app.services.advisory_preranking_service import CandidateText
+
+    return [
+        (
+            "english_job_arabic_cv",
+            ["Accountant", "Accounts payable", "Microsoft Excel"],
+            [
+                CandidateText(
+                    "decoy",
+                    "Experience\nBuilt data dashboards and analytical pipelines.\n"
+                    "Skills\nPython, SQL, Tableau",
+                ),
+                CandidateText(
+                    "strong",
+                    "Experience\nعملت محاسبا ماليا وأدرت الحسابات الدائنة وتسوية الفواتير.\n"
+                    "Skills\nمحاسب، الحسابات الدائنة، Excel",
+                ),
+            ],
+            {"strong"},
+        ),
+        (
+            "arabic_job_english_cv",
+            ["محاسب", "الحسابات الدائنة", "إكسل"],
+            [
+                CandidateText(
+                    "decoy",
+                    "Experience\nBuilt data dashboards and analytical pipelines.\n"
+                    "Skills\nPython, SQL, Tableau",
+                ),
+                CandidateText(
+                    "strong",
+                    "Experience\nWorked as an accountant handling accounts payable and invoice reconciliation.\n"
+                    "Skills\nAccountant, accounts payable, Excel",
+                ),
+            ],
+            {"strong"},
+        ),
+        (
+            "accountant_synonym_arabic_cv",
+            ["Accountant"],
+            [
+                CandidateText("decoy", "Experience\nBuilt data dashboards.\nSkills\nPython, SQL"),
+                CandidateText("strong", "Experience\nعملت محاسبا ماليا.\nSkills\nمحاسب"),
+            ],
+            {"strong"},
+        ),
+    ]
+
+
+def _terms(text: str, *, bilingual_aliases: bool = False) -> list[str]:
+    if bilingual_aliases:
+        from app.services.text_normalization import normalize_for_matching
+
+        text = normalize_for_matching(text)
+        for canonical, aliases in _BILINGUAL_SKILL_ALIASES.items():
+            for alias in sorted(aliases, key=len, reverse=True):
+                normalized_alias = normalize_for_matching(alias)
+                text = re.sub(
+                    rf"(?<!\w){re.escape(normalized_alias)}(?!\w)",
+                    f" {canonical} ",
+                    text,
+                    flags=re.IGNORECASE,
+                )
     return [token.casefold() for token in _TOKEN_RE.findall(text)]
 
 
-def lexical_rank(candidates: list, requirements: list[str]) -> list[str]:
-    """Simple TF-IDF cosine baseline across the eligible experience/skills chunks."""
+def lexical_rank(
+    candidates: list, requirements: list[str], *, bilingual_aliases: bool = False
+) -> list[str]:
+    """TF-IDF cosine across eligible text, optionally canonicalizing skill aliases."""
     from app.services.advisory_preranking_service import build_candidate_chunks
 
     # The offline baseline uses whitespace chunks; prefixes remain part of the same
@@ -200,7 +275,10 @@ def lexical_rank(candidates: list, requirements: list[str]) -> list[str]:
             return type("Encoding", (), {"ids": text.split()})()
 
     documents = [
-        _terms(" ".join(build_candidate_chunks(candidate.cv_text, WordTokenizer(), max_chunks=24)))
+        _terms(
+            " ".join(build_candidate_chunks(candidate.cv_text, WordTokenizer(), max_chunks=24)),
+            bilingual_aliases=bilingual_aliases,
+        )
         for candidate in candidates
     ]
     document_frequency: dict[str, int] = {}
@@ -222,7 +300,10 @@ def lexical_rank(candidates: list, requirements: list[str]) -> list[str]:
         return {term: value / norm for term, value in values.items()}
 
     doc_vectors = [vector(terms) for terms in documents]
-    query_vectors = [vector(_terms(requirement)) for requirement in requirements]
+    query_vectors = [
+        vector(_terms(requirement, bilingual_aliases=bilingual_aliases))
+        for requirement in requirements
+    ]
     scores = []
     for candidate, document in zip(candidates, doc_vectors, strict=True):
         per_requirement = [
@@ -351,6 +432,23 @@ def main() -> int:
         print(
             f"  cpu_seconds_per_cv={cpu_seconds / len(candidates):.4f} "
             f"wall_seconds_per_cv={wall_seconds / len(candidates):.4f}"
+        )
+    print("cross_language_synthetic_cases=known_by_construction")
+    for case_id, requirements, candidates, positives in cross_language_cases():
+        e5 = rank_candidates(
+            requirements,
+            candidates,
+            tokenizer=embedder.tokenizer,
+            embedder=embedder,
+            max_chunks_per_cv=24,
+            timeout_seconds=30,
+        )
+        raw_lexical = lexical_rank(candidates, requirements)
+        alias_lexical = lexical_rank(candidates, requirements, bilingual_aliases=True)
+        print(
+            f"  case={case_id} known_strong={len(positives)}"
+            f" e5_top={e5[0].identity in positives} raw_lexical_top={raw_lexical[0] in positives}"
+            f" alias_lexical_top={alias_lexical[0] in positives}"
         )
     print(
         "ground_truth=synthetic cohort labels, known by construction; no real CVs or LLM judgments"
