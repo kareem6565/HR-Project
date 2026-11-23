@@ -1,9 +1,19 @@
-FROM python:3.11-slim
+FROM python:3.11-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 WORKDIR /app
+
+# Local OCR only. Versions are pinned to Debian Bookworm packages.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        tesseract-ocr=5.3.0-2 \
+        tesseract-ocr-eng=1:4.1.0-2 \
+        tesseract-ocr-ara=1:4.1.0-2 \
+        tesseract-ocr-osd=1:4.1.0-2 \
+        poppler-utils=22.12.0-2+deb12u3 \
+    && rm -rf /var/lib/apt/lists/*
 
 # Upgrade build tools first so wheels are used
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel

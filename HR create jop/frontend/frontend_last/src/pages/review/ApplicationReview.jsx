@@ -656,6 +656,23 @@ export default function ApplicationReview() {
               </button>
             )}
           </div>
+          {resume?.extraction_source === "ocr" && (
+            <div className={`ocr-review-notice${resume.status === "needs_manual_review" ? " needs-review" : ""}`} role="status">
+              <strong>
+                {resume.status === "needs_manual_review"
+                  ? "Needs manual review"
+                  : "Text extracted with local OCR"}
+              </strong>
+              <span>
+                OCR confidence: {Number.isFinite(resume.extraction_confidence)
+                  ? `${Math.round(resume.extraction_confidence * 100)}%`
+                  : "unavailable"}
+              </span>
+              {resume.status === "needs_manual_review" && (
+                <span>Check the original CV before relying on extracted text or evaluation.</span>
+              )}
+            </div>
+          )}
           {cvError && (
             <div className="form-error" style={{ marginTop: 8 }}>
               <AlertCircle size={14} style={{ marginRight: 6, verticalAlign: "-2px" }} />

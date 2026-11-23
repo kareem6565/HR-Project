@@ -64,8 +64,9 @@ class ResumeService:
         max_upload_bytes: int,
         storage: StorageProvider,
         checksum: str | None = None,
+        defer_text_extraction: bool = False,
     ) -> Resume:
-        """Store an uploaded resume file, extract its text, and persist metadata.
+        """Store an uploaded resume file and optionally defer text extraction to the worker.
 
         Persists only the file path and metadata; raw file bytes never enter the
         database. On any failure after the file is written to disk, the stored
@@ -96,7 +97,7 @@ class ResumeService:
         # Once the file is on disk, any subsequent failure deletes it so no
         # orphaned file remains. The caller rolls back the DB transaction.
         try:
-            text = extract_text(file_bytes, filename=filename)
+            text = None if defer_text_extraction else extract_text(file_bytes, filename=filename)
             digest = checksum or hashlib.sha256(file_bytes).hexdigest()
             resume = Resume(
                 id=resume_id,
@@ -107,7 +108,7 @@ class ResumeService:
                 file_size_bytes=len(file_bytes),
                 checksum=digest,
                 extracted_text=text,
-                status="text_extracted",
+                status="uploaded" if defer_text_extraction else "text_extracted",
             )
             db.add(resume)
             db.flush()

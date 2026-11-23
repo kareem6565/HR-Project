@@ -4,7 +4,17 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Index, String, Text, func
+from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    func,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -20,7 +30,8 @@ class Resume(Base):
     __tablename__ = "resumes"
     __table_args__ = (
         CheckConstraint(
-            "status IN ('uploaded', 'text_extracted', 'profile_extracted', 'archived')",
+            "status IN ('uploaded', 'text_extracted', 'profile_extracted', "
+            "'needs_manual_review', 'archived')",
             name="ck_resumes_status",
         ),
         Index("ix_resumes_candidate_id", "candidate_id"),
@@ -36,6 +47,8 @@ class Resume(Base):
     file_size_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     checksum: Mapped[str | None] = mapped_column(String(255), nullable=True)
     extracted_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    extraction_source: Mapped[str] = mapped_column(String(24), nullable=False, default="text_layer")
+    extraction_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="uploaded")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

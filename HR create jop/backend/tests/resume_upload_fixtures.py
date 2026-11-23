@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+from pathlib import Path
 
 import pytest
 
@@ -39,6 +40,59 @@ def make_pdf_bytes(text: str = PDF_TEXT) -> bytes:
         + str(xref).encode()
         + b"\n%%EOF"
     )
+
+
+def make_image_pdf(images: list[bytes | None]) -> bytes:
+    """Build image-only synthetic PDF pages without a third-party PDF writer."""
+    page_ids = [3 + index * 3 for index in range(len(images))]
+    image_ids = [
+        page_id + 2 if image is not None else None
+        for page_id, image in zip(page_ids, images, strict=True)
+    ]
+    objects: dict[int, bytes] = {
+        1: b"<< /Type /Catalog /Pages 2 0 R >>",
+        2: f"<< /Type /Pages /Kids [{' '.join(f'{i} 0 R' for i in page_ids)}] "
+        f"/Count {len(images)} >>".encode(),
+    }
+    for page_id, image_id, image in zip(page_ids, image_ids, images, strict=True):
+        content_id = page_id + 1
+        content = b"q 520 0 0 120 40 500 cm /Im0 Do Q" if image is not None else b""
+        resources = (
+            f"<< /XObject << /Im0 {image_id} 0 R >> >>".encode() if image is not None else b"<< >>"
+        )
+        objects[page_id] = (
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources "
+            + resources
+            + f" /Contents {content_id} 0 R >>".encode()
+        )
+        objects[content_id] = (
+            f"<< /Length {len(content)} >>\nstream\n".encode() + content + b"\nendstream"
+        )
+        if image is not None:
+            objects[image_id] = (
+                f"<< /Type /XObject /Subtype /Image /Width 1800 /Height 420 "
+                f"/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode "
+                f"/Length {len(image)} >>\nstream\n".encode()
+                + image
+                + b"\nendstream"
+            )
+    output = bytearray(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
+    offsets = [0]
+    for object_id in range(1, max(objects) + 1):
+        offsets.append(len(output))
+        output.extend(f"{object_id} 0 obj\n".encode() + objects[object_id] + b"\nendobj\n")
+    xref = len(output)
+    output.extend(f"xref\n0 {len(offsets)}\n0000000000 65535 f \n".encode())
+    for offset in offsets[1:]:
+        output.extend(f"{offset:010} 00000 n \n".encode())
+    output.extend(
+        f"trailer\n<< /Size {len(offsets)} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode()
+    )
+    return bytes(output)
+
+
+def scanned_image(name: str) -> bytes:
+    return (Path(__file__).parent / "fixtures" / name).read_bytes()
 
 
 def make_docx_bytes(text: str = DOCX_TEXT) -> bytes:

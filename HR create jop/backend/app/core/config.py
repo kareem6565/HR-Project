@@ -118,6 +118,21 @@ class Settings(BaseSettings):
     )
     max_batch_bytes: int = Field(default=50 * 1024 * 1024, validation_alias="MAX_BATCH_BYTES")
     max_pdf_pages: int = Field(default=50, validation_alias="MAX_PDF_PAGES")
+    ocr_page_timeout_seconds: int = Field(
+        default=20, ge=1, le=120, validation_alias="OCR_PAGE_TIMEOUT_SECONDS"
+    )
+    ocr_file_timeout_seconds: int = Field(
+        default=180, ge=1, le=900, validation_alias="OCR_FILE_TIMEOUT_SECONDS"
+    )
+    ocr_max_concurrent_jobs: int = Field(
+        default=1, ge=1, le=8, validation_alias="OCR_MAX_CONCURRENT_JOBS"
+    )
+    ocr_confidence_threshold: float = Field(
+        default=0.55, ge=0.0, le=1.0, validation_alias="OCR_CONFIDENCE_THRESHOLD"
+    )
+    ocr_max_page_dimension: int = Field(
+        default=2400, ge=1000, le=4000, validation_alias="OCR_MAX_PAGE_DIMENSION"
+    )
     max_docx_uncompressed_bytes: int = Field(
         default=20 * 1024 * 1024, validation_alias="MAX_DOCX_UNCOMPRESSED_BYTES"
     )

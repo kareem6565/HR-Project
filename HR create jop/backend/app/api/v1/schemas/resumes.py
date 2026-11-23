@@ -23,5 +23,7 @@ class ResumeResponse(BaseModel):
     content_type: str | None
     file_size_bytes: int | None
     status: str
+    extraction_source: str
+    extraction_confidence: float | None
     created_at: datetime
     updated_at: datetime

@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import app.worker as worker_module
 from app.models import Candidate, Job, JobApplication, JobProfile, Resume, ScreeningBatchItem
 from app.services.screening_batch_service import ScreeningBatchService
+from app.services.text_extraction_service import ExtractedDocumentText
 from app.worker import ScreeningWorker
 
 
@@ -35,6 +36,9 @@ def test_public_application_worker_reuses_records_and_pinned_profile(monkeypatch
         candidate_id=candidate_id,
         file_uri="private/resume.pdf",
         extracted_text="Candidate CV text",
+        extraction_source="text_layer",
+        extraction_confidence=None,
+        status="uploaded",
     )
     application = SimpleNamespace(
         id=application_id,
@@ -127,7 +131,13 @@ def test_public_application_worker_reuses_records_and_pinned_profile(monkeypatch
             assert kwargs["job_profile_id"] == profile_id
             return SimpleNamespace(evaluation_id=uuid.uuid4())
 
-    monkeypatch.setattr(worker_module, "extract_text", lambda *args, **kwargs: "CV text")
+    monkeypatch.setattr(
+        worker_module,
+        "extract_document_text",
+        lambda *args, **kwargs: ExtractedDocumentText(
+            "CV text", source="ocr", confidence=0.42, needs_manual_review=True
+        ),
+    )
     monkeypatch.setattr(
         worker_module,
         "derive_screening_payloads",
@@ -160,3 +170,7 @@ def test_public_application_worker_reuses_records_and_pinned_profile(monkeypatch
     assert item.resume_id == resume_id
     assert item.application_id == application_id
     assert item.evaluation_id is not None
+    assert resume.extracted_text == "CV text"
+    assert resume.extraction_source == "ocr"
+    assert resume.extraction_confidence == 0.42
+    assert resume.status == "needs_manual_review"

@@ -42,7 +42,7 @@ from app.services.job_application_service import JobApplicationService
 from app.services.resume_details_service import derive_screening_payloads
 from app.services.screening_batch_service import ScreeningBatchService
 from app.services.storage_service import LocalFileSystemStorage, StorageProvider
-from app.services.text_extraction_service import extract_text
+from app.services.text_extraction_service import extract_document_text
 
 logger = logging.getLogger("app.worker")
 _SAFE_DIAGNOSTIC_FIELD = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
@@ -325,13 +325,14 @@ class ScreeningWorker:
 
         # Extract text and validate format
         try:
-            text = extract_text(
+            extraction = extract_document_text(
                 raw_bytes,
                 filename=item.filename,
                 max_pdf_pages=settings.max_pdf_pages,
                 max_docx_uncompressed_bytes=settings.max_docx_uncompressed_bytes,
                 max_docx_entries=settings.max_docx_entries,
             )
+            text = extraction.text
         except UploadValidationError as exc:
             self._log_item_failure(item, "cv_text_extraction", exc, level=logging.WARNING)
             self._record_permanent_failure(item_id, claim_token, exc.code, str(exc), db=db)
@@ -356,6 +357,14 @@ class ScreeningWorker:
                     candidate = db.get(Candidate, item.candidate_id)
                     resume = db.get(Resume, item.resume_id)
                     application = db.get(JobApplication, item.application_id)
+                    resume.extracted_text = text
+                    resume.extraction_source = extraction.source
+                    resume.extraction_confidence = extraction.confidence
+                    resume.status = (
+                        "needs_manual_review"
+                        if extraction.needs_manual_review
+                        else "text_extracted"
+                    )
                 else:
                     candidate_name = self._candidate_name_from_filename(item.filename)
                     candidate = CandidateService().create(
@@ -383,7 +392,13 @@ class ScreeningWorker:
                         file_size_bytes=len(raw_bytes),
                         checksum=item.sha256,
                         extracted_text=text,
-                        status="text_extracted",
+                        extraction_source=extraction.source,
+                        extraction_confidence=extraction.confidence,
+                        status=(
+                            "needs_manual_review"
+                            if extraction.needs_manual_review
+                            else "text_extracted"
+                        ),
                     )
                     db.add(resume)
                     db.flush()

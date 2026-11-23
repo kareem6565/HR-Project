@@ -86,6 +86,25 @@ describe("ApplicationReview pipeline decision", () => {
     );
   });
 
+  it("shows OCR provenance and a manual-review warning for low-confidence extraction", async () => {
+    getReviewWorkspace.mockResolvedValueOnce({
+      ...workspace,
+      resume: {
+        id: "resume-ocr",
+        original_filename: "candidate.pdf",
+        extraction_source: "ocr",
+        extraction_confidence: 0.42,
+        status: "needs_manual_review",
+      },
+    });
+    renderPage();
+
+    await screen.findByRole("heading", { name: "Ada Lovelace" });
+    expect(screen.getByRole("status")).toHaveTextContent("Needs manual review");
+    expect(screen.getByRole("status")).toHaveTextContent("OCR confidence: 42%");
+    expect(screen.getByRole("status")).toHaveTextContent("Check the original CV");
+  });
+
   it("submits { decision: 'hold', reason } via the shared component and confirmation modal", async () => {
     const user = userEvent.setup();
     renderPage();

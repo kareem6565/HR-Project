@@ -68,6 +68,10 @@ jobs:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: HR create jop/backend/pyproject.toml
+      - name: Install local OCR tools for scanned-PDF tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y tesseract-ocr tesseract-ocr-eng tesseract-ocr-ara tesseract-ocr-osd poppler-utils
       - name: Install backend and audit tool
         working-directory: HR create jop/backend
         run: python -m pip install -e ".[dev]" pip-audit
