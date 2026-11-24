@@ -42,6 +42,7 @@ import { downloadResume } from "../../services/resumeService";
 import { formatScore, parseScore } from "../../utils/score";
 import { BAND_CONFIG } from "../../components/common/ScoreBadge";
 import { getApplicationStatusGroup } from "../../utils/applicationStatus";
+import useCountUp from "../../hooks/useCountUp";
 import { createCandidateInterviewInvitation } from "../../services/interviewService";
 import GitHubEvidencePanel from "../../components/review/GitHubEvidencePanel";
 
@@ -151,6 +152,12 @@ export function filterCertificationHeadings(entries) {
       typeof entry !== "string" ||
       !PROFILE_SECTION_HEADINGS.has(entry.trim().replace(/:$/, "").replace(/\s+/g, " ").toLowerCase()),
   );
+}
+
+function ScoreReveal({ score }) {
+  const animated = useCountUp(score !== null ? Math.round(score) : 0);
+  if (score !== null && animated < Math.round(score)) return String(animated);
+  return formatScore(score);
 }
 
 export default function ApplicationReview() {
@@ -443,7 +450,7 @@ export default function ApplicationReview() {
       </header>
 
       {/* ===== Status Strip Summary ===== */}
-      <div className="status-strip review-status-strip" role="group" aria-label="Application review summary">
+      <div className="status-strip review-status-strip motion-stagger" role="group" aria-label="Application review summary">
         <span className="status-item review-metric-state">
           <span className="review-metric-label"><ShieldCheck size={13} aria-hidden="true" />
             {applicationStatusGroup?.id === "processing"
@@ -466,7 +473,9 @@ export default function ApplicationReview() {
         </span>
         <span className="status-item review-metric-score">
           <span className="review-metric-label"><Activity size={13} aria-hidden="true" /> AI Match Score (0–100)</span>
-          <strong>{hasEvaluation ? formatScore(score) : "Not available"}</strong>
+          <strong className="review-score-value">
+            {hasEvaluation ? <ScoreReveal score={score} /> : "Not available"}
+          </strong>
         </span>
         <span className="status-item review-metric-category">
           <span className="review-metric-label"><Sparkles size={13} aria-hidden="true" /> AI Review Category</span>
