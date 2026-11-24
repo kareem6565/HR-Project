@@ -265,7 +265,7 @@ require_once __DIR__ . '/includes/helpers.php';
               <span class="px-2.5 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-xs font-bold border border-indigo-500/30">شفت مسائي</span>
             </div>
 
-            <!-- Card 3: AI RAG & Telegram Pipeline -->
+            <!-- Card 3: Employee policy assistant -->
             <div class="bg-slate-900/90 p-4 rounded-2xl border border-slate-800 shadow-lg space-y-3">
               <div class="flex items-center justify-between border-b border-slate-800 pb-2">
                 <span class="text-xs font-bold text-white flex items-center gap-1.5">
@@ -275,7 +275,7 @@ require_once __DIR__ . '/includes/helpers.php';
                 <span class="text-[10px] font-mono text-cyan-400 font-bold">Automated</span>
               </div>
               <div class="p-3 rounded-xl bg-slate-950/80 text-xs text-slate-300 font-medium leading-relaxed border border-slate-800">
-                🤖 <b>مساعد تليجرام الذكي:</b> استعلام فوري عن كشوفات الحضور، اللوائح، وحسابات الرواتب عبر Ollama Chat Model.
+                🤖 <b>مساعد الموظفين الذكي:</b> إجابات موثقة عن سياسات الشركة ومساعدة في طلبات الموظفين.
               </div>
             </div>
 
@@ -367,23 +367,22 @@ require_once __DIR__ . '/includes/helpers.php';
         </div>
       </div>
 
-      <!-- BENTO TILE 4: Enterprise RAG System & Telegram (Span 8) — Darkened Card -->
+      <!-- BENTO TILE 4: Employee policy assistant (Span 8) -->
       <div class="md:col-span-8 bg-slate-950 text-white rounded-3xl p-8 border border-slate-800 shadow-2xl flex flex-col justify-between space-y-6">
         <div class="space-y-3">
           <div class="w-12 h-12 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 text-xl font-bold">
             🤖
           </div>
-          <h3 class="text-2xl font-bold text-white">شبكة الـ RAG والمساعد الذكي عبر تليجرام</h3>
+          <h3 class="text-2xl font-bold text-white">مساعد الموظفين الذكي</h3>
           <p class="text-slate-300 text-sm leading-relaxed max-w-xl">
-            ربط ملفات الشركة على Google Drive بـ Pinecone Vector Store وموديلات Ollama المحلية عبر مسارات أتمتة n8n، لتزويد الموظفين بمساعد ذكي يجيب عن اللوائح ويستعلم مباشرة من قاعدة البيانات.
+            مساعد داخل بوابة الموظف يجيب عن السياسات المعتمدة، ويساعد في تقديم الطلبات ومتابعة حالتها وفق صلاحيات الموظف.
           </p>
         </div>
 
         <div class="flex flex-wrap items-center gap-3 pt-4 border-t border-slate-800">
-          <span class="px-3.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-semibold text-indigo-300">n8n Automation Engine</span>
-          <span class="px-3.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-semibold text-cyan-300">Pinecone Vector Store</span>
-          <span class="px-3.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-semibold text-emerald-300">Ollama Local LLM</span>
-          <span class="px-3.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-semibold text-amber-300">Telegram Bot API</span>
+          <span class="px-3.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-semibold text-indigo-300">سياسات معتمدة</span>
+          <span class="px-3.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-semibold text-cyan-300">طلبات الموظفين</span>
+          <span class="px-3.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-semibold text-emerald-300">متابعة الموافقات</span>
         </div>
       </div>
 

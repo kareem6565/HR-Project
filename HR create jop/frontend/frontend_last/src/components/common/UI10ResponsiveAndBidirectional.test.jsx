@@ -11,6 +11,7 @@ import EvidenceTable from "../evaluation/EvidenceTable";
 import ScoreCard from "./ScoreCard";
 import MainLayout from "../../layouts/MainLayout";
 import { AuthContext } from "../../context/AuthContext";
+import { ThemeProvider } from "../../context/ThemeContext";
 
 describe("HERA UI-10: Responsive, Bidirectional Text (dir='auto'), and Visual QA", () => {
   describe("Bidirectional Text Support (dir='auto') at Data Boundaries", () => {
@@ -90,11 +91,13 @@ describe("HERA UI-10: Responsive, Bidirectional Text (dir='auto'), and Visual QA
       };
 
       return render(
-        <AuthContext.Provider value={authValues}>
-          <MemoryRouter initialEntries={[initialPath]}>
-            <MainLayout />
-          </MemoryRouter>
-        </AuthContext.Provider>
+        <ThemeProvider>
+          <AuthContext.Provider value={authValues}>
+            <MemoryRouter initialEntries={[initialPath]}>
+              <MainLayout />
+            </MemoryRouter>
+          </AuthContext.Provider>
+        </ThemeProvider>
       );
     };
 

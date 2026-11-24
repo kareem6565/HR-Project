@@ -1,25 +1,21 @@
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
-import { render, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import Login from "./Login";
-import { HR_MANAGER_WORKSPACE_URL } from "../../config/hrManager";
+import { HR_MANAGER_LOGIN_URL } from "../../config/hrManager";
 
-describe("HR Manager sign-in redirect", () => {
-  it("redirects to the configured HR Manager workspace", async () => {
+describe("Login page", () => {
+  it("redirects HERA sign-in to the shared HR portal", () => {
     const redirect = vi.fn();
 
-    const { container } = render(<Login redirect={redirect} />);
+    render(<Login redirect={redirect} />);
 
-    await waitFor(() => {
-      expect(redirect).toHaveBeenCalledWith(HR_MANAGER_WORKSPACE_URL);
-    });
-    expect(container).toBeEmptyDOMElement();
-  });
-
-  it("does not render a separate recruitment login form", () => {
-    const { queryByRole } = render(<Login redirect={vi.fn()} />);
-
-    expect(queryByRole("textbox", { name: /email/i })).not.toBeInTheDocument();
-    expect(queryByRole("button", { name: /sign in/i })).not.toBeInTheDocument();
+    expect(redirect).toHaveBeenCalledWith(HR_MANAGER_LOGIN_URL);
+    expect(screen.getByRole("link", { name: /open the shared hr portal/i })).toHaveAttribute(
+      "href",
+      HR_MANAGER_LOGIN_URL,
+    );
+    expect(screen.queryByLabelText(/email/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/password/i)).not.toBeInTheDocument();
   });
 });

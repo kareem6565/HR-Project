@@ -1,12 +1,14 @@
 import uuid
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import (
     Candidate,
     Interview,
+    InterviewAvailability,
     Job,
     JobApplication,
     Organization,
@@ -68,6 +70,48 @@ def create_parent_records(
     return organization, user, interviewer, job, application, candidate
 
 
+def _future_date() -> date:
+    """A date that is always in the future relative to when the test runs."""
+    return date.today() + timedelta(days=1)
+
+
+def ensure_availability(
+    db_session: Session,
+    *,
+    organization_id: uuid.UUID,
+    interviewer_user_id: uuid.UUID,
+    scheduled_date: date,
+    start_time: str = "09:00",
+    end_time: str = "17:00",
+    duration_minutes: int = 30,
+) -> InterviewAvailability:
+    existing = db_session.scalar(
+        select(InterviewAvailability).where(
+            InterviewAvailability.organization_id == organization_id,
+            InterviewAvailability.interviewer_user_id == interviewer_user_id,
+            InterviewAvailability.scheduled_date == scheduled_date,
+            InterviewAvailability.status == "available",
+            InterviewAvailability.start_time == start_time,
+            InterviewAvailability.end_time == end_time,
+        )
+    )
+    if existing is not None:
+        return existing
+    availability = InterviewAvailability(
+        organization_id=organization_id,
+        interviewer_user_id=interviewer_user_id,
+        scheduled_date=scheduled_date,
+        start_time=start_time,
+        end_time=end_time,
+        duration_minutes=duration_minutes,
+        timezone="UTC",
+        status="available",
+    )
+    db_session.add(availability)
+    db_session.flush()
+    return availability
+
+
 def schedule(
     db_session: Session,
     *,
@@ -75,9 +119,18 @@ def schedule(
     application: JobApplication,
     interviewer_user_id: uuid.UUID,
     scheduled_time: str,
-    scheduled_date: date = date(2026, 9, 9),
+    scheduled_date: date | None = None,
     scheduled_duration_minutes: int = 60,
 ) -> Interview:
+    if scheduled_date is None:
+        # Scheduling in the past is now rejected, so default to a future date.
+        scheduled_date = date.today() + timedelta(days=1)
+    ensure_availability(
+        db_session,
+        organization_id=organization_id,
+        interviewer_user_id=interviewer_user_id,
+        scheduled_date=scheduled_date,
+    )
     return InterviewService().schedule(
         db_session,
         organization_id=organization_id,
@@ -414,7 +467,7 @@ def test_find_conflicts_returns_overlapping_interviews(db_session: Session) -> N
         job_application_id=application.id,
         candidate_id=application.candidate_id,
         interviewer_user_id=interviewer.id,
-        scheduled_date=date(2026, 9, 9),
+        scheduled_date=_future_date(),
         start_minutes=630,
         duration_minutes=30,
     )
@@ -478,7 +531,7 @@ def test_list_slots_for_date_returns_occupied_windows(db_session: Session) -> No
     slots = InterviewService().list_slots_for_date(
         db_session,
         organization_id=organization.id,
-        scheduled_date=date(2026, 9, 9),
+        scheduled_date=_future_date(),
         interviewer_user_id=interviewer.id,
     )
     assert slots == [
@@ -533,7 +586,7 @@ def test_schedule_rejects_question_set_from_another_application(db_session: Sess
             candidate_id=application.candidate_id,
             job_id=application.job_id,
             interview_type="technical",
-            scheduled_date=date(2026, 9, 9),
+            scheduled_date=_future_date(),
             scheduled_time="10:00 AM",
             interviewer_user_id=interviewer.id,
             interview_question_set_id=foreign_set.id,
@@ -553,6 +606,12 @@ def test_schedule_rejects_unapproved_question_set(db_session: Session) -> None:
         organization_id=organization.id,
     )
     db_session.commit()
+    ensure_availability(
+        db_session,
+        organization_id=organization.id,
+        interviewer_user_id=interviewer.id,
+        scheduled_date=_future_date(),
+    )
 
     with pytest.raises(ValidationError, match="approved interview question set"):
         InterviewService().schedule(
@@ -561,7 +620,7 @@ def test_schedule_rejects_unapproved_question_set(db_session: Session) -> None:
             candidate_id=application.candidate_id,
             job_id=application.job_id,
             interview_type="technical",
-            scheduled_date=date(2026, 9, 9),
+            scheduled_date=_future_date(),
             scheduled_time="10:00 AM",
             interviewer_user_id=interviewer.id,
             interview_question_set_id=generated_set.id,
@@ -581,7 +640,7 @@ def test_schedule_rejects_unapproved_question_set(db_session: Session) -> None:
         candidate_id=application.candidate_id,
         job_id=application.job_id,
         interview_type="technical",
-        scheduled_date=date(2026, 9, 9),
+        scheduled_date=_future_date(),
         scheduled_time="10:00 AM",
         interviewer_user_id=interviewer.id,
         interview_question_set_id=approved.id,

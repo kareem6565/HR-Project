@@ -12,6 +12,7 @@ import ScreenCandidates from "../../pages/candidates/ScreenCandidates";
 import * as applicationService from "../../services/applicationService";
 import * as jobService from "../../services/jobService";
 import { AuthProvider } from "../../context/AuthContext";
+import { ThemeProvider } from "../../context/ThemeContext";
 
 vi.mock("../../services/applicationService", () => ({
   getApplications: vi.fn(),
@@ -53,9 +54,11 @@ describe("UI-03: Route Titles from Single Map", () => {
 describe("UI-03: Navbar Dead Control Removal", () => {
   it("does not render any inert notification bell button in Navbar", () => {
     render(
-      <AuthProvider>
-        <Navbar pathname="/dashboard" />
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <Navbar pathname="/dashboard" />
+        </AuthProvider>
+      </ThemeProvider>
     );
 
     // Page title is accurately rendered

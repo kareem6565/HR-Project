@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import hashlib
 import re
 import secrets
 import uuid
@@ -19,6 +20,38 @@ MAX_KEY_ID_BYTES = 64
 
 class StorageEncryptionError(ValueError):
     """Raised when an encrypted storage object is malformed or cannot authenticate."""
+
+
+def _google_token_key() -> bytes:
+    """Return the dedicated key used by the existing Google OAuth token format."""
+    from app.core.config import settings
+
+    key_material = settings.google_token_encryption_key
+    if not key_material:
+        raise StorageEncryptionError("The Google token encryption key is unavailable.")
+    return hashlib.sha256(key_material.encode("utf-8")).digest()
+
+
+def encrypt_secret(plaintext: str) -> str:
+    """Encrypt a Google OAuth token using the legacy, version-compatible format."""
+    nonce = secrets.token_bytes(NONCE_BYTES)
+    ciphertext = AESGCM(_google_token_key()).encrypt(nonce, plaintext.encode("utf-8"), None)
+    return base64.b64encode(nonce + ciphertext).decode("ascii")
+
+
+def decrypt_secret(encoded: str) -> str:
+    """Decrypt a Google OAuth token produced by the legacy format."""
+    try:
+        data = base64.b64decode(encoded.encode("ascii"), validate=True)
+    except (ValueError, UnicodeEncodeError, binascii.Error):
+        raise StorageEncryptionError("The stored Google token is invalid.") from None
+    if len(data) < NONCE_BYTES + TAG_BYTES:
+        raise StorageEncryptionError("The stored Google token is invalid.")
+    try:
+        plaintext = AESGCM(_google_token_key()).decrypt(data[:NONCE_BYTES], data[NONCE_BYTES:], None)
+    except InvalidTag:
+        raise StorageEncryptionError("The stored Google token failed authentication.") from None
+    return plaintext.decode("utf-8")
 
 
 def is_encrypted_file(data: bytes) -> bool:

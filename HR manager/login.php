@@ -68,177 +68,169 @@ $_SESSION['login_nonce'] = bin2hex(random_bytes(32));
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>تسجيل الدخول — HERA</title>
-  <meta name="description" content="تسجيل الدخول إلى منصة HERA لإدارة الموارد البشرية والتوظيف." />
+  <meta name="theme-color" content="#faf7f2" />
+  <title>مرحبًا بعودتك — HERA</title>
+  <meta name="description" content="سجّل الدخول إلى HERA لمتابعة قرارات توظيف أذكى." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          fontFamily: { cairo: ['Cairo', 'sans-serif'] },
-          colors: {
-            primary: { 50:'#eff6ff',100:'#dbeafe',200:'#bfdbfe',300:'#93c5fd',400:'#60a5fa',500:'#3b82f6',600:'#2563eb',700:'#1d4ed8',800:'#1e40af',900:'#1e3a8a' },
-            dark: { 800:'#1e293b', 900:'#0f172a', 950:'#020617' },
-          },
-          backdropBlur: { xs: '2px' },
-        }
-      }
-    }
-  </script>
-  <style>
-    * { font-family: 'Cairo', sans-serif; }
-    body {
-      background: radial-gradient(circle at 50% 0%, #315759 0%, #1B3A3A 62%, #122b2b 100%);
-      min-height: 100vh;
-    }
-    .card-glass {
-      background: rgba(15, 23, 42, 0.75);
-      backdrop-filter: blur(20px);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
-    }
-    .btn-gradient {
-      background: linear-gradient(135deg, #1B3A3A 0%, #315759 100%);
-      box-shadow: 0 4px 20px rgba(27, 58, 58, 0.35);
-      transform: skewX(-4deg);
-      transition: all 0.25s ease;
-    }
-    .btn-gradient:hover {
-      transform: skewX(-4deg) translateY(-2px);
-      box-shadow: 0 8px 25px rgba(27, 58, 58, 0.5);
-    }
-    .btn-content {
-      transform: skewX(4deg);
-    }
-    .skew-badge {
-      transform: skewX(-8deg);
-      display: inline-block;
-    }
-    .skew-badge-inner {
-      transform: skewX(8deg);
-      display: inline-block;
-    }
-  </style>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/BIC2_Mvp/assets/hera-brand.css?v=hera-motion-20261116-1" />
-  <script src="/BIC2_Mvp/assets/hera-language.js" defer></script>
+  <link rel="stylesheet" href="/BIC2_Mvp/assets/login.css?v=hera-login-20261121-1" />
+  <script src="/BIC2_Mvp/assets/hera-language.js?v=hera-login-20261121-1" defer></script>
 </head>
-<body class="hera-auth-page flex items-center justify-center p-4">
-
-  <div class="w-full max-w-md">
-    
-    <!-- Top Brand Logo -->
-    <div class="text-center mb-8">
-      <a href="/BIC2_Mvp/index.php" class="inline-flex items-center gap-3" aria-label="HERA">
-        <img src="/BIC2_Mvp/assets/hera-logo.svg" alt="HERA" class="w-44 h-auto" />
-      </a>
-    </div>
-
-    <!-- Login Card -->
-    <div class="card-glass rounded-3xl p-8 border border-white/10">
-      
-      <div class="mb-6">
-        <h1 class="text-xl font-bold text-white mb-1">تسجيل الدخول للنظام</h1>
-          <p class="text-xs text-slate-400">أدخل بريدك الإلكتروني وكلمة المرور الخاصة بك</p>
-      </div>
-
-      <?php if ($successMessage): ?>
-        <div role="status" class="mb-6 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-800 text-sm font-semibold">
-          <?= htmlspecialchars($successMessage, ENT_QUOTES, 'UTF-8') ?>
-        </div>
-      <?php endif; ?>
-
-      <?php if ($error): ?>
-        <div role="alert" class="mb-6 p-4 rounded-xl <?= $isServiceError ? 'bg-amber-500/10 border-amber-500/25 text-amber-900' : 'bg-red-500/10 border-red-500/25 text-red-800' ?> border text-sm font-semibold flex items-center gap-2">
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-          <span><?= htmlspecialchars($error) ?></span>
-        </div>
-      <?php endif; ?>
-
-      <form id="loginForm" method="POST" action="/BIC2_Mvp/login.php" class="space-y-4">
-        <input type="hidden" name="login_nonce" value="<?= htmlspecialchars($_SESSION['login_nonce'], ENT_QUOTES, 'UTF-8') ?>" />
-        <input type="hidden" name="login_mode" id="loginMode" value="<?= $loginMode ?>" />
-        <div id="emailLoginField" <?= $loginMode === 'legacy' ? 'hidden' : '' ?>>
-          <label for="email" class="block text-xs font-bold text-slate-300 mb-1.5">البريد الإلكتروني</label>
-          <input
-            type="email"
-            id="email"
-            name="email"
-            value="<?= htmlspecialchars($email, ENT_QUOTES, 'UTF-8') ?>"
-            placeholder="name@company.com"
-            autocomplete="username"
-            <?= $loginMode === 'legacy' ? 'disabled' : 'required autofocus' ?>
-            class="w-full px-4 py-3 bg-slate-900/90 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
-          />
-        </div>
-
-        <div id="legacyLoginField" <?= $loginMode !== 'legacy' ? 'hidden' : '' ?>>
-          <label for="emp_code" class="block text-xs font-bold text-slate-300 mb-1.5">كود الموظف للحسابات القديمة</label>
-          <input type="text" id="emp_code" name="emp_code" value="<?= htmlspecialchars($empCode, ENT_QUOTES, 'UTF-8') ?>" autocomplete="username" <?= $loginMode === 'legacy' ? 'required autofocus' : 'disabled' ?> class="w-full px-4 py-3 bg-slate-900/90 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-mono" />
-        </div>
-
-        <div>
-          <label for="password" class="block text-xs font-bold text-slate-300 mb-1.5">كلمة المرور</label>
-          <input
-            type="password"
-            id="password"
-            name="password"
-            placeholder="••••••••"
-            autocomplete="current-password"
-            required
-            class="w-full px-4 py-3 bg-slate-900/90 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
-          />
-        </div>
-
-        <button type="submit" id="loginBtn" class="w-full py-3.5 rounded-xl font-bold text-white text-sm btn-gradient mt-2 flex items-center justify-center gap-2">
-          <span class="btn-content flex items-center gap-2">
-            <span>تسجيل الدخول</span>
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
-          </span>
-        </button>
-      </form>
-
-      <button type="button" id="legacyLoginToggle" class="mt-4 w-full text-center text-xs text-slate-500 hover:text-teal-700 underline underline-offset-4">
-        <?= $loginMode === 'legacy' ? 'الدخول بالبريد الإلكتروني' : 'حساب قديم بدون بريد؟ ادخل بكود الموظف مؤقتاً' ?>
-      </button>
-
-      <div class="mt-5 text-center">
-        <a href="/BIC2_Mvp/index.php" class="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors">
-          <span>← العودة للواجهة التعريفية للمؤسسات (Landing Page)</span>
+<body class="hera-auth-page">
+  <main class="auth-layout" aria-label="HERA sign in">
+    <section class="auth-form-side" aria-labelledby="login-title">
+      <div class="auth-form-wrap">
+        <a href="/BIC2_Mvp/index.php" class="auth-brand" aria-label="HERA">
+          <img src="/BIC2_Mvp/assets/hera-icon-light.svg" alt="" width="48" height="48" />
+          <span class="auth-brand-copy"><strong>HERA</strong><span>AI HR &amp; Recruitment</span></span>
         </a>
+
+        <header class="auth-heading">
+          <p class="auth-eyebrow">HERA WORKSPACE</p>
+          <h1 id="login-title">أهلًا بعودتك</h1>
+          <p>سجّل الدخول لمواصلة بناء قرارات توظيف أكثر ذكاءً.</p>
+        </header>
+
+        <?php if ($successMessage): ?>
+          <div class="auth-alert auth-alert-success" role="status">
+            <span aria-hidden="true">✓</span><?= htmlspecialchars($successMessage, ENT_QUOTES, 'UTF-8') ?>
+          </div>
+        <?php endif; ?>
+        <?php if ($error): ?>
+          <div class="auth-alert <?= $isServiceError ? 'auth-alert-warning' : 'auth-alert-error' ?>" role="alert">
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="M12 8v4m0 4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            <span><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></span>
+          </div>
+        <?php endif; ?>
+
+        <form id="loginForm" method="POST" action="/BIC2_Mvp/login.php" class="auth-form">
+          <input type="hidden" name="login_nonce" value="<?= htmlspecialchars($_SESSION['login_nonce'], ENT_QUOTES, 'UTF-8') ?>" />
+          <input type="hidden" name="login_mode" id="loginMode" value="<?= htmlspecialchars($loginMode, ENT_QUOTES, 'UTF-8') ?>" />
+
+          <div id="emailLoginField" class="auth-field" <?= $loginMode === 'legacy' ? 'hidden' : '' ?>>
+            <label for="email">البريد الإلكتروني</label>
+            <input type="email" id="email" name="email" value="<?= htmlspecialchars($email, ENT_QUOTES, 'UTF-8') ?>" placeholder="name@company.com" autocomplete="username" dir="ltr" <?= $loginMode === 'legacy' ? 'disabled' : 'required autofocus' ?> />
+          </div>
+          <div id="legacyLoginField" class="auth-field" <?= $loginMode !== 'legacy' ? 'hidden' : '' ?>>
+            <label for="emp_code">كود الموظف للحسابات القديمة</label>
+            <input type="text" id="emp_code" name="emp_code" value="<?= htmlspecialchars($empCode, ENT_QUOTES, 'UTF-8') ?>" autocomplete="username" dir="ltr" <?= $loginMode === 'legacy' ? 'required autofocus' : 'disabled' ?> />
+          </div>
+          <div class="auth-field">
+            <label for="password">كلمة المرور</label>
+            <div class="password-control" dir="ltr">
+              <input type="password" id="password" name="password" placeholder="••••••••" autocomplete="current-password" required />
+              <button type="button" class="password-toggle" id="passwordToggle" aria-label="إظهار كلمة المرور" aria-pressed="false">
+                <svg class="eye-open" aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.7"/></svg>
+                <svg class="eye-closed" aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="m3 3 18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.9 5.2A10.8 10.8 0 0 1 12 5c6.4 0 10 7 10 7a16 16 0 0 1-3.1 3.8M6.2 6.2C3.5 8 2 12 2 12s3.6 7 10 7a10 10 0 0 0 4-.8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="auth-form-meta">
+            <details class="reset-help">
+              <summary>نسيت كلمة المرور؟</summary>
+              <p>تواصل مع مسؤول الموارد البشرية في شركتك لإعادة تعيين كلمة المرور.</p>
+            </details>
+          </div>
+
+          <button type="submit" id="loginBtn" class="auth-submit">
+            <span class="auth-submit-label">تسجيل الدخول</span>
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none"><path d="M5 12h14m-6-6 6 6-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </form>
+
+        <div class="auth-divider"><span>أو</span></div>
+        <button type="button" id="legacyLoginToggle" class="auth-alternate">
+          <?= $loginMode === 'legacy' ? 'الدخول بالبريد الإلكتروني' : 'الدخول بكود الموظف لحساب قديم' ?>
+        </button>
+        <p class="auth-account-note">لا تملك حسابًا؟ تواصل مع مسؤول الموارد البشرية.</p>
+        <p class="auth-copyright">© <?= date('Y') ?> HERA · جميع الحقوق محفوظة</p>
       </div>
+    </section>
 
-    </div>
+    <aside class="auth-visual" aria-label="HERA intelligent recruitment preview">
+      <div class="visual-orbit visual-orbit-one"></div><div class="visual-orbit visual-orbit-two"></div>
+      <div class="visual-content">
+        <div class="visual-copy">
+          <span class="visual-kicker"><span class="kicker-dot"></span> HERA AI RECRUITMENT</span>
+          <h2>التوظيف الأذكى يبدأ مع HERA</h2>
+          <p>ارتقِ بالتوظيف عبر فحص ذكي للسير الذاتية، ومطابقة دقيقة للمواهب، وقرارات إنسانية مدعومة بالذكاء الاصطناعي.</p>
+        </div>
 
-    <p class="text-center text-slate-500 text-xs mt-6">© <?= date('Y') ?> منصة BIC2 — جميع الحقوق محفوظة</p>
-  </div>
+        <div class="product-preview" aria-hidden="true">
+          <div class="preview-topbar"><div class="preview-brand"><img src="/BIC2_Mvp/assets/hera-icon-dark.svg" alt="" /><span>Talent insights</span></div><span class="preview-live"><i></i> Live analysis</span></div>
+          <div class="preview-body">
+            <div class="preview-title-row"><div><span class="preview-overline">CANDIDATE MATCH</span><strong>Senior Product Designer</strong></div><span class="preview-count">12 profiles</span></div>
+            <div class="candidate-card candidate-featured">
+              <div class="candidate-avatar">SM</div><div class="candidate-info"><strong>Sarah Mitchell</strong><span>Product Designer · 6 years</span><div class="skill-list"><span>Product design</span><span>Figma</span><span>Research</span></div></div>
+              <div class="match-score"><span class="score-ring"><b>92</b></span><small>match</small></div>
+            </div>
+            <div class="insight-card"><span class="insight-icon"><svg viewBox="0 0 24 24" fill="none"><path d="m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Zm6 11 .9 2.1L21 17l-2.1.9L18 20l-.9-2.1L15 17l2.1-.9L18 14Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg></span><div><strong>Strong experience match</strong><span>5 of 6 role requirements found</span></div><span class="insight-check">✓</span></div>
+            <div class="preview-footer"><span><i class="human-dot"></i> Human review enabled</span><span class="preview-progress"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></div>
+          </div>
+          <div class="floating-chip"><span class="floating-check">✓</span><span><b>Skills verified</b><small>Evidence from CV</small></span></div>
+          <div class="floating-match"><span>↗</span><div><b>Top match</b><small>Candidate ranked #1</small></div></div>
+        </div>
+        <div class="visual-bottom"><span>HUMAN-LED · AI-ASSISTED</span><span>HIRING WITH CLARITY</span></div>
+      </div>
+    </aside>
+  </main>
 
   <script>
-    let loginSubmitting = false;
-    document.getElementById('legacyLoginToggle').addEventListener('click', function () {
-      const useLegacy = document.getElementById('loginMode').value !== 'legacy';
-      document.getElementById('loginMode').value = useLegacy ? 'legacy' : 'email';
-      document.getElementById('emailLoginField').hidden = useLegacy;
-      document.getElementById('legacyLoginField').hidden = !useLegacy;
-      document.getElementById('email').disabled = useLegacy;
-      document.getElementById('email').required = !useLegacy;
-      document.getElementById('emp_code').disabled = !useLegacy;
-      document.getElementById('emp_code').required = useLegacy;
-      document.getElementById('legacyLoginToggle').textContent = useLegacy
-        ? 'الدخول بالبريد الإلكتروني'
-        : 'حساب قديم بدون بريد؟ ادخل بكود الموظف مؤقتاً';
-    });
-    document.getElementById('loginForm').addEventListener('submit', function (event) {
-      if (loginSubmitting) {
-        event.preventDefault();
-        return;
+    (() => {
+      const form = document.getElementById('loginForm');
+      const mode = document.getElementById('loginMode');
+      const emailField = document.getElementById('emailLoginField');
+      const legacyField = document.getElementById('legacyLoginField');
+      const email = document.getElementById('email');
+      const employeeCode = document.getElementById('emp_code');
+      const password = document.getElementById('password');
+      const passwordToggle = document.getElementById('passwordToggle');
+      const toggleButton = document.getElementById('legacyLoginToggle');
+      let loginSubmitting = false;
+      const isArabic = () => document.documentElement.lang === 'ar';
+
+      function updatePasswordToggleLabel() {
+        const visible = password.type === 'text';
+        passwordToggle.setAttribute('aria-pressed', String(visible));
+        passwordToggle.setAttribute('aria-label', visible
+          ? (isArabic() ? 'إخفاء كلمة المرور' : 'Hide password')
+          : (isArabic() ? 'إظهار كلمة المرور' : 'Show password'));
       }
-      loginSubmitting = true;
-      const btn = document.getElementById('loginBtn');
-      btn.innerHTML = `<span class="btn-content flex items-center gap-2"><svg class="animate-spin w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path></svg> جارٍ التحقق...</span>`;
-      btn.disabled = true;
-    });
+      passwordToggle.addEventListener('click', () => {
+        password.type = password.type === 'password' ? 'text' : 'password';
+        updatePasswordToggleLabel();
+        password.focus();
+      });
+      window.addEventListener('hera:languagechange', updatePasswordToggleLabel);
+
+      toggleButton.addEventListener('click', () => {
+        const useLegacy = mode.value !== 'legacy';
+        mode.value = useLegacy ? 'legacy' : 'email';
+        emailField.hidden = useLegacy;
+        legacyField.hidden = !useLegacy;
+        email.disabled = useLegacy;
+        email.required = !useLegacy;
+        employeeCode.disabled = !useLegacy;
+        employeeCode.required = useLegacy;
+        toggleButton.textContent = useLegacy
+          ? (isArabic() ? 'الدخول بالبريد الإلكتروني' : 'Sign in with email')
+          : (isArabic() ? 'الدخول بكود الموظف لحساب قديم' : 'Use employee code for an older account');
+        (useLegacy ? employeeCode : email).focus();
+      });
+
+      form.addEventListener('submit', (event) => {
+        if (loginSubmitting) { event.preventDefault(); return; }
+        loginSubmitting = true;
+        const button = document.getElementById('loginBtn');
+        button.disabled = true;
+        button.setAttribute('aria-busy', 'true');
+        button.querySelector('.auth-submit-label').textContent = isArabic() ? 'جارٍ التحقق...' : 'Signing in...';
+      });
+      updatePasswordToggleLabel();
+    })();
   </script>
 </body>
 </html>

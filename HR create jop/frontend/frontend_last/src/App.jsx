@@ -44,9 +44,9 @@ function AuthenticatedRoutes() {
       <Routes>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
-        {/* Authentication flow */}
+        {/* The shared HR portal owns sign-in; keep only the SSO return screen here. */}
+        <Route path="/login" element={<Login />} />
         <Route element={<AuthLayout />}>
-          <Route path="/login" element={<Login />} />
           <Route path="/sso/callback" element={<SsoCallback />} />
         </Route>
 

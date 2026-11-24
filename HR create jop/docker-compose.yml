@@ -30,6 +30,7 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-hr_ai_assistant}:${POSTGRES_PASSWORD:-hr_ai_assistant}@postgres:5432/${POSTGRES_DB:-hr_ai_assistant}
       AI_PROVIDER: ${AI_PROVIDER:-openrouter}
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost:8080}
       OLLAMA_API_KEY: ${OLLAMA_API_KEY:-}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-https://ollama.com/v1}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma4:31b}
@@ -80,6 +81,7 @@ services:
     env_file:
       - ../HR manager/.env
     environment:
+      HERA_API_BASE_URL: http://backend:8000/api/v1
       DB_HOST: postgres
       DB_PORT: "5432"
       DB_NAME: ${POSTGRES_DB:-hr_ai_assistant}
@@ -90,6 +92,8 @@ services:
       - ../HR manager:/var/www/html/BIC2_Mvp
     depends_on:
       postgres:
+        condition: service_healthy
+      backend:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "php", "-r", "exit(in_array('pgsql', PDO::getAvailableDrivers(), true) ? 0 : 1);"]

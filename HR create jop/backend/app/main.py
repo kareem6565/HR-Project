@@ -35,7 +35,7 @@ logger = logging.getLogger("app.main")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Start the screening worker thread on startup and stop it on shutdown."""
+    """Start background workers and stop them cleanly during shutdown."""
     ai_config = resolve_ai_config(settings)
     logger.info(
         "Effective AI provider configured: provider=%s model=%s demo=%s",
@@ -43,27 +43,53 @@ async def lifespan(app: FastAPI):
         ai_config["model"] or "none",
         ai_config["is_fake"],
     )
-    if not settings.enable_screening_worker:
-        yield
-        return
+    workers: list[object] = []
+    worker_threads: list[threading.Thread] = []
 
-    from app.worker import ScreeningWorker
+    if settings.enable_outbox_worker:
+        try:
+            from app.services.outbox_worker import OutboxWorker
 
-    worker = ScreeningWorker()
-    worker_thread = threading.Thread(
-        target=worker.run_loop,
-        kwargs={"poll_interval_seconds": 2.0},
-        daemon=True,
-        name="screening-worker",
-    )
-    worker_thread.start()
-    logger.info("Screening worker thread started.")
+            outbox_worker = OutboxWorker()
+            outbox_thread = threading.Thread(
+                target=outbox_worker.run_loop,
+                kwargs={"poll_interval_seconds": 2.0},
+                daemon=True,
+                name="outbox-worker",
+            )
+            outbox_thread.start()
+            workers.append(outbox_worker)
+            worker_threads.append(outbox_thread)
+            logger.info("Outbox worker thread started.")
+        except Exception:
+            logger.exception("Failed to start outbox worker.")
+
+    if settings.enable_screening_worker:
+        from app.worker import ScreeningWorker
+
+        screening_worker = ScreeningWorker()
+        screening_thread = threading.Thread(
+            target=screening_worker.run_loop,
+            kwargs={"poll_interval_seconds": 2.0},
+            daemon=True,
+            name="screening-worker",
+        )
+        screening_thread.start()
+        workers.append(screening_worker)
+        worker_threads.append(screening_thread)
+        logger.info("Screening worker thread started.")
+
     try:
         yield
     finally:
-        worker.request_shutdown()
-        worker_thread.join(timeout=2.0)
-        logger.info("Screening worker thread stopped.")
+        for worker in workers:
+            try:
+                worker.request_shutdown()
+            except Exception:
+                logger.exception("Failed to stop background worker.")
+        for worker_thread in worker_threads:
+            worker_thread.join(timeout=2.0)
+        logger.info("Background workers stopped.")
 
 
 def create_app() -> FastAPI:

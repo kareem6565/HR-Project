@@ -817,7 +817,7 @@ def test_cannot_upload_resume_to_cross_tenant_candidate(
 
 
 def test_cannot_schedule_interview_with_cross_tenant_resources(
-    client, recruiter_a, seeded_resources
+    client, recruiter_a, admin_a, seeded_resources
 ) -> None:
     """Scheduling an interview with cross-tenant candidate, job, or question set returns 404."""
     headers = auth_header(recruiter_a)
@@ -852,6 +852,12 @@ def test_cannot_schedule_interview_with_cross_tenant_resources(
     assert resp.status_code == 404
 
     # 3. Cross-tenant question set
+    advance = client.post(
+        f"/api/v1/job-applications/{res['app_a'].id}/decisions",
+        json={"decision": "advance"},
+        headers=headers,
+    )
+    assert advance.status_code == 201
     resp = client.post(
         "/api/v1/interviews",
         json={
@@ -860,6 +866,7 @@ def test_cannot_schedule_interview_with_cross_tenant_resources(
             "interview_type": "technical",
             "scheduled_date": "2026-11-15",
             "scheduled_time": "11:00",
+            "interviewer_user_id": str(admin_a.id),
             "interview_question_set_id": str(res["qset_b"].id),
         },
         headers=headers,

@@ -265,6 +265,7 @@ if ($isNightShift) {
     }
   </style>
   <link rel="stylesheet" href="/BIC2_Mvp/assets/hera-brand.css?v=hera-motion-20261116-1" />
+  <link rel="stylesheet" href="/BIC2_Mvp/assets/employee-chatbot.css" />
   <script src="/BIC2_Mvp/assets/hera-language.js" defer></script>
 </head>
 <body class="hera-theme min-h-screen flex">
@@ -853,5 +854,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadEmployeeNotifications();
 });
 </script>
+<?php require __DIR__ . '/includes/employee-chatbot.php'; ?>
+<script src="/BIC2_Mvp/assets/employee-chatbot.js" defer></script>
 </body>
 </html>

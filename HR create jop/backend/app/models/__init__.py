@@ -7,14 +7,18 @@ from app.models.candidate_invitation import CandidateInvitation
 from app.models.candidate_profile import CandidateProfile
 from app.models.chat_message import ChatMessage
 from app.models.chat_thread import ChatThread
+from app.models.calendar_sync_outbox import CalendarSyncOutbox
 from app.models.github_evidence_analysis import GitHubEvidenceAnalysis
 from app.models.hr_decision import HRDecision
 from app.models.hr_feedback_correction import HRFeedbackCorrection
+from app.models.hr_google_connection import HRGoogleConnection
+from app.models.hr_google_oauth_state import HRGoogleOAuthState
 from app.models.hr_sso_assertion_use import HRSSOAssertionUse
 from app.models.interview import Interview
 from app.models.interview_availability import InterviewAvailability
 from app.models.interview_question import InterviewQuestion
 from app.models.interview_question_set import InterviewQuestionSet
+from app.models.interview_slot_reservation import InterviewSlotReservation
 from app.models.job import Job
 from app.models.job_application import JobApplication
 from app.models.job_distribution import JobDistribution, JobDistributionView
@@ -27,6 +31,7 @@ from app.models.resume import Resume
 from app.models.screening_batch import ScreeningBatch
 from app.models.screening_batch_item import ScreeningBatchItem
 from app.models.talent_pool_consent import TalentPoolConsent
+from app.models.transactional_email_outbox import TransactionalEmailOutbox
 from app.models.user import User
 from app.models.workflow_run import WorkflowRun
 from app.models.workflow_step_trace import WorkflowStepTrace
@@ -37,6 +42,7 @@ __all__ = [
     "AIUsageCounter",
     "AIPolicyControl",
     "AuditLog",
+    "CalendarSyncOutbox",
     "Candidate",
     "CandidateEvaluation",
     "CandidateInvitation",
@@ -46,11 +52,14 @@ __all__ = [
     "HRDecision",
     "HRFeedbackCorrection",
     "HRSSOAssertionUse",
+    "HRGoogleConnection",
+    "HRGoogleOAuthState",
     "GitHubEvidenceAnalysis",
     "Interview",
     "InterviewAvailability",
     "InterviewQuestion",
     "InterviewQuestionSet",
+    "InterviewSlotReservation",
     "Job",
     "JobApplication",
     "JobDistribution",
@@ -64,6 +73,7 @@ __all__ = [
     "ScreeningBatch",
     "ScreeningBatchItem",
     "TalentPoolConsent",
+    "TransactionalEmailOutbox",
     "User",
     "WorkflowRun",
     "WorkflowStepTrace",

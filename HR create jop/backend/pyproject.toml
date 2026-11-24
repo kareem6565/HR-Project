@@ -46,6 +46,7 @@ testpaths = ["tests"]
 pythonpath = ["."]
 markers = [
     "soal: tests that require a live SOAL_API_KEY (skipped otherwise)",
+    "postgres: tests that require real PostgreSQL concurrency semantics (skipped if the test engine falls back to SQLite)",
 ]
 
 [tool.ruff]

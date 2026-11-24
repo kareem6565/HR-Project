@@ -16,6 +16,8 @@ export function ThemeProvider({ children }) {
 
   useLayoutEffect(() => {
     document.documentElement.dataset.theme = theme;
+    const favicon = document.querySelector('link[rel="icon"]');
+    if (favicon) favicon.href = `/brand/hera-icon-${theme === "dark" ? "dark" : "light"}.svg`;
     try {
       localStorage.setItem(STORAGE_KEY, theme);
     } catch {
@@ -31,4 +33,8 @@ export function useTheme() {
   const context = useContext(ThemeContext);
   if (!context) throw new Error("useTheme must be used inside ThemeProvider");
   return context;
+}
+
+export function useThemeMode() {
+  return useContext(ThemeContext)?.theme ?? getInitialTheme();
 }

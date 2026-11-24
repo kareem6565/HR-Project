@@ -11,10 +11,13 @@ from app.api.v1.routes.candidate_portal import router as candidate_portal_router
 from app.api.v1.routes.candidate_profiles import router as candidate_profiles_router
 from app.api.v1.routes.candidates import router as candidates_router
 from app.api.v1.routes.chat import router as chat_router
+from app.api.v1.routes.employee_chat import router as employee_chat_router
 from app.api.v1.routes.evaluations import router as evaluations_router
 from app.api.v1.routes.feedback_learning import router as feedback_learning_router
 from app.api.v1.routes.github_evidence import public_router as github_evidence_public_router
 from app.api.v1.routes.github_evidence import router as github_evidence_router
+from app.api.v1.routes.google_calendar import public_router as google_calendar_public_router
+from app.api.v1.routes.google_calendar import router as google_calendar_router
 from app.api.v1.routes.health import router as health_router
 from app.api.v1.routes.hr_decisions import router as hr_decisions_router
 from app.api.v1.routes.interview_question_sets import router as interview_question_sets_router
@@ -39,6 +42,7 @@ recruitment_router = APIRouter(dependencies=[Depends(require_roles("admin", "rec
 
 api_router.include_router(health_router, tags=["health"])
 api_router.include_router(auth_router, tags=["auth"])
+api_router.include_router(employee_chat_router, tags=["employee-chat"])
 recruitment_router.include_router(audit_logs_router, tags=["audit-logs"])
 recruitment_router.include_router(users_router, tags=["users"])
 recruitment_router.include_router(jobs_router, tags=["jobs"])
@@ -62,10 +66,10 @@ recruitment_router.include_router(interviews_router, tags=["interviews"])
 recruitment_router.include_router(availability_router, tags=["availability"])
 recruitment_router.include_router(feedback_learning_router, tags=["feedback-learning"])
 recruitment_router.include_router(github_evidence_router, tags=["github-evidence"])
-recruitment_router.include_router(github_evidence_router, tags=["github-evidence"])
 recruitment_router.include_router(interview_questions_router, tags=["interview-questions"])
 recruitment_router.include_router(interview_question_sets_router, tags=["interview-questions"])
 recruitment_router.include_router(chat_router, tags=["chat"])
+recruitment_router.include_router(google_calendar_router, tags=["google-calendar"])
 
 # Candidate-facing invitation endpoints are intentionally public. Their HR-only
 # invitation-creation endpoint enforces recruiter/admin access at the route.
@@ -73,4 +77,6 @@ api_router.include_router(candidate_portal_router, tags=["candidate-portal"])
 api_router.include_router(talent_pool_consent_router, tags=["talent-pool-consent"])
 api_router.include_router(github_evidence_public_router, tags=["github-evidence-consent"])
 api_router.include_router(public_jobs_router, tags=["public-jobs"])
+# Google OAuth browser callback is public (validated via short-lived, hashed, one-time state).
+api_router.include_router(google_calendar_public_router, tags=["google-calendar"])
 api_router.include_router(recruitment_router)

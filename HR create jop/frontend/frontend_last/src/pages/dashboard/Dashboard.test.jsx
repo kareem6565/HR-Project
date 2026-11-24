@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import Dashboard from "./Dashboard";
 import {
@@ -36,8 +36,9 @@ describe("Recruitment dashboard", () => {
     expect(screen.getByText("HERA · AI-ASSISTED, HR-LED").previousElementSibling.getAttribute("aria-hidden")).toBe("true");
     expect(screen.getByText("Live workspace snapshot")).toBeTruthy();
     expect(screen.getByRole("link", { name: /Create vacancy/i }).getAttribute("href")).toBe("/jobs/new");
-    expect(screen.getByRole("link", { name: /Review applications/i }).getAttribute("href")).toBe("/applications");
-    expect(screen.getByRole("link", { name: "Applications" }).getAttribute("href")).toBe("/applications");
+    const applicationLinks = screen.getAllByRole("link", { name: /Review applications/i });
+    expect(applicationLinks).toHaveLength(2);
+    expect(applicationLinks.every((link) => link.getAttribute("href") === "/applications")).toBe(true);
     expect(screen.getByRole("link", { name: /Manage jobs/i }).getAttribute("href")).toBe("/jobs");
     expect(screen.getByRole("img", { name: "Bar chart of applications for each job" })).toBeTruthy();
     expect(screen.getByRole("table", { name: "Application counts by job" })).toBeTruthy();

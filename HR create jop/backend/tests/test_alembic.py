@@ -14,4 +14,4 @@ def test_single_alembic_head() -> None:
     cfg.set_main_option("script_location", str(backend_root / "alembic"))
     script = ScriptDirectory.from_config(cfg)
     heads = script.get_heads()
-    assert heads == ["032_resume_ocr_metadata"], f"Expected single head, got {heads}"
+    assert heads == ["033_merge_main_a5"], f"Expected single head, got {heads}"

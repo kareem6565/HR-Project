@@ -33,10 +33,12 @@ class CandidatePortalViewResponse(BaseModel):
     department: str | None = None
     location: str | None = None
     employment_type: str | None = None
+    interview_id: UUID | None = None
     scheduled_date: str | None = None
     scheduled_time: str | None = None
     scheduled_duration_minutes: int | None = None
     timezone: str | None = None
+    can_reschedule: bool = False
 
 
 class AvailableSlotResponse(BaseModel):
@@ -47,10 +49,18 @@ class AvailableSlotResponse(BaseModel):
     end_time: str
     duration_minutes: int
     timezone: str
+    start_at: datetime
 
 
 class CandidateBookSlotRequest(BaseModel):
     token: str = Field(min_length=32, max_length=64)
+    availability_id: UUID
+    scheduled_time: str = Field(min_length=1, max_length=20)
+
+
+class CandidateRescheduleRequest(BaseModel):
+    token: str = Field(min_length=32, max_length=64)
+    interview_id: UUID
     availability_id: UUID
     scheduled_time: str = Field(min_length=1, max_length=20)
 
@@ -76,6 +86,8 @@ class CandidateBookingResponse(BaseModel):
     scheduled_time: str
     scheduled_duration_minutes: int
     timezone: str
+    interview_id: UUID | None = None
+    rescheduled: bool = False
 
 
 class AvailabilityCreateRequest(BaseModel):

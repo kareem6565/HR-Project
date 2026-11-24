@@ -1,17 +1,22 @@
-import { useEffect } from "react";
-import { HR_MANAGER_WORKSPACE_URL } from "../../config/hrManager";
+import React, { useEffect } from "react";
+import { HR_MANAGER_LOGIN_URL } from "../../config/hrManager";
 
-const redirectToHRManager = (url) => window.location.replace(url);
+const redirectToSharedPortal = (url) => window.location.replace(url);
 
-/**
- * HERA recruitment uses the HR Manager sign-in as its only user-facing login.
- * The HR workspace redirects unauthenticated visitors to its PHP login and
- * exchanges authenticated HR sessions through the existing SSO callback.
- */
-export default function Login({ redirect = redirectToHRManager }) {
+export default function Login({ redirect = redirectToSharedPortal }) {
   useEffect(() => {
-    redirect(HR_MANAGER_WORKSPACE_URL);
+    redirect(HR_MANAGER_LOGIN_URL);
   }, [redirect]);
 
-  return null;
+  return (
+    <section className="auth-card panel" aria-labelledby="portal-redirect-title">
+      <h1 id="portal-redirect-title">Continue through Smart HR</h1>
+      <p className="auth-subtitle">
+        HERA sign-in is managed by the shared HR portal. Redirecting you to sign in…
+      </p>
+      <a className="btn btn-primary wide" href={HR_MANAGER_LOGIN_URL}>
+        Open the shared HR portal
+      </a>
+    </section>
+  );
 }

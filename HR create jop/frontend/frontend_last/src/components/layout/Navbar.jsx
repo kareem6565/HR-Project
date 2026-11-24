@@ -1,12 +1,14 @@
 import React from "react";
-import { LogOut, Menu, User as UserIcon, X } from "lucide-react";
+import { BriefcaseBusiness, LogOut, Menu, Moon, Sun, X } from "lucide-react";
 import useAuth from "../../hooks/useAuth";
+import { useTheme } from "../../context/ThemeContext";
 import { BRAND } from "../../config/brand";
 import { HR_MANAGER_LOGOUT_URL } from "../../config/hrManager";
 import { getTitleForPath } from "../../config/routes";
 
 export default function Navbar({ pathname, isNavigationOpen = false, onMenuToggle }) {
   const { user, logout } = useAuth();
+  const { theme, setTheme } = useTheme();
 
   const matchedTitle = getTitleForPath(pathname);
   const handleLogout = () =>
@@ -30,53 +32,25 @@ export default function Navbar({ pathname, isNavigationOpen = false, onMenuToggl
       </div>
 
       <div className="top-actions">
+        <button
+          className="theme-toggle"
+          type="button"
+          aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+          aria-pressed={theme === "dark"}
+          title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+        >
+          {theme === "dark" ? <Sun size={17} aria-hidden="true" /> : <Moon size={17} aria-hidden="true" />}
+          <span className="theme-toggle-label">{theme === "dark" ? "Light mode" : "Dark mode"}</span>
+        </button>
 
         {user && (
           <div
             className="user-profile-chip"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "10px",
-              padding: "6px 12px",
-              border: "1px solid #eef2f6",
-              borderRadius: "12px",
-              background: "#f8fafc",
-            }}
+            aria-label={`Signed in as ${formatRole(user.role)}`}
           >
-            <div
-              className="avatar"
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: "50%",
-                fontSize: 13,
-                fontWeight: 600,
-              }}
-            >
-              {user.full_name ? user.full_name.charAt(0).toUpperCase() : <UserIcon size={16} />}
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.2 }}>
-              <strong style={{ fontSize: 13, color: "#344054" }}>
-                {user.full_name || user.email}
-              </strong>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
-                <span
-                  style={{
-                    fontSize: 10,
-                    textTransform: "uppercase",
-                    fontWeight: 700,
-                    padding: "1px 6px",
-                    borderRadius: 4,
-                    background: user.role === "admin" ? "var(--hera-teal-light)" : "#f2f4f7",
-                    color: user.role === "admin" ? "var(--hera-teal)" : "#475467",
-                  }}
-                >
-                  {user.role}
-                </span>
-                <span style={{ fontSize: 11, color: "#98a2b3" }}>{user.email}</span>
-              </div>
-            </div>
+            <span className="user-profile-avatar" aria-hidden="true"><BriefcaseBusiness size={15} /></span>
+            <span className="user-profile-role">{formatRole(user.role)}</span>
           </div>
         )}
 
@@ -92,4 +66,16 @@ export default function Navbar({ pathname, isNavigationOpen = false, onMenuToggl
       </div>
     </header>
   );
+}
+
+function formatRole(role) {
+  const labels = {
+    admin: "Administrator",
+    administrator: "Administrator",
+    recruiter: "Recruiter",
+    hr_manager: "HR Manager",
+    hiring_manager: "Hiring Manager",
+  };
+  const normalized = String(role || "User").trim().toLowerCase();
+  return labels[normalized] || normalized.replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }

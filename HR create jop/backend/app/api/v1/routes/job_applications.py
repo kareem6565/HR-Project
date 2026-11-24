@@ -17,7 +17,7 @@ from app.api.v1.schemas.job_applications import (
 from app.api.v1.schemas.review import ReviewBundleResponse, ReviewCandidateInfo
 from app.core.config import settings
 from app.core.database import get_db
-from app.models import ScreeningBatch, ScreeningBatchItem
+from app.models import CandidateEvaluation, ScreeningBatch, ScreeningBatchItem
 from app.services.job_application_service import JobApplicationService
 from app.services.review_service import ReviewService
 
@@ -40,7 +40,22 @@ def _screening_status(
         .order_by(ScreeningBatchItem.created_at.desc(), ScreeningBatchItem.id.desc())
         .limit(1)
     )
-    if item is None:
+    if item is None or item.status == "duplicate":
+        evaluation_status = db.scalar(
+            select(CandidateEvaluation.status)
+            .where(
+                CandidateEvaluation.job_application_id == application_id,
+                CandidateEvaluation.is_current.is_(True),
+            )
+            .limit(1)
+        )
+        if evaluation_status is not None:
+            return {
+                "queued": "queued",
+                "running": "processing",
+                "completed": "completed",
+                "failed": "failed",
+            }.get(evaluation_status, "not_started")
         return {
             "analysis_pending": "queued",
             "analyzing": "processing",

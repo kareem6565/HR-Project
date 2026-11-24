@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Activity, BriefcaseBusiness, CalendarDays, CheckCircle2, ChevronDown, ClipboardList, Filter, Gauge, Link2, RotateCcw, Search, SlidersHorizontal, Sparkles, UserRound } from "lucide-react";
+import { Activity, BriefcaseBusiness, CalendarDays, CheckCircle2, ChevronDown, ClipboardList, Gauge, Link2, RotateCcw, Search, SlidersHorizontal, Sparkles, UserRound } from "lucide-react";
 import DataTable from "../../components/common/DataTable";
 import Pagination from "../../components/common/Pagination";
 import LoadingSpinner from "../../components/common/LoadingSpinner";
@@ -119,26 +119,47 @@ export default function ApplicationsList() {
       </div>
 
       <div className="application-dashboard-filters panel" aria-label="Application filters">
+        <div className="application-filter-groups">
+          {APPLICATION_STATUS_GROUPS.map((group, groupIndex) => (
+            <div className="application-filter-group" role="group" aria-label={group.label} key={group.id}>
+              <div className="application-filter-options">
+                {groupIndex === 0 && (
+                  <button
+                    type="button"
+                    className={`filter-tab ${filter === "all" ? "active" : ""}`}
+                    aria-pressed={filter === "all"}
+                    onClick={() => { setFilter("all"); setPage(1); }}
+                  >
+                    All
+                  </button>
+                )}
+                {group.statuses.map((status) => (
+                  <button
+                    type="button"
+                    className={`filter-tab ${filter === status ? "active" : ""}`}
+                    aria-pressed={filter === status}
+                    key={status}
+                    onClick={() => { setFilter(status); setPage(1); }}
+                  >
+                    {APPLICATION_STATUS_LABELS[status]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+        <p className="application-filter-note">
+          Application states mirror an HR decision recorded for the candidate.
+        </p>
         <div className="application-filter-primary-row">
           <label className="application-filter-search">
             <span><Search size={14} aria-hidden="true" /> Search</span>
-            <input type="search" value={searchInput} onChange={(event) => { setSearchInput(event.target.value); setPage(1); }} placeholder="Candidate name, email, or job" />
+            <input type="search" aria-label="Search candidates or jobs" value={searchInput} onChange={(event) => { setSearchInput(event.target.value); setPage(1); }} placeholder="Candidate name, email, or job" />
           </label>
           <label>
             <span>Job</span>
             <select value={jobId} onChange={(event) => { setJobId(event.target.value); setPage(1); }}>
               <option value="">All jobs</option>{jobs.map((job) => <option key={job.id} value={job.id}>{job.title}</option>)}
-            </select>
-          </label>
-          <label>
-            <span><Filter size={14} aria-hidden="true" /> Application status</span>
-            <select value={filter} onChange={(event) => { setFilter(event.target.value); setPage(1); }}>
-              <option value="all">All statuses</option>
-              {APPLICATION_STATUS_GROUPS.map((group) => (
-                <optgroup label={group.label} key={group.id}>
-                  {group.statuses.map((status) => <option key={status} value={status}>{APPLICATION_STATUS_LABELS[status]}</option>)}
-                </optgroup>
-              ))}
             </select>
           </label>
           <div className="application-filter-actions">

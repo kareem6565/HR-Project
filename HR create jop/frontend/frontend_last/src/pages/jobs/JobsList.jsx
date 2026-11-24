@@ -93,7 +93,7 @@ export default function JobsList() {
       <div className="jobs-content-grid">
         <div className="jobs-list-column">
           {!jobs.length ? (
-            <div className="panel jobs-empty-panel"><EmptyState message="No jobs posted yet." /></div>
+            <div className="panel jobs-empty-panel"><EmptyState message="No jobs posted yet." illustration="/brand/illustrations/jobs.png" /></div>
           ) : (
             <div className="panel table-panel jobs-table-panel">
               <div className="jobs-table-heading">

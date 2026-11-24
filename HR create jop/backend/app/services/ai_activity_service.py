@@ -284,6 +284,7 @@ def _rerun_candidate_evaluation(
     from app.core.config import settings
     from app.models import JobApplication
     from app.services.errors import NotFoundError
+    from app.services.job_profile_requirements import get_effective_job_requirements
     from app.services.job_profile_service import JobProfileService
     from app.services.job_service import JobService
     from app.services.resume_details_service import (
@@ -304,9 +305,7 @@ def _rerun_candidate_evaluation(
     ):
         if profile.status == "approved":
             approved_profile = profile
-    requirements = (
-        approved_profile.profile_data.get("requirements") if approved_profile is not None else []
-    )
+    requirements, _ = get_effective_job_requirements(job, approved_profile)
     resume = ResumeService().get(
         db,
         resume_id=application.resume_id,

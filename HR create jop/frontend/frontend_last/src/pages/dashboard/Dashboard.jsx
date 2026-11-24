@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, BriefcaseBusiness, ClipboardList, Plus, Users, UserRoundCheck } from "lucide-react";
+import { ArrowRight, BriefcaseBusiness, ClipboardList, Plus, Sparkles, Users, UserRoundCheck } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -58,6 +58,13 @@ export default function Dashboard() {
   }
 
   const hasApplications = stats.applications > 0;
+  const topApplicationJob = applicationsByJob.reduce(
+    (top, item) => (!top || item.applications > top.applications ? item : top),
+    null,
+  );
+  const topJobShare = topApplicationJob && stats.applications
+    ? Math.round((topApplicationJob.applications / stats.applications) * 100)
+    : 0;
 
   return (
     <div className="dashboard dashboard-redesign">
@@ -79,7 +86,7 @@ export default function Dashboard() {
             <Link className="btn btn-secondary dashboard-action-secondary" to="/applications">
               Review applications <ArrowRight size={15} aria-hidden="true" />
             </Link>
-            <Link className="btn btn-secondary dashboard-action-secondary" to="/applications">Applications</Link>
+            <Link className="btn btn-secondary dashboard-action-secondary" to="/evaluations">Evaluations</Link>
             <Link className="btn btn-secondary dashboard-action-secondary" to="/jobs">
               Manage jobs <BriefcaseBusiness size={15} aria-hidden="true" />
             </Link>
@@ -113,9 +120,9 @@ export default function Dashboard() {
         <div className="dashboard-section-heading">
           <div>
             <h2 id="pipeline-title">Hiring activity</h2>
-            <p>All recorded applications grouped by role.</p>
+            <p>Applications by role.</p>
           </div>
-          <span className="dashboard-section-note">Workspace snapshot · all recorded applications</span>
+          <span className="dashboard-section-note">{stats.applications} applications</span>
         </div>
 
         {hasApplications ? (
@@ -124,7 +131,6 @@ export default function Dashboard() {
               <div className="dashboard-chart-heading">
                 <div>
                   <h3 id="jobs-chart-title">Applications by job</h3>
-                  <p>Compare application volume across open and past roles.</p>
                 </div>
                 <span className="dashboard-chart-total">
                   <strong>{stats.applications}</strong>
@@ -137,7 +143,7 @@ export default function Dashboard() {
                   className="dashboard-chart"
                   role="img"
                   aria-label="Bar chart of applications for each job"
-                  style={{ "--dashboard-chart-height": `${Math.min(Math.max(applicationsByJob.length * 48 + 72, 250), 430)}px` }}
+                  style={{ "--dashboard-chart-height": `${Math.min(Math.max(applicationsByJob.length * 38 + 64, 208), 340)}px` }}
                 >
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
@@ -146,11 +152,11 @@ export default function Dashboard() {
                       margin={{ top: 8, right: 18, left: 8, bottom: 8 }}
                       barCategoryGap="34%"
                     >
-                      <CartesianGrid stroke="var(--hera-border)" horizontal={false} />
+                      <CartesianGrid stroke="var(--color-border)" horizontal={false} />
                       <XAxis
                         type="number"
                         allowDecimals={false}
-                        tick={{ fill: "var(--hera-muted)", fontSize: 11 }}
+                        tick={{ fill: "var(--color-muted)", fontSize: 13 }}
                         axisLine={false}
                         tickLine={false}
                       />
@@ -158,17 +164,17 @@ export default function Dashboard() {
                         type="category"
                         dataKey="job"
                         width={170}
-                        tick={{ fill: "var(--hera-ink)", fontSize: 12 }}
+                        tick={{ fill: "var(--color-text)", fontSize: 13 }}
                         tickFormatter={formatJobTick}
                         axisLine={false}
                         tickLine={false}
                         interval={0}
                       />
                       <Tooltip
-                        cursor={{ fill: "rgba(27, 58, 58, 0.05)" }}
-                        contentStyle={{ border: "1px solid var(--hera-border)", borderRadius: 10, boxShadow: "0 8px 24px rgba(16, 38, 35, .12)" }}
+                        cursor={{ fill: "var(--dashboard-chart-cursor)" }}
+                        contentStyle={{ border: "1px solid var(--color-border)", borderRadius: 10, background: "var(--color-surface)", color: "var(--color-text)", boxShadow: "0 8px 24px rgba(16, 38, 35, .12)" }}
                       />
-                      <Bar dataKey="applications" name="Applications" fill="var(--hera-teal)" radius={[0, 5, 5, 0]} maxBarSize={28} />
+                      <Bar dataKey="applications" name="Applications" fill="var(--dashboard-chart-bar)" radius={[0, 5, 5, 0]} maxBarSize={28} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -184,7 +190,32 @@ export default function Dashboard() {
                 </>
               ) : <p className="dashboard-chart-empty">No job application breakdown is available yet.</p>}
             </section>
-
+            <aside className="panel dashboard-hiring-insight" aria-labelledby="hiring-insight-title">
+              <div className="hiring-insight-kicker"><span><Sparkles size={15} aria-hidden="true" /></span>HERA hiring insight</div>
+              {topApplicationJob ? (
+                <>
+                  <p className="hiring-insight-label">Most applied role</p>
+                  <h3 id="hiring-insight-title">{topApplicationJob.job}</h3>
+                  <div className="hiring-insight-metrics">
+                    <strong>{topApplicationJob.applications}<span> applications</span></strong>
+                    <span>{topJobShare}% of total</span>
+                  </div>
+                  <div className="hiring-insight-track" role="img" aria-label={`${topJobShare}% of applications are for ${topApplicationJob.job}`}>
+                    <span style={{ width: `${topJobShare}%` }} />
+                  </div>
+                  <div className="hiring-insight-footer">
+                    <Link to="/applications" aria-label="Review applications">
+                      Review applications <ArrowRight size={15} aria-hidden="true" />
+                    </Link>
+                  </div>
+                </>
+              ) : (
+                <div className="hiring-insight-unavailable">
+                  <h3 id="hiring-insight-title">Application breakdown unavailable</h3>
+                  <p>Role level data will appear here when it is available.</p>
+                </div>
+              )}
+            </aside>
           </div>
         ) : stats.totalJobs > 0 ? (
           <div className="dashboard-empty panel">

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ArrowRight, CalendarDays, Clock3, Plus, Trash2 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { ArrowLeft, ArrowRight, CalendarDays, Clock3, Link2, PlugZap, Plus, Trash2, Unplug } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import LoadingSpinner from "../../components/common/LoadingSpinner";
 import ErrorState from "../../components/common/ErrorState";
 import {
@@ -9,6 +9,11 @@ import {
   publishInterviewAvailability,
   withdrawInterviewAvailability,
 } from "../../services/interviewService";
+import {
+  disconnectGoogleConnection,
+  getGoogleConnectUrl,
+  getGoogleConnectionStatus,
+} from "../../services/googleCalendarService";
 
 function monthDate(year, month, day = 1) {
   return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
@@ -35,6 +40,8 @@ function displayDate(value) {
 }
 
 export default function InterviewAvailability() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [month, setMonth] = useState(() => {
     const today = new Date();
     return new Date(today.getFullYear(), today.getMonth(), 1);
@@ -52,17 +59,21 @@ export default function InterviewAvailability() {
   const [withdrawingId, setWithdrawingId] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [googleStatus, setGoogleStatus] = useState(null);
+  const [googleBusy, setGoogleBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const [people, blocks] = await Promise.all([
+      const [people, blocks, gStatus] = await Promise.all([
         getInterviewers(),
         getPublishedAvailability(monthBounds(month)),
+        getGoogleConnectionStatus().catch(() => ({ connected: false, status: "unknown" })),
       ]);
       setInterviewers(people);
       setAvailability(blocks);
+      setGoogleStatus(gStatus);
       setInterviewerId((current) => current || people[0]?.id || "");
     } catch {
       setError("Could not load interviewer availability. Please try again.");
@@ -72,6 +83,17 @@ export default function InterviewAvailability() {
   }, [month]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const google = params.get("google");
+    if (!google) return;
+    if (google === "connected") setMessage("Google Calendar connected successfully.");
+    if (google === "error") setError("Google Calendar connection failed. Please try again.");
+    load();
+    params.delete("google");
+    navigate({ pathname: location.pathname, search: params.toString() ? `?${params.toString()}` : "" }, { replace: true });
+  }, [location.pathname, location.search, load, navigate]);
 
   const monthLabel = month.toLocaleDateString(undefined, { month: "long", year: "numeric" });
   const cells = useMemo(() => calendarCells(month), [month]);
@@ -131,6 +153,34 @@ export default function InterviewAvailability() {
     }
   };
 
+  const connectGoogle = async () => {
+    setGoogleBusy(true);
+    setError("");
+    try {
+      const { authorize_url } = await getGoogleConnectUrl();
+      if (authorize_url) window.open(authorize_url, "_blank", "noopener,noreferrer");
+      setMessage("Complete Google sign-in in the opened window, then refresh status.");
+    } catch (err) {
+      setError(err?.response?.data?.detail || "Could not start Google connection.");
+    } finally {
+      setGoogleBusy(false);
+    }
+  };
+
+  const disconnectGoogle = async () => {
+    setGoogleBusy(true);
+    setError("");
+    try {
+      await disconnectGoogleConnection();
+      setMessage("Google Calendar disconnected.");
+      await load();
+    } catch (err) {
+      setError(err?.response?.data?.detail || "Could not disconnect Google Calendar.");
+    } finally {
+      setGoogleBusy(false);
+    }
+  };
+
   if (loading && interviewers.length === 0) return <LoadingSpinner label="Loading availability tools…" />;
   if (error && interviewers.length === 0) return <ErrorState message={error} onRetry={load} />;
 
@@ -145,8 +195,35 @@ export default function InterviewAvailability() {
           <h1>Manage interview availability</h1>
           <p>Only the dates and times you publish here can be offered to candidates.</p>
         </div>
-        <span className="availability-truth-note"><CalendarDays size={16} aria-hidden="true" /> No calendar sync</span>
+        <span className="availability-truth-note"><CalendarDays size={16} aria-hidden="true" /> {googleStatus?.connected ? "Google Calendar connected" : "Calendar connection required in production"}</span>
       </header>
+
+      <section className="panel" aria-labelledby="google-connection-title" style={{ marginBottom: 16 }}>
+        <div className="availability-list-heading">
+          <div>
+            <p className="eyebrow">GOOGLE CALENDAR</p>
+            <h2 id="google-connection-title">Per-HR Google connection</h2>
+          </div>
+          <Link2 size={18} aria-hidden="true" />
+        </div>
+        <p>
+          Status: <strong>{googleStatus?.connected ? `Connected${googleStatus.google_email ? ` (${googleStatus.google_email})` : ""}` : (googleStatus?.status || "Not connected")}</strong>
+        </p>
+        {!googleStatus?.connected && (
+          <p className="availability-help">Development may use clearly warned HERA-only mode when configured; production requires a valid Google Calendar connection for the interviewer.</p>
+        )}
+        <div className="btn-row">
+          <button type="button" className="btn btn-primary" onClick={connectGoogle} disabled={googleBusy}>
+            <PlugZap size={16} /> {googleBusy ? "Working…" : "Connect Google Calendar"}
+          </button>
+          {googleStatus?.connected && (
+            <button type="button" className="btn btn-secondary" onClick={disconnectGoogle} disabled={googleBusy}>
+              <Unplug size={16} /> Disconnect
+            </button>
+          )}
+          <button type="button" className="btn btn-secondary" onClick={load} disabled={googleBusy}>Refresh status</button>
+        </div>
+      </section>
 
       {error && <div className="form-error" role="alert">{error}</div>}
       {message && <div className="success-message" role="status">{message}</div>}

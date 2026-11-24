@@ -53,27 +53,50 @@ $name = htmlspecialchars((string)($_SESSION['name'] ?? ''), ENT_QUOTES, 'UTF-8')
       align-items: center;
       justify-content: space-between;
       gap: 24px;
-      padding: 0 2px 22px;
-      border-bottom: 1px solid rgba(27,58,58,.12);
+      padding: 0 2px 18px;
+      color: var(--workspace-ink) !important;
+      background: transparent !important;
+      border: 0 !important;
+      border-bottom: 1px solid rgba(27,58,58,.12) !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      backdrop-filter: none !important;
     }
-    .workspace-logo { display: block; width: 164px; max-width: 42vw; height: auto; }
-    .top-actions { display: flex; align-items: center; gap: 10px; }
+    body.hera-theme.workspace-page header.workspace-top {
+      color: var(--workspace-ink) !important;
+      background: transparent !important;
+      border: 0 !important;
+      border-bottom: 1px solid rgba(27,58,58,.12) !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      backdrop-filter: none !important;
+    }
+    .workspace-brand { display: inline-flex; align-items: center; gap: 11px; color: var(--workspace-ink); text-decoration: none; }
+    .workspace-brand-mark { display: block; width: 43px; height: 43px; border-radius: 13px; box-shadow: 0 3px 9px rgba(8,42,36,.12); }
+    .workspace-brand-copy { display: grid; gap: 2px; text-align: start; }
+    .workspace-brand-copy strong { color: var(--workspace-ink); font: 800 17px/1 Inter, Cairo, sans-serif; letter-spacing: .045em; }
+    .workspace-brand-copy small { color: var(--workspace-muted); font: 500 10px/1.35 Inter, Cairo, sans-serif; }
+    .top-actions { display: flex; align-items: center; gap: 9px; }
     .logout-link {
-      min-height: 42px;
+      min-height: 40px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      padding: 0 16px;
-      border: 1px solid var(--workspace-line);
-      border-radius: 12px;
-      color: var(--workspace-ink) !important;
-      background: rgba(255,255,255,.72);
-      font-size: 14px;
+      gap: 8px;
+      padding: 0 13px;
+      border: 1px solid #d8e2dd;
+      border-radius: 10px;
+      color: #31534b !important;
+      background: rgba(255,255,255,.62) !important;
+      font-size: 13px;
       font-weight: 700;
       text-decoration: none;
       transition: background-color 160ms ease, border-color 160ms ease, transform 160ms var(--workspace-ease);
     }
-    .logout-link:hover { border-color: #b8cbc5; background: #fff; transform: translateY(-1px); }
+    .logout-link svg { width: 16px; height: 16px; color: #648078; }
+    .logout-link:hover { border-color: #b8cbc5; background: #fff !important; transform: translateY(-1px); }
+    .workspace-top .hera-language-toggle { min-height: 40px; margin: 0; padding: 0 11px; border: 1px solid #d8e2dd; border-radius: 10px; color: #31534b; background: rgba(255,255,255,.62); box-shadow: none; font-size: 12px; font-weight: 700; }
+    .workspace-top .hera-language-toggle:hover { border-color: #b8cbc5; background: #fff; }
     .workspace-top :focus-visible,
     .workspace-option:focus-visible { outline: 3px solid #2e8492; outline-offset: 4px; }
 
@@ -226,8 +249,9 @@ $name = htmlspecialchars((string)($_SESSION['name'] ?? ''), ENT_QUOTES, 'UTF-8')
     @media (max-width: 540px) {
       .workspace-shell { width: calc(100% - 32px); padding-block: 16px 32px; }
       .workspace-top { min-height: 58px; gap: 10px; padding-bottom: 14px; }
-      .workspace-logo { width: 132px; }
+      .workspace-brand-mark { width: 39px; height: 39px; border-radius: 11px; }
       .top-actions { gap: 6px; }
+      .workspace-brand-copy small { font-size: 9px; }
       .logout-link { min-height: 38px; padding-inline: 10px; border-radius: 10px; font-size: 12px; white-space: nowrap; }
       .workspace-top .hera-language-toggle { min-height: 38px; padding-inline: 9px; font-size: 12px; }
       .workspace-main { padding-top: 22px; }
@@ -255,11 +279,12 @@ $name = htmlspecialchars((string)($_SESSION['name'] ?? ''), ENT_QUOTES, 'UTF-8')
 <body class="hera-theme workspace-page">
   <div class="workspace-shell">
     <header class="workspace-top">
-      <a href="/BIC2_Mvp/workspace.php" aria-label="HERA — مساحات العمل">
-        <img class="workspace-logo" src="/BIC2_Mvp/assets/hera-logo.svg?v=hera-horizontal-20261113-1" alt="HERA" />
+      <a class="workspace-brand" href="/BIC2_Mvp/workspace.php" aria-label="HERA — مساحات العمل">
+        <img class="workspace-brand-mark" src="/BIC2_Mvp/assets/hera-icon-light.svg?v=hera-workspace-brand-20261121-1" alt="" width="43" height="43" />
+        <span class="workspace-brand-copy"><strong>HERA</strong><small>HR &amp; Recruitment</small></span>
       </a>
       <nav class="top-actions" aria-label="إعدادات الحساب">
-        <a class="logout-link" href="/BIC2_Mvp/logout.php">تسجيل الخروج</a>
+        <a class="logout-link" href="/BIC2_Mvp/logout.php"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 17l5-5-5-5m5 5H3"/><path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"/></svg><span>تسجيل الخروج</span></a>
       </nav>
     </header>
 
