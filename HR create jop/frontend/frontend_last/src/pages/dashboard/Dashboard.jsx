@@ -68,7 +68,12 @@ export default function Dashboard() {
 
   return (
     <div className="dashboard dashboard-redesign motion-rise">
-      <section className="dashboard-intro" aria-labelledby="dashboard-intro-title">
+      <section className="dashboard-intro dashboard-intro--alive" aria-labelledby="dashboard-intro-title">
+        <div className="hero-aurora" aria-hidden="true">
+          <div className="blob b1" />
+          <div className="blob b2" />
+          <div className="blob b3" />
+        </div>
         <div className="dashboard-intro-copy">
           <p className="dashboard-kicker">
             <HeraAssistantMark size={25} />
@@ -78,7 +83,7 @@ export default function Dashboard() {
           <p>Live totals from your current jobs and applications.</p>
         </div>
         <div className="dashboard-intro-actions">
-          <span className="dashboard-live-indicator"><span aria-hidden="true" />Live workspace snapshot</span>
+          <span className="dashboard-live-indicator"><span className="motion-live-dot" aria-hidden="true" />Live workspace snapshot</span>
           <div className="dashboard-shortcuts" aria-label="Quick actions">
             <Link className="btn btn-primary dashboard-action-primary" to="/jobs/new">
               <Plus size={16} aria-hidden="true" /> Create vacancy
