@@ -45,6 +45,7 @@ describe("Applications score formatting", () => {
         score: "81.579",
         group: "must_review",
         status: "ready_for_review",
+        pipelineStage: "review",
       },
     ]));
 
@@ -56,6 +57,8 @@ describe("Applications score formatting", () => {
     expect(await screen.findByText("Must Review")).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "AI review" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "HR decision" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Pipeline stage" })).toBeInTheDocument();
+    expect(screen.getByText("HR review")).toBeInTheDocument();
 
     const decisionGroup = screen.getByRole("group", { name: "HR decision status" });
     expect(within(decisionGroup).getByRole("button", { name: "Advanced" })).toHaveAttribute("aria-pressed", "false");
@@ -110,5 +113,14 @@ describe("Applications score formatting", () => {
     await waitFor(() => expect(getApplications).toHaveBeenLastCalledWith(expect.objectContaining({ search: "Ada", processing_status: "failed" })));
     await user.click(screen.getAllByRole("button", { name: "Reset filters" })[0]);
     await waitFor(() => expect(getApplications).toHaveBeenLastCalledWith(expect.not.objectContaining({ search: expect.anything(), processing_status: expect.anything() })));
+  });
+
+  it("filters applications by the selected pipeline stage", async () => {
+    getApplications.mockResolvedValue(pageResult([]));
+    const user = userEvent.setup();
+    render(<MemoryRouter><ApplicationsList /></MemoryRouter>);
+    await user.click(screen.getByRole("button", { name: /More filters/ }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "Filter by pipeline stage" }), "interview");
+    await waitFor(() => expect(getApplications).toHaveBeenLastCalledWith(expect.objectContaining({ pipeline_stage: "interview" })));
   });
 });

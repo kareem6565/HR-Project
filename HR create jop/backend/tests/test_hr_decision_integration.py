@@ -29,6 +29,7 @@ from app.models import (
     JobApplication,
     JobProfile,
     Organization,
+    PipelineStageTransition,
     Resume,
     User,
     WorkflowRun,
@@ -166,6 +167,13 @@ def test_create_reject_decision(db_session: Session) -> None:
 
     assert decision.decision == "reject"
     assert decision.reason == "Candidate did not meet core requirements."
+    db_session.refresh(application)
+    assert application.pipeline_stage == "rejected"
+    transition = db_session.query(PipelineStageTransition).filter_by(
+        job_application_id=application.id
+    ).one()
+    assert transition.to_stage == "rejected"
+    assert transition.source == "hr_decision"
 
 
 def test_create_hold_decision(db_session: Session) -> None:

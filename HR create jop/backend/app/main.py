@@ -26,6 +26,7 @@ from app.services.errors import (
     ConflictError,
     InvalidStateError,
     NotFoundError,
+    PermissionDeniedError,
     ValidationError,
     VersionConflictError,
 )
@@ -129,6 +130,12 @@ def create_app() -> FastAPI:
     @app.exception_handler(NotFoundError)
     async def not_found_handler(request: Request, exc: NotFoundError) -> JSONResponse:
         return JSONResponse(status_code=404, content={"detail": str(exc)})
+
+    @app.exception_handler(PermissionDeniedError)
+    async def permission_denied_handler(
+        request: Request, exc: PermissionDeniedError
+    ) -> JSONResponse:
+        return JSONResponse(status_code=403, content={"detail": str(exc)})
 
     @app.exception_handler(ValidationError)
     async def validation_error_handler(request: Request, exc: ValidationError) -> JSONResponse:

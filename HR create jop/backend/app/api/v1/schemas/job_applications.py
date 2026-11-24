@@ -21,6 +21,7 @@ class JobApplicationResponse(BaseModel):
     candidate_id: UUID
     resume_id: UUID
     status: str
+    pipeline_stage: str = "screening"
     created_at: datetime
     updated_at: datetime
     screening_status: str = "not_started"
@@ -70,6 +71,7 @@ class ApplicationSummaryResponse(BaseModel):
     score: str | None = None
     group: str | None = None
     status: str
+    pipeline_stage: str = "screening"
     created_at: datetime
     evidence: list[RequirementEvidenceSummary] = Field(default_factory=list)
     candidate_email: str | None = None

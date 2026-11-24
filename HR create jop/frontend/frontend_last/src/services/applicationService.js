@@ -33,6 +33,7 @@ export async function getApplications(filters = {}) {
     score: row.score,
     group: row.group,
     status: row.status,
+    pipelineStage: row.pipeline_stage || "screening",
     screeningStatus: row.screening_status || "not_started",
     advisoryRank: row.advisory_rank ?? null,
     advisoryStatus: row.advisory_status ?? null,

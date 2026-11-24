@@ -14,11 +14,17 @@ from app.api.v1.schemas.job_applications import (
     JobApplicationResponse,
     RequirementEvidenceSummary,
 )
+from app.api.v1.schemas.pipeline import (
+    PipelineCorrectionRequest,
+    PipelineStateResponse,
+    PipelineTransitionRequest,
+)
 from app.api.v1.schemas.review import ReviewBundleResponse, ReviewCandidateInfo
 from app.core.config import settings
 from app.core.database import get_db
 from app.models import CandidateEvaluation, ScreeningBatch, ScreeningBatchItem
 from app.services.job_application_service import JobApplicationService
+from app.services.pipeline_stage_service import PipelineStageService
 from app.services.review_service import ReviewService
 
 router = APIRouter()
@@ -103,6 +109,10 @@ def list_org_applications(
     ctx: RequestContext = Depends(get_request_context),
     db: Session = Depends(get_db),
     status: str | None = Query(default=None),
+    pipeline_stage: str | None = Query(
+        default=None,
+        pattern="^(screening|review|interview|offer|hired|rejected|withdrawn|archived)$",
+    ),
     candidate_id: uuid.UUID | None = Query(default=None),
     job_id: uuid.UUID | None = Query(default=None),
     search: str | None = Query(default=None, max_length=200),
@@ -126,6 +136,7 @@ def list_org_applications(
         db,
         organization_id=ctx.organization_id,
         status=status,
+        pipeline_stage=pipeline_stage,
         candidate_id=candidate_id,
         job_id=job_id,
         search=search,
@@ -164,6 +175,7 @@ def list_org_applications(
                 score=score,
                 group=row.group,
                 status=row.application.status,
+                pipeline_stage=row.application.pipeline_stage,
                 screening_status=row.screening_status,
                 advisory_rank=row.application.advisory_rank,
                 advisory_score=row.application.advisory_score,
@@ -305,3 +317,82 @@ def list_job_applications(
         }
         for item in applications
     ]
+
+
+@router.get(
+    "/job-applications/{application_id}/pipeline",
+    response_model=PipelineStateResponse,
+)
+def get_pipeline_state(
+    application_id: str,
+    ctx: RequestContext = Depends(get_request_context),
+    db: Session = Depends(get_db),
+):
+    return PipelineStageService().state(
+        db,
+        application_id=uuid.UUID(application_id),
+        organization_id=ctx.organization_id,
+        actor_user_id=ctx.user_id,
+    )
+
+
+@router.post(
+    "/job-applications/{application_id}/pipeline-transitions",
+    response_model=PipelineStateResponse,
+)
+def transition_pipeline_stage(
+    application_id: str,
+    body: PipelineTransitionRequest,
+    ctx: RequestContext = Depends(get_request_context),
+    db: Session = Depends(get_db),
+):
+    _, _, replayed = PipelineStageService().transition(
+        db,
+        application_id=uuid.UUID(application_id),
+        organization_id=ctx.organization_id,
+        actor_user_id=ctx.user_id,
+        expected_stage=body.expected_stage,
+        to_stage=body.to_stage,
+        idempotency_key=body.idempotency_key,
+        reason_code=body.reason_code,
+        note=body.note,
+    )
+    state = PipelineStageService().state(
+        db,
+        application_id=uuid.UUID(application_id),
+        organization_id=ctx.organization_id,
+        actor_user_id=ctx.user_id,
+    )
+    state["replayed"] = replayed
+    return state
+
+
+@router.post(
+    "/job-applications/{application_id}/pipeline-corrections",
+    response_model=PipelineStateResponse,
+)
+def correct_hired_pipeline_stage(
+    application_id: str,
+    body: PipelineCorrectionRequest,
+    ctx: RequestContext = Depends(get_request_context),
+    db: Session = Depends(get_db),
+):
+    _, _, replayed = PipelineStageService().correct_hired_stage(
+        db,
+        application_id=uuid.UUID(application_id),
+        organization_id=ctx.organization_id,
+        actor_user_id=ctx.user_id,
+        expected_stage=body.expected_stage,
+        to_stage=body.to_stage,
+        idempotency_key=body.idempotency_key,
+        reason_code=body.reason_code,
+        reason=body.reason,
+    )
+    state = PipelineStageService().state(
+        db,
+        application_id=uuid.UUID(application_id),
+        organization_id=ctx.organization_id,
+        actor_user_id=ctx.user_id,
+    )
+    state["replayed"] = replayed
+    return state

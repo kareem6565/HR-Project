@@ -44,6 +44,7 @@ import { BAND_CONFIG } from "../../components/common/ScoreBadge";
 import { getApplicationStatusGroup } from "../../utils/applicationStatus";
 import { createCandidateInterviewInvitation } from "../../services/interviewService";
 import GitHubEvidencePanel from "../../components/review/GitHubEvidencePanel";
+import PipelineStagePanel from "../../components/review/PipelineStagePanel";
 
 const DECISION_LABELS = {
   [HRDecisionValue.ADVANCE]: "Advance",
@@ -170,6 +171,7 @@ export default function ApplicationReview() {
   const [saving, setSaving] = useState(false);
   const [decisionError, setDecisionError] = useState(null);
   const [isConflictError, setIsConflictError] = useState(false);
+  const [pipelineRefresh, setPipelineRefresh] = useState(0);
 
   const [successMsg, setSuccessMsg] = useState("");
   const [downloading, setDownloading] = useState(false);
@@ -325,6 +327,7 @@ export default function ApplicationReview() {
       } else {
         await recordDecision(applicationId, decisionModal.decision, decisionReason);
       }
+      setPipelineRefresh((version) => version + 1);
       setSuccessMsg(`${DECISION_LABELS[decisionModal.decision]} recorded for ${candidate?.name || "this candidate"}.`);
       setDecisionModal({ open: false, decision: null });
 
@@ -490,6 +493,11 @@ export default function ApplicationReview() {
           <strong><span className="review-signal-count">{hasEvaluation ? signalsCount : "—"}</span></strong>
         </span>
       </div>
+
+      <PipelineStagePanel
+        applicationId={applicationId}
+        refreshKey={pipelineRefresh}
+      />
 
       <div className="review-quick-actions application-review-quick-actions">
         <div className="review-quick-actions-copy">

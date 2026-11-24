@@ -23,6 +23,7 @@ from app.models import (
     JobApplication,
     MatchEvidence,
     Organization,
+    PipelineStageTransition,
     Resume,
     ScreeningBatch,
     ScreeningBatchItem,
@@ -162,6 +163,16 @@ class CandidatePrivacyService:
             "interview_records_kept": 0,
             "hr_decisions_kept": 0,
             "audit_records_kept": 0,
+            "pipeline_notes_scrubbed": db.scalar(
+                select(func.count()).select_from(PipelineStageTransition).where(
+                    PipelineStageTransition.organization_id == organization_id,
+                    PipelineStageTransition.job_application_id.in_(application_ids)
+                    if application_ids
+                    else False,
+                    PipelineStageTransition.note.is_not(None),
+                )
+            )
+            or 0,
             "files": len(resumes)
             + (
                 db.scalar(
@@ -217,6 +228,17 @@ class CandidatePrivacyService:
         )
         if dry_run:
             return {"already_anonymized": False, **count_specs}
+
+        if application_ids:
+            db.execute(
+                update(PipelineStageTransition)
+                .where(
+                    PipelineStageTransition.organization_id == organization_id,
+                    PipelineStageTransition.job_application_id.in_(application_ids),
+                    PipelineStageTransition.note.is_not(None),
+                )
+                .values(note=None)
+            )
 
         if storage is None:
             storage = LocalFileSystemStorage(settings.storage_root_dir)

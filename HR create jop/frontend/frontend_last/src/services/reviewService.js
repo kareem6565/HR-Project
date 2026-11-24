@@ -51,6 +51,27 @@ export async function recordDecision(applicationId, decision, reason, expectedEv
   return createDecision(applicationId, payload);
 }
 
+export async function getPipelineState(applicationId) {
+  const { data } = await apiClient.get(`/job-applications/${applicationId}/pipeline`);
+  return data;
+}
+
+export async function transitionPipelineStage(applicationId, payload) {
+  const { data } = await apiClient.post(
+    `/job-applications/${applicationId}/pipeline-transitions`,
+    payload,
+  );
+  return data;
+}
+
+export async function correctHiredPipelineStage(applicationId, payload) {
+  const { data } = await apiClient.post(
+    `/job-applications/${applicationId}/pipeline-corrections`,
+    payload,
+  );
+  return data;
+}
+
 // Full review-workspace load: the review bundle plus the resume metadata and
 // the latest current CandidateProfile, both fetched through EXISTING read
 // endpoints (GET /resumes/{id}, GET /resumes/{id}/profiles). Either extras

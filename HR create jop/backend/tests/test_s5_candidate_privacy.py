@@ -15,6 +15,7 @@ from app.models import (
     Job,
     JobApplication,
     Organization,
+    PipelineStageTransition,
     Resume,
     TalentPoolConsent,
     User,
@@ -80,7 +81,17 @@ def _candidate_with_records(db: Session):
         scheduled_time="10:00",
         feedback={"summary": "Interview record retained"},
     )
-    db.add_all([decision, interview])
+    transition = PipelineStageTransition(
+        organization_id=org.id,
+        job_application_id=application.id,
+        actor_user_id=user.id,
+        from_stage="screening",
+        to_stage="review",
+        reason_code="process_reopened",
+        note="Sensitive HR note with candidate context",
+        source="hr",
+    )
+    db.add_all([decision, interview, transition])
     db.flush()
     return org, user, candidate, resume, application, decision, interview
 
@@ -116,6 +127,14 @@ def test_erasure_anonymizes_candidate_and_keeps_hr_and_interview_records(
     assert db_session.get(Interview, interview.id).feedback == {
         "summary": "Interview record retained"
     }
+    scrubbed_transition = db_session.scalar(
+        select(PipelineStageTransition).where(
+            PipelineStageTransition.organization_id == org.id,
+            PipelineStageTransition.job_application_id == application.id,
+        )
+    )
+    assert scrubbed_transition.note is None
+    assert counts["pipeline_notes_scrubbed"] == 1
     audit = db_session.scalar(select(AuditLog).where(AuditLog.action == "candidate.data_erased"))
     assert audit.entity_id == candidate.id
     assert audit.organization_id == org.id

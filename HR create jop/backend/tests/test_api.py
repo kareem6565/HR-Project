@@ -99,6 +99,188 @@ def bootstrap(client: httpx.Client) -> tuple[dict, dict]:
     return org, user
 
 
+def _pipeline_application(client: httpx.Client, db_session: Session, org: dict, user: dict):
+    job = client.post(
+        "/api/v1/jobs", json={"title": "Pipeline test"},
+        headers=auth_headers(org["id"], user["id"]),
+    ).json()
+    candidate = models.Candidate(
+        organization_id=uuid.UUID(org["id"]), full_name="Test Candidate"
+    )
+    db_session.add(candidate)
+    db_session.flush()
+    resume = models.Resume(candidate_id=candidate.id, file_uri="local://pipeline-test.pdf")
+    db_session.add(resume)
+    db_session.flush()
+    application = models.JobApplication(
+        organization_id=uuid.UUID(org["id"]),
+        job_id=uuid.UUID(job["id"]),
+        candidate_id=candidate.id,
+        resume_id=resume.id,
+    )
+    db_session.add(application)
+    db_session.flush()
+    return application
+
+
+def test_pipeline_routes_are_org_scoped_and_transition_retries_are_idempotent(
+    client: httpx.Client, db_session: Session
+) -> None:
+    org, user = bootstrap(client)
+    other_org, other_user = bootstrap(client)
+    application = _pipeline_application(client, db_session, org, user)
+    owner_headers = auth_headers(org["id"], user["id"])
+    other_headers = auth_headers(other_org["id"], other_user["id"])
+
+    hidden = client.get(
+        f"/api/v1/job-applications/{application.id}/pipeline", headers=other_headers
+    )
+    assert hidden.status_code == 404
+    cross_tenant_transition = client.post(
+        f"/api/v1/job-applications/{application.id}/pipeline-transitions",
+        json={"idempotency_key": str(uuid.uuid4()), "expected_stage": "screening",
+              "to_stage": "review"},
+        headers=other_headers,
+    )
+    assert cross_tenant_transition.status_code == 404
+    cross_tenant_correction = client.post(
+        f"/api/v1/job-applications/{application.id}/pipeline-corrections",
+        json={"idempotency_key": str(uuid.uuid4()), "expected_stage": "hired",
+              "to_stage": "review", "reason_code": "data_correction", "reason": "Test"},
+        headers=other_headers,
+    )
+    assert cross_tenant_correction.status_code == 404
+
+    payload = {
+        "idempotency_key": str(uuid.uuid4()),
+        "expected_stage": "screening",
+        "to_stage": "review",
+    }
+    first = client.post(
+        f"/api/v1/job-applications/{application.id}/pipeline-transitions",
+        json=payload,
+        headers=owner_headers,
+    )
+    assert first.status_code == 200, first.text
+    assert first.json()["pipeline_stage"] == "review"
+    assert first.json()["allowed_next_stages"] == [
+        "screening", "interview", "withdrawn", "archived"
+    ]
+    assert first.json()["reason_required_stages"] == ["screening", "withdrawn"]
+
+    replay = client.post(
+        f"/api/v1/job-applications/{application.id}/pipeline-transitions",
+        json=payload,
+        headers=owner_headers,
+    )
+    assert replay.status_code == 200, replay.text
+    assert replay.json()["replayed"] is True
+    assert len(replay.json()["transitions"]) == 1
+
+    filtered = client.get(
+        "/api/v1/job-applications", params={"pipeline_stage": "review"}, headers=owner_headers
+    )
+    assert filtered.status_code == 200
+    assert [row["pipeline_stage"] for row in filtered.json()] == ["review"]
+
+    backward_url = f"/api/v1/job-applications/{application.id}/pipeline-transitions"
+    missing_reason = client.post(
+        backward_url,
+        json={
+            "idempotency_key": str(uuid.uuid4()),
+            "expected_stage": "review",
+            "to_stage": "screening",
+        },
+        headers=owner_headers,
+    )
+    assert missing_reason.status_code == 422
+    backward = client.post(
+        backward_url,
+        json={"idempotency_key": str(uuid.uuid4()), "expected_stage": "review",
+              "to_stage": "screening", "reason_code": "process_reopened"},
+        headers=owner_headers,
+    )
+    assert backward.status_code == 200, backward.text
+    assert backward.json()["pipeline_stage"] == "screening"
+
+    archived = client.post(
+        backward_url,
+        json={"idempotency_key": str(uuid.uuid4()), "expected_stage": "screening",
+              "to_stage": "archived"},
+        headers=owner_headers,
+    )
+    assert archived.status_code == 200, archived.text
+    assert archived.json()["pipeline_stage"] == "archived"
+    assert archived.json()["status"] == "archived"
+    db_session.refresh(application)
+    assert application.archived_at is not None
+
+    stale = client.post(
+        f"/api/v1/job-applications/{application.id}/pipeline-transitions",
+        json={**payload, "idempotency_key": str(uuid.uuid4()), "to_stage": "interview"},
+        headers=owner_headers,
+    )
+    assert stale.status_code == 409
+
+
+def test_hired_is_final_except_admin_correction_with_both_stages_logged(
+    client: httpx.Client, db_session: Session
+) -> None:
+    org = create_org(client)
+    recruiter = create_user(client, org["id"], "recruiter@test.com", role="recruiter")
+    admin = create_user(client, org["id"], "admin@test.com", role="admin")
+    application = _pipeline_application(client, db_session, org, recruiter)
+    url = f"/api/v1/job-applications/{application.id}/pipeline-transitions"
+    headers = auth_headers(org["id"], recruiter["id"])
+    for expected, target in [
+        ("screening", "review"), ("review", "interview"),
+        ("interview", "offer"),
+        ("offer", "hired"),
+    ]:
+        response = client.post(
+            url,
+            json={
+                "idempotency_key": str(uuid.uuid4()),
+                "expected_stage": expected,
+                "to_stage": target,
+            },
+            headers=headers,
+        )
+        assert response.status_code == 200, response.text
+    state = response.json()
+    assert state["pipeline_stage"] == "hired"
+    assert state["allowed_next_stages"] == []
+    assert state["allowed_correction_stages"] == []
+
+    denied_correction = client.post(
+        f"/api/v1/job-applications/{application.id}/pipeline-corrections",
+        json={"idempotency_key": str(uuid.uuid4()), "expected_stage": "hired",
+              "to_stage": "review", "reason_code": "data_correction",
+              "reason": "Correction requires admin."},
+        headers=headers,
+    )
+    assert denied_correction.status_code == 403
+
+    correction = client.post(
+        f"/api/v1/job-applications/{application.id}/pipeline-corrections",
+        json={"idempotency_key": str(uuid.uuid4()), "expected_stage": "hired",
+              "to_stage": "review", "reason_code": "data_correction",
+              "reason": "Corrected after HR record review."},
+        headers=auth_headers(org["id"], admin["id"]),
+    )
+    assert correction.status_code == 200, correction.text
+    assert correction.json()["pipeline_stage"] == "review"
+    transition = db_session.scalar(
+        select(models.PipelineStageTransition).where(
+            models.PipelineStageTransition.job_application_id == application.id,
+            models.PipelineStageTransition.source == "admin_correction",
+        )
+    )
+    assert (transition.from_stage, transition.to_stage, transition.reason_code) == (
+        "hired", "review", "data_correction"
+    )
+
+
 def test_job_extraction_provider_failure_commits_safe_failure_status(
     client: httpx.Client, db_session: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -2107,6 +2289,7 @@ class TestApplicationList:
             candidate_id=candidate.id,
             resume_id=second_resume.id,
             status="rejected",
+            pipeline_stage="rejected",
             source="Referral",
         )
         db_session.add(second)
@@ -2950,6 +3133,7 @@ class TestTalentPool:
             db_session, organization, user_obj
         )
         rejected_app.status = "rejected"
+        rejected_app.pipeline_stage = "rejected"
         db_session.flush()
 
         consented_at = datetime.now(UTC)
@@ -2979,6 +3163,7 @@ class TestTalentPool:
             db_session, other_organization, other_user_obj
         )
         other_app.status = "rejected"
+        other_app.pipeline_stage = "rejected"
         db_session.flush()
 
         resp = client.get("/api/v1/talent-pool", headers=h)
@@ -3028,6 +3213,7 @@ class TestTalentPool:
             db_session, organization, user_obj
         )
         application.status = "archived"
+        application.pipeline_stage = "archived"
         db_session.flush()
 
         resp = client.get("/api/v1/talent-pool", headers=h)

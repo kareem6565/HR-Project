@@ -44,6 +44,7 @@ describe("getApplications", () => {
         score: "81.579",
         group: "must_review",
         status: "analysis_pending",
+        pipelineStage: "screening",
         screeningStatus: "processing",
         decisionStatus: "pending_review",
         decisionCreatedAt: undefined,

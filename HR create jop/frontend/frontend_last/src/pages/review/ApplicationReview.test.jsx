@@ -13,6 +13,14 @@ vi.mock("../../services/reviewService", () => ({
   getReviewWorkspace: vi.fn(),
   runEvaluation: vi.fn(),
   recordDecision: vi.fn(),
+  getPipelineState: vi.fn().mockResolvedValue({
+    application_id: "app-1", status: "ready_for_review", pipeline_stage: "review",
+    allowed_next_stages: ["screening", "interview", "withdrawn", "archived"],
+    allowed_correction_stages: [], reason_required_stages: ["screening", "withdrawn"],
+    is_admin: false, transitions: [],
+  }),
+  transitionPipelineStage: vi.fn(),
+  correctHiredPipelineStage: vi.fn(),
 }));
 vi.mock("../../services/resumeService", () => ({
   downloadResume: vi.fn(),
