@@ -710,7 +710,7 @@ export default function JobForm() {
         </div>}
 
         {creationMethod === "linkedin_import" && (
-          <div className="job-paste-source">
+          <div className={`job-paste-source linkedin-import${linkedinImportStatus === "running" ? " is-running" : ""}${linkedinImportStatus === "succeeded" ? " is-done" : ""}`}>
             <label htmlFor="linkedin-job-url">Public LinkedIn job URL</label>
             <input id="linkedin-job-url" type="url" value={linkedinUrl}
               onChange={(event) => setLinkedinUrl(event.target.value)}

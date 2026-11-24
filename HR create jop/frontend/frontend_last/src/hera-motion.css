@@ -266,3 +266,45 @@
 @media (prefers-reduced-motion: reduce) {
   .evidence-row { animation: none; }
 }
+
+/* ---------------- LinkedIn job import experience ---------------- */
+.linkedin-import { position: relative; overflow: hidden; border-radius: 12px; }
+.linkedin-import::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #0a66c2, var(--hm-sky, #6FA8B8), #0a66c2);
+  background-size: 200% 100%;
+  opacity: 0;
+  transition: opacity 300ms ease;
+}
+.linkedin-import.is-running::before {
+  opacity: 1;
+  animation: hmScanX 1.4s linear infinite;
+}
+.linkedin-import.is-done::before { opacity: 1; background: #12b76a; animation: none; }
+.linkedin-import.is-running input {
+  border-color: #0a66c2;
+  box-shadow: 0 0 0 4px rgba(10, 102, 194, 0.12);
+}
+.job-creation-methods button {
+  transition: transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 250ms ease, border-color 250ms ease;
+}
+.job-creation-methods button:hover { transform: translateY(-3px); box-shadow: 0 12px 26px -10px rgba(27, 58, 58, 0.35); }
+.job-creation-methods button:active { transform: scale(0.97); }
+.job-creation-methods button:hover .job-method-icon { animation: hmWiggle 500ms ease; }
+@keyframes hmScanX {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+@keyframes hmWiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-10deg); }
+  75% { transform: rotate(10deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .linkedin-import.is-running::before, .job-creation-methods button:hover .job-method-icon { animation: none; }
+  .job-creation-methods button { transition: none; }
+}
