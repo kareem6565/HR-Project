@@ -2,15 +2,15 @@
 
 ## What it does
 
-When `A5_PRERANK_ENABLED=true`, the worker runs a cheap CPU embedding pass over
+When `A5_PRERANK_ENABLED=true`, the worker runs a dependency-free lexical BM25 pass by default over
 applications for the job, including queued/running items in other screening
 batches, and marks the top N (default 20) for the usual AI evidence evaluation.
-This rank is advisory only: it never writes the official
+Set `A5_PRERANK_ENGINE=e5` only to opt into the separate E5 add-on. This rank is advisory only: it never writes the official
 score or HR decision. Applicants outside N show **“LLM evaluation not run;
 ranking is advisory only”** and remain manually evaluable from their review
 page. Pre-ranking never runs inside an HTTP request.
 
-The feature is OFF by default. If its pinned model files are absent, have the
+The feature is OFF by default (`A5_PRERANK_ENABLED=false`). Lexical mode needs no added package. If E5 is selected but its optional runtime or pinned model files are absent, have the
 wrong checksum, or the run exceeds its limit, the feature reports an unavailable
 status and the worker continues its standard flow. It does not silently fall
 back to another model. Embeddings are held in memory only; vectors are not
@@ -87,24 +87,24 @@ optional additional file:
 .\.venv\Scripts\python.exe ..\tools\fetch_preranker_assets.py --output models\multilingual-e5-small --include-quantized
 ```
 
-Build the backend image only after fetching assets so Docker bundles the pinned
-files. This is the required customer-image packaging sequence from
-`HR create jop`:
+The default Compose build uses the `backend` target, installs only the base backend,
+and excludes both E5 runtime dependencies and model files. A5 remains disabled.
+To build the optional E5 image, first fetch the pinned assets, then opt in explicitly:
 
 ```powershell
 .\backend\.venv\Scripts\python.exe .\tools\fetch_preranker_assets.py --output .\backend\models\multilingual-e5-small
+$env:BACKEND_BUILD_TARGET = "backend-e5"
+$env:A5_E5_PACK = "on"
 docker compose build backend
 ```
+The asset script checks revision and SHA-256 before writing. Only the optional
+target copies assets into `/app/models`; the default image needs no models or
+Hugging Face access. Retain and publish the built E5 image (or include the
+verified model files in an offline installer).
 
-The asset script checks the pinned revision and SHA-256 values before writing
-the files; the Dockerfile copies those files into `/app/models`. A clean Git
-checkout without the fetched assets cannot produce the A5-enabled image, by
-design. The release pipeline must retain and publish the resulting image (or
-include the verified model directory in its offline installer artifact).
-Runtime deployments need no Hugging Face access. The feature still defaults
-to OFF. To test locally, set these variables in the backend environment and
-restart the worker:
-
+A5 stays OFF. In the backend environment, choose `A5_PRERANK_ENGINE=lexical`
+for the default lexical ranker or `A5_PRERANK_ENGINE=e5` for the optional pack.
+Set the following values only for a deliberate test, then restart the worker:
 The A5 migration can be checked without touching the app or test database:
 `.\.venv\Scripts\python.exe ..\tools\verify_a5_migration.py` creates a
 randomly named local PostgreSQL database, verifies upgrade and downgrade, and
@@ -153,7 +153,7 @@ base budget per 20 applicants and scales by `ceil(applicants / 20)`, bounded at
 reports unavailable and never returns a partial ranking. Re-measure on customer
 hardware before enabling the feature for large jobs.
 
-### A5b lexical baseline comparison
+### A5b initial TF-IDF baseline comparison (historical; superseded by BM25 results below)
 
 The benchmark validates its Data Analyst labels before scoring: all 24 strong
 CVs contain SQL, Python, Tableau, and Microsoft Excel; the 48 partial CVs
@@ -224,12 +224,36 @@ positive first in all three. This is a small synthetic sanity set, not a broad
 quality claim. These cases and checks are kept in `tools/eval_a5_preranking.py`
 and `backend/tests/test_a5_evaluation.py`.
 
-The broad synthetic results still favor the lexical baseline: on both 120-CV
-cohorts its R-precision equals or exceeds E5 and its CPU cost is about 100x
-lower. Proposed packaging change is pending owner review: remove NumPy,
-ONNX Runtime, and Tokenizers from mandatory backend dependencies and the
-default image; expose them as an optional `prerank-e5` extra with the existing
-hash lock; build a separate opt-in E5 image target that bundles the pinned
-model/tokenizer files; and keep lexical ranking as the default when A5 is
-enabled. The standard image would need no model files or runtime download.
-No packaging or production ranking change has been applied; A5 remains OFF.
+The implementation now uses a field-weighted, standard-library BM25 ranker as the A5 default. NumPy, ONNX Runtime and Tokenizers are an opt-in `prerank-e5` extra; the existing hash-locked add-on lock is unchanged. The default Docker target excludes E5 packages and weights; `backend-e5` includes the hash-pinned lock and model files. No runtime download or fallback occurs. A5 remains OFF.
+
+### 2026-11-24 expanded, synthetic-only comparison
+
+Evaluation ran on Windows 11 Pro x64 (build 22631), Intel Core i7-13700HX (16 cores / 24 logical processors), 15.7 GiB RAM, CPython 3.11, ONNX Runtime 1.31.0, FP32 `model_O4.onnx`, CPUExecutionProvider with one thread. Each job has 120 constructed applicants (24 strong, 48 partial, 48 unrelated; 12 strong English and 12 strong Arabic). CVs are 690–913 words and 1,193–1,452 E5 tokens across chunks. All figures are synthetic and no LLM judgments or candidate data were used.
+
+| Job | Ranker | Recall@20 | R-precision@24 | CPU seconds/CV |
+|---|---|---:|---:|---:|
+| Senior Backend Engineer | E5 | 20/24 (83.3%) | 21/24 (87.5%) | 1.2770 |
+| Senior Backend Engineer | lexical BM25 + aliases | 20/24 (83.3%) | 24/24 (100%) | 0.0060 |
+| Data Analyst | E5 | 12/24 (50.0%) | 12/24 (50.0%) | 1.9928 |
+| Data Analyst | lexical BM25 + aliases | 20/24 (83.3%) | 24/24 (100%) | 0.0087 |
+
+Language fairness details (strong-candidate scores; normalized lexical scores and cosine scores are ranker-specific and are not compared across rankers):
+
+| Job | Ranker / language | Top-20 strong retrieved | R-precision strong retrieved | Strong score min / median / mean / max |
+|---|---|---:|---:|---:|
+| Senior Backend | E5 English | 12/12 | 12/12 | 0.8246 / 0.8255 / 0.8261 / 0.8286 |
+| Senior Backend | E5 Arabic | 8/12 | 9/12 | 0.8184 / 0.8235 / 0.8229 / 0.8262 |
+| Senior Backend | lexical English | 12/12 | 12/12 | 0.9593 / 0.9802 / 0.9799 / 1.0000 |
+| Senior Backend | lexical Arabic | 8/12 | 12/12 | 0.5222 / 0.5298 / 0.5298 / 0.5372 |
+| Data Analyst | E5 English | 0/12 | 0/12 | 0.8104 / 0.8113 / 0.8115 / 0.8132 |
+| Data Analyst | E5 Arabic | 12/12 | 12/12 | 0.8151 / 0.8188 / 0.8194 / 0.8249 |
+| Data Analyst | lexical English | 12/12 | 12/12 | 0.9628 / 0.9820 / 0.9817 / 1.0000 |
+| Data Analyst | lexical Arabic | 8/12 | 12/12 | 0.9291 / 0.9445 / 0.9444 / 0.9594 |
+
+The earlier Data Analyst result of E5 0/12 English versus 12/12 Arabic is reproduced. Strong Arabic E5 scores have a higher median by 0.0075 (0.8188 vs 0.8113), and the full top-20 and R-precision distributions show the English strong candidates are displaced; this is a measurable language-ranking disparity, not evidence that the English text was missing or truncated. Since R=24, recall@20 cannot exceed 20/24 by construction.
+
+In the cross-language/synonym checks, both rankers placed the known positive first for English-job/Arabic-CV, Arabic-job/English-CV and `Accountant`/`محاسب`. For the keyword-stuffing check, E5 ranked the 100-times-repeated keyword-only CV first (score 0.8722) and the honest experience CV second (0.8581). BM25 with experience weighting and term-frequency saturation ranked the honest CV first (1.0000) and the stuffer second (0.6284).
+
+Lexical ranking was 1.2770–1.9928 E5 CPU seconds/CV versus 0.0060–0.0087 lexical CPU seconds/CV in these runs. E5 was substantially slower and showed a strong language disparity on Data Analyst; lexical achieved 100% R-precision on both constructed cohorts and ranked the honest CV ahead of the stuffer. These controlled labels favor explicit skill overlap; the results do not establish real-world hiring quality. A5 remains OFF pending review and the separate real-model A4 quality results.
+
+Docker verification: default image built at 592,124,019 bytes and contained no NumPy, ONNX Runtime, Tokenizers, or `/app/models`. The opt-in E5 image built at 1,300,597,146 bytes, contained the three pinned packages and model, and completed a CPU inference smoke check (2 vectors × 384 dimensions). Because `huggingface-hub` metadata now advertises an unpinned `hf-xet` dependency, the E5 target installs only the complete versions/hashes explicitly enumerated by `requirements-a5.lock` using `--no-deps`; the lock itself was not changed.

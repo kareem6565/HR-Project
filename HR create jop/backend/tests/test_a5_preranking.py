@@ -154,7 +154,8 @@ def test_quantized_model_fails_closed_when_vnni_cannot_be_verified(monkeypatch):
         OnnxE5Embedder(Path("missing-model"), Path("missing-tokenizer"), threads=2, quantized=True)
 
 
-def test_worker_ranks_public_application_once_and_syncs_batch_item(monkeypatch):
+@pytest.mark.parametrize("engine", ["lexical", "e5"])
+def test_worker_ranks_public_application_once_and_syncs_batch_item(monkeypatch, engine):
     import app.services.advisory_preranking_service as service
 
     organization_id = uuid4()
@@ -243,6 +244,7 @@ def test_worker_ranks_public_application_once_and_syncs_batch_item(monkeypatch):
             return b"synthetic-cv-content"
 
     monkeypatch.setattr(settings, "a5_prerank_enabled", True)
+    monkeypatch.setattr(settings, "a5_prerank_engine", engine)
     monkeypatch.setattr(service, "configured_embedder", lambda: FakeEmbedder())
     monkeypatch.setattr(
         "app.services.text_extraction_service.extract_text",

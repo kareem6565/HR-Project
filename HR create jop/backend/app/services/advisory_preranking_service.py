@@ -354,7 +354,10 @@ class OnnxE5Embedder:
             )
         expected_hash = QUANTIZED_MODEL_SHA256 if quantized else MODEL_SHA256
         if not model_path.is_file() or not tokenizer_path.is_file():
-            raise PreRankingUnavailable("Pinned ONNX model or tokenizer files are missing.")
+            raise PreRankingUnavailable(
+                "Optional E5 pack is selected, but its pinned ONNX model "
+                "or tokenizer files are missing."
+            )
         if _sha256_file(model_path) != expected_hash:
             raise PreRankingUnavailable("Pinned ONNX model checksum does not match.")
         self._np = np
@@ -469,10 +472,27 @@ def cpu_supports_avx512_vnni() -> bool:
     )
 
 
+def _require_e5_runtime() -> None:
+    import importlib.util
+
+    missing = [
+        module
+        for module in ("numpy", "onnxruntime", "tokenizers")
+        if importlib.util.find_spec(module) is None
+    ]
+    if missing:
+        names = ", ".join(missing)
+        raise PreRankingUnavailable(
+            f"Optional E5 add-on is not installed (missing: {names}); "
+            "build the backend-e5 image to use E5."
+        )
+
+
 @lru_cache(maxsize=1)
 def configured_embedder() -> OnnxE5Embedder:
     if not settings.a5_prerank_enabled:
         raise PreRankingUnavailable("Advisory pre-ranking is disabled by configuration.")
+    _require_e5_runtime()
     model_dir = Path(settings.a5_prerank_model_dir)
     return OnnxE5Embedder(
         model_dir
@@ -594,23 +614,32 @@ def rank_worker_cohort(db, *, job, batch, approved_profile, storage) -> None:
             candidate_identities.add(identity)
 
     try:
-        model = configured_embedder()
         requirements = []
+
         for item in approved_profile.profile_data.get("requirements") or []:
             text = item.get("text") if isinstance(item, dict) else item
             if text and not _SENSITIVE_LABEL_RE.search(str(text)):
                 requirements.append(str(text))
-        ranked = rank_candidates(
-            requirements,
-            candidates,
-            tokenizer=model.tokenizer,
-            embedder=model,
-            max_chunks_per_cv=settings.a5_prerank_max_chunks_per_cv,
-            timeout_seconds=ranking_timeout_for_cohort(
-                len(candidates),
-                base_timeout_seconds=settings.a5_prerank_timeout_seconds,
-            ),
+        timeout_seconds = ranking_timeout_for_cohort(
+            len(candidates),
+            base_timeout_seconds=settings.a5_prerank_timeout_seconds,
         )
+        if settings.a5_prerank_engine == "lexical":
+            from app.services.lexical_preranking_service import rank_lexically
+
+            ranked = rank_lexically(
+                requirements, candidates, timeout_seconds=timeout_seconds
+            )
+        else:
+            model = configured_embedder()
+            ranked = rank_candidates(
+                requirements,
+                candidates,
+                tokenizer=model.tokenizer,
+                embedder=model,
+                max_chunks_per_cv=settings.a5_prerank_max_chunks_per_cv,
+                timeout_seconds=timeout_seconds,
+            )
         by_identity = {result.identity: result for result in ranked}
         for identity, result in by_identity.items():
             rank_status, advisory_message = advisory_evaluation_state(

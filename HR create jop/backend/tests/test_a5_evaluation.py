@@ -45,10 +45,12 @@ def test_bilingual_skill_aliases_retrieve_cross_language_known_positive_cases():
 
 
 def test_synonym_case_matches_accountant_and_arabic_mohaseb():
+    import pytest
+
+    from app.services.advisory_preranking_service import PreRankingUnavailable
+
     _case_id, requirements, candidates, positives = _EVAL.cross_language_cases()[2]
-
-    raw = _EVAL.lexical_rank(candidates, requirements)
+    with pytest.raises(PreRankingUnavailable, match="No eligible CV terms matched"):
+        _EVAL.lexical_rank(candidates, requirements, bilingual_aliases=False)
     bilingual = _EVAL.lexical_rank(candidates, requirements, bilingual_aliases=True)
-
-    assert raw[0] not in positives
     assert bilingual[0] in positives

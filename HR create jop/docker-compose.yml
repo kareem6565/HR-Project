@@ -21,6 +21,9 @@ services:
   backend:
     build:
       context: ./backend
+      target: ${BACKEND_BUILD_TARGET:-backend}
+      args:
+        A5_E5_PACK: ${A5_E5_PACK:-off}
     env_file:
       - path: ./backend/.env
         required: false

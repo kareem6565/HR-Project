@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     )
     ai_mode: Literal["llm", "rules"] = Field(default="llm", validation_alias="AI_MODE")
     a5_prerank_enabled: bool = Field(default=False, validation_alias="A5_PRERANK_ENABLED")
+    a5_prerank_engine: Literal["lexical", "e5"] = Field(
+        default="lexical", validation_alias="A5_PRERANK_ENGINE"
+    )
     a5_prerank_model_dir: str = Field(
         default="./models/multilingual-e5-small", validation_alias="A5_PRERANK_MODEL_DIR"
     )
