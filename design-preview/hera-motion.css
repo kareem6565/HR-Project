@@ -8,14 +8,14 @@
 
 :root {
   /* Motion tokens */
-  --motion-instant: 120ms;
-  --motion-fast: 200ms;
-  --motion-standard: 320ms;
-  --motion-slow: 560ms;
-  --motion-cinematic: 900ms;
-  --motion-ease: cubic-bezier(0.22, 1, 0.36, 1);        /* soft settle */
-  --motion-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1); /* gentle overshoot */
-  --motion-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --hm-instant: 120ms;
+  --hm-fast: 200ms;
+  --hm-standard: 320ms;
+  --hm-slow: 560ms;
+  --hm-cinematic: 900ms;
+  --hm-ease: cubic-bezier(0.22, 1, 0.36, 1);        /* soft settle */
+  --hm-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1); /* gentle overshoot */
+  --hm-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --stagger-step: 70ms;
 
   /* Depth tokens */
@@ -68,22 +68,22 @@
 
 /* ---------- Entrance utilities ---------- */
 
-.motion-rise   { animation: hera-rise var(--motion-slow) var(--motion-ease) both; }
-.motion-rise-sm { animation: hera-rise-sm var(--motion-standard) var(--motion-ease) both; }
-.motion-pop    { animation: hera-pop var(--motion-standard) var(--motion-ease-spring) both; }
+.motion-rise   { animation: hera-rise var(--hm-slow) var(--hm-ease) both; }
+.motion-rise-sm { animation: hera-rise-sm var(--hm-standard) var(--hm-ease) both; }
+.motion-pop    { animation: hera-pop var(--hm-standard) var(--hm-ease-spring) both; }
 
 /* Stagger: apply .motion-stagger to children, set --i per child (0,1,2,...) */
-.motion-stagger { animation: hera-rise var(--motion-slow) var(--motion-ease) both;
+.motion-stagger { animation: hera-rise var(--hm-slow) var(--hm-ease) both;
                   animation-delay: calc(var(--i, 0) * var(--stagger-step)); }
-.motion-stagger-pop { animation: hera-pop var(--motion-standard) var(--motion-ease-spring) both;
+.motion-stagger-pop { animation: hera-pop var(--hm-standard) var(--hm-ease-spring) both;
                       animation-delay: calc(var(--i, 0) * var(--stagger-step)); }
 
 /* ---------- Interactive surfaces ---------- */
 
 /* Card that lifts on hover/focus-within */
 .motion-card {
-  transition: transform var(--motion-fast) var(--motion-ease),
-              box-shadow var(--motion-fast) var(--motion-ease);
+  transition: transform var(--hm-fast) var(--hm-ease),
+              box-shadow var(--hm-fast) var(--hm-ease);
   box-shadow: var(--elev-1);
 }
 .motion-card:hover, .motion-card:focus-within {
@@ -95,9 +95,9 @@
 .motion-btn {
   position: relative;
   overflow: hidden;
-  transition: transform var(--motion-instant) var(--motion-ease),
-              box-shadow var(--motion-fast) var(--motion-ease),
-              background-color var(--motion-fast) var(--motion-ease);
+  transition: transform var(--hm-instant) var(--hm-ease),
+              box-shadow var(--hm-fast) var(--hm-ease),
+              background-color var(--hm-fast) var(--hm-ease);
 }
 .motion-btn:hover  { transform: translateY(-1px); box-shadow: var(--elev-2); }
 .motion-btn:active { transform: translateY(0) scale(0.97); }
@@ -107,7 +107,7 @@
   transform: translateX(-120%) skewX(-18deg);
   pointer-events: none;
 }
-.motion-btn:hover .sheen { animation: hera-sheen 700ms var(--motion-ease-out); }
+.motion-btn:hover .sheen { animation: hera-sheen 700ms var(--hm-ease-out); }
 
 /* Skeleton shimmer */
 .motion-skeleton {
@@ -119,7 +119,7 @@
 }
 
 /* Live status dot */
-.motion-live-dot { animation: hera-pulse-ring 2s var(--motion-ease-out) infinite; }
+.motion-live-dot { animation: hera-pulse-ring 2s var(--hm-ease-out) infinite; }
 
 /* Ambient float for decorative marks */
 .motion-float { animation: hera-float 6s ease-in-out infinite; }
@@ -138,7 +138,7 @@
 /* SVG chart draw-on */
 .chart-draw {
   stroke-dasharray: var(--draw-length, 400);
-  animation: hera-draw 1.2s var(--motion-ease-out) both;
+  animation: hera-draw 1.2s var(--hm-ease-out) both;
 }
 
 /* ---------- Reduced motion: everything settles instantly ---------- */

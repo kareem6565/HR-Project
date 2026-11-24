@@ -67,7 +67,7 @@ export default function Dashboard() {
     : 0;
 
   return (
-    <div className="dashboard dashboard-redesign">
+    <div className="dashboard dashboard-redesign motion-rise">
       <section className="dashboard-intro" aria-labelledby="dashboard-intro-title">
         <div className="dashboard-intro-copy">
           <p className="dashboard-kicker">
@@ -95,10 +95,16 @@ export default function Dashboard() {
       </section>
 
       <section className="stats-grid dashboard-stats" aria-label="Recruitment summary">
-        <StatCard icon={Users} label="Candidates with applications" value={stats.candidatesWithApplications} />
-        <StatCard icon={BriefcaseBusiness} label="Active jobs" value={stats.activeJobs} />
-        <StatCard icon={ClipboardList} label="Applications" value={stats.applications} />
-        <StatCard icon={UserRoundCheck} label="Advanced applications" value={stats.advancedApplications} />
+        {[
+          { icon: Users, label: "Candidates with applications", value: stats.candidatesWithApplications },
+          { icon: BriefcaseBusiness, label: "Active jobs", value: stats.activeJobs },
+          { icon: ClipboardList, label: "Applications", value: stats.applications },
+          { icon: UserRoundCheck, label: "Advanced applications", value: stats.advancedApplications },
+        ].map((card, i) => (
+          <div key={card.label} className="motion-stagger" style={{ "--i": i }}>
+            <StatCard icon={card.icon} label={card.label} value={card.value} />
+          </div>
+        ))}
       </section>
 
       {stats.totalJobs === 0 && stats.applications === 0 && (

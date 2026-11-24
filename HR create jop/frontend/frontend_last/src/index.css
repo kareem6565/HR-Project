@@ -10091,3 +10091,31 @@ html[dir="rtl"] .main { margin-left: 0; margin-right: 240px; width: calc(100% - 
 .hiring-insight-copy { font-size: 14px; }
 .hiring-insight-footer,
 .hiring-insight-footer a { font-size: 12px; }
+
+/* ===== HERA Motion integration (ui/motion-redesign) ===== */
+
+/* Stagger wrappers keep the grid cell so cards fill their track */
+.stats-grid > .motion-stagger,
+.dashboard-stats > .motion-stagger {
+  display: flex;
+  min-width: 0;
+}
+.stats-grid > .motion-stagger > .stat-card,
+.dashboard-stats > .motion-stagger > .stat-card {
+  flex: 1;
+}
+
+/* Skeleton component shapes */
+.skeleton-card {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding: 18px;
+}
+.skeleton-lines {
+  flex: 1;
+  display: grid;
+  gap: 10px;
+}
+.skeleton-avatar { width: 52px; height: 52px; border-radius: 50%; flex: none; }
+.skeleton-line { height: 12px; }
