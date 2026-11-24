@@ -308,3 +308,6 @@
   .linkedin-import.is-running::before, .job-creation-methods button:hover .job-method-icon { animation: none; }
   .job-creation-methods button { transition: none; }
 }
+
+.brand-icon.mascot-scan { border-radius: 10px; }
+.brand-icon.mascot-scan .scan-ring { inset: -4px; border-radius: 13px; }
