@@ -61,14 +61,37 @@ export default function ScoreBadge({ value, group, size = 40, showLabel = false 
   const tone = BAND_CONFIG[effectiveGroup]?.tone || "grey";
   const label = BAND_CONFIG[effectiveGroup]?.label || "Lower Priority";
 
+  const ringR = (size - 6) / 2;
+  const ringC = 2 * Math.PI * ringR;
+  const ringTarget = numeric === null ? ringC : ringC * (1 - Math.min(100, Math.max(0, numeric)) / 100);
   const badgeNode = (
-    <div
-      className={`score-badge score-badge-${tone} motion-pop`}
-      style={{ width: size, height: size, fontSize: size * 0.34 }}
-      aria-label={`Score: ${displayValue}, Band: ${label}`}
-      title={`Score: ${displayValue} (${label})`}
-    >
-      {shown}
+    <div className="score-badge-wrap" style={{ width: size, height: size }}>
+      {numeric !== null && (
+        <svg
+          className={`score-ring score-ring-${tone}`}
+          width={size}
+          height={size}
+          viewBox={`0 0 ${size} ${size}`}
+          aria-hidden="true"
+        >
+          <circle className="score-ring-bg" cx={size / 2} cy={size / 2} r={ringR} />
+          <circle
+            className="score-ring-fill"
+            cx={size / 2}
+            cy={size / 2}
+            r={ringR}
+            style={{ strokeDasharray: ringC, "--ring-target": ringTarget, "--ring-circ": ringC }}
+          />
+        </svg>
+      )}
+      <div
+        className={`score-badge score-badge-${tone} motion-pop`}
+        style={{ width: size, height: size, fontSize: size * 0.34 }}
+        aria-label={`Score: ${displayValue}, Band: ${label}`}
+        title={`Score: ${displayValue} (${label})`}
+      >
+        {shown}
+      </div>
     </div>
   );
 
