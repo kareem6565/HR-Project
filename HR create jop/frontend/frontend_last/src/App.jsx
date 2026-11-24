@@ -8,6 +8,7 @@ import AuthLayout from "./layouts/AuthLayout";
 import MainLayout from "./layouts/MainLayout";
 
 import Login from "./pages/auth/Login";
+import LandingPage from "./pages/landing/LandingPage";
 import SsoCallback from "./pages/auth/SsoCallback";
 
 import Dashboard from "./pages/dashboard/Dashboard";
@@ -47,6 +48,7 @@ function AuthenticatedRoutes() {
 
         {/* The shared HR portal owns sign-in; keep only the SSO return screen here. */}
         <Route path="/login" element={<Login />} />
+        <Route path="/landing" element={<LandingPage />} />
         <Route element={<AuthLayout />}>
           <Route path="/sso/callback" element={<SsoCallback />} />
         </Route>
