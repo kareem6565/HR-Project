@@ -7,8 +7,9 @@ export default function AuthLayout() {
     <div className="auth-shell">
       <div className="auth-side">
         <div className="brand">
-          <div className="brand-icon">
+          <div className="brand-icon mascot-scan">
             <BrandIcon size={20} />
+            <span className="scan-ring" aria-hidden="true"></span>
           </div>
           <div>
             <strong>HERA</strong>
