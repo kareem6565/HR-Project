@@ -1,0 +1,158 @@
+/* ============================================================
+   HERA Motion Foundation v1  (design-preview)
+   "HERA, Alive" - a choreographed motion + depth system built
+   on the approved HERA brand tokens (docs/ui-design-direction.md).
+   Every effect is transform/opacity based (GPU-cheap) and has a
+   prefers-reduced-motion fallback at the bottom of this file.
+   ============================================================ */
+
+:root {
+  /* Motion tokens */
+  --motion-instant: 120ms;
+  --motion-fast: 200ms;
+  --motion-standard: 320ms;
+  --motion-slow: 560ms;
+  --motion-cinematic: 900ms;
+  --motion-ease: cubic-bezier(0.22, 1, 0.36, 1);        /* soft settle */
+  --motion-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1); /* gentle overshoot */
+  --motion-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --stagger-step: 70ms;
+
+  /* Depth tokens */
+  --elev-1: 0 1px 2px rgba(8, 42, 36, 0.06), 0 2px 8px rgba(8, 42, 36, 0.06);
+  --elev-2: 0 2px 6px rgba(8, 42, 36, 0.07), 0 12px 28px rgba(8, 42, 36, 0.10);
+  --elev-3: 0 4px 10px rgba(8, 42, 36, 0.08), 0 24px 56px rgba(8, 42, 36, 0.16);
+  --elev-gold-glow: 0 0 0 1px rgba(233, 217, 138, 0.35), 0 12px 40px rgba(233, 217, 138, 0.25);
+}
+
+/* ---------- Keyframes library ---------- */
+
+@keyframes hera-rise {            /* entrance: rise + fade */
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes hera-rise-sm {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes hera-pop {             /* entrance: scale pop */
+  0%   { opacity: 0; transform: scale(0.92); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes hera-drift {           /* ambient: slow floating shapes */
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  33%      { transform: translate3d(4%, -6%, 0) scale(1.08); }
+  66%      { transform: translate3d(-5%, 4%, 0) scale(0.95); }
+}
+@keyframes hera-float {           /* ambient: gentle bob */
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-8px); }
+}
+@keyframes hera-sheen {           /* hover: light sweep across a surface */
+  from { transform: translateX(-120%) skewX(-18deg); }
+  to   { transform: translateX(240%) skewX(-18deg); }
+}
+@keyframes hera-shimmer {         /* skeleton loading */
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+@keyframes hera-draw {            /* SVG stroke draw-on */
+  from { stroke-dashoffset: var(--draw-length, 400); }
+  to   { stroke-dashoffset: 0; }
+}
+@keyframes hera-pulse-ring {      /* attention ring, e.g. live status dot */
+  0%   { box-shadow: 0 0 0 0 rgba(111, 168, 184, 0.45); }
+  70%  { box-shadow: 0 0 0 10px rgba(111, 168, 184, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(111, 168, 184, 0); }
+}
+
+/* ---------- Entrance utilities ---------- */
+
+.motion-rise   { animation: hera-rise var(--motion-slow) var(--motion-ease) both; }
+.motion-rise-sm { animation: hera-rise-sm var(--motion-standard) var(--motion-ease) both; }
+.motion-pop    { animation: hera-pop var(--motion-standard) var(--motion-ease-spring) both; }
+
+/* Stagger: apply .motion-stagger to children, set --i per child (0,1,2,...) */
+.motion-stagger { animation: hera-rise var(--motion-slow) var(--motion-ease) both;
+                  animation-delay: calc(var(--i, 0) * var(--stagger-step)); }
+.motion-stagger-pop { animation: hera-pop var(--motion-standard) var(--motion-ease-spring) both;
+                      animation-delay: calc(var(--i, 0) * var(--stagger-step)); }
+
+/* ---------- Interactive surfaces ---------- */
+
+/* Card that lifts on hover/focus-within */
+.motion-card {
+  transition: transform var(--motion-fast) var(--motion-ease),
+              box-shadow var(--motion-fast) var(--motion-ease);
+  box-shadow: var(--elev-1);
+}
+.motion-card:hover, .motion-card:focus-within {
+  transform: translateY(-4px);
+  box-shadow: var(--elev-2);
+}
+
+/* Button press physics + optional sheen sweep */
+.motion-btn {
+  position: relative;
+  overflow: hidden;
+  transition: transform var(--motion-instant) var(--motion-ease),
+              box-shadow var(--motion-fast) var(--motion-ease),
+              background-color var(--motion-fast) var(--motion-ease);
+}
+.motion-btn:hover  { transform: translateY(-1px); box-shadow: var(--elev-2); }
+.motion-btn:active { transform: translateY(0) scale(0.97); }
+.motion-btn .sheen {
+  position: absolute; top: 0; bottom: 0; width: 40%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent);
+  transform: translateX(-120%) skewX(-18deg);
+  pointer-events: none;
+}
+.motion-btn:hover .sheen { animation: hera-sheen 700ms var(--motion-ease-out); }
+
+/* Skeleton shimmer */
+.motion-skeleton {
+  background: linear-gradient(90deg,
+    rgba(8,42,36,0.06) 25%, rgba(8,42,36,0.12) 37%, rgba(8,42,36,0.06) 63%);
+  background-size: 400% 100%;
+  animation: hera-shimmer 1.4s linear infinite;
+  border-radius: 8px;
+}
+
+/* Live status dot */
+.motion-live-dot { animation: hera-pulse-ring 2s var(--motion-ease-out) infinite; }
+
+/* Ambient float for decorative marks */
+.motion-float { animation: hera-float 6s ease-in-out infinite; }
+
+/* ---------- Cinematic hero layer ---------- */
+
+.hero-aurora { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.hero-aurora .blob {
+  position: absolute; border-radius: 50%; filter: blur(70px); opacity: 0.55;
+  animation: hera-drift 18s ease-in-out infinite;
+}
+.hero-aurora .blob.b1 { width: 46vw; height: 46vw; background: #14443c; top: -18%; left: -10%; }
+.hero-aurora .blob.b2 { width: 34vw; height: 34vw; background: rgba(111,168,184,0.5); bottom: -22%; right: -6%; animation-delay: -6s; }
+.hero-aurora .blob.b3 { width: 22vw; height: 22vw; background: rgba(233,217,138,0.35); top: 12%; right: 18%; animation-delay: -12s; }
+
+/* SVG chart draw-on */
+.chart-draw {
+  stroke-dasharray: var(--draw-length, 400);
+  animation: hera-draw 1.2s var(--motion-ease-out) both;
+}
+
+/* ---------- Reduced motion: everything settles instantly ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-rise, .motion-rise-sm, .motion-pop,
+  .motion-stagger, .motion-stagger-pop,
+  .motion-float, .motion-live-dot,
+  .hero-aurora .blob, .chart-draw {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+  }
+  .motion-card, .motion-btn { transition: none; }
+  .motion-btn:hover .sheen { display: none; }
+  .motion-skeleton { animation: none; }
+}
