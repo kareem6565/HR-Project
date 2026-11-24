@@ -156,3 +156,48 @@
   .motion-btn:hover .sheen { display: none; }
   .motion-skeleton { animation: none; }
 }
+
+/* ---------- Mascot scan: the mark "reads a CV" ---------- */
+.mascot-scan {
+  position: relative;
+  overflow: hidden;
+  border-radius: inherit;
+  isolation: isolate;
+}
+.mascot-scan::after {
+  content: "";
+  position: absolute;
+  inset-inline: -20%;
+  top: -30%;
+  height: 34%;
+  background: linear-gradient(180deg,
+    transparent 0%,
+    rgba(111, 168, 184, 0.12) 25%,
+    rgba(233, 217, 138, 0.55) 50%,
+    rgba(111, 168, 184, 0.12) 75%,
+    transparent 100%);
+  animation: hera-mascot-scan 3.2s var(--hm-ease, cubic-bezier(0.22, 1, 0.36, 1)) infinite;
+  pointer-events: none;
+}
+@keyframes hera-mascot-scan {
+  0%   { transform: translateY(0); opacity: 0; }
+  12%  { opacity: 1; }
+  62%  { opacity: 1; }
+  78%, 100% { transform: translateY(390%); opacity: 0; }
+}
+.mascot-scan .scan-ring {
+  position: absolute;
+  inset: -6px;
+  border-radius: 32px;
+  border: 2px solid rgba(233, 217, 138, 0.0);
+  animation: hera-mascot-ring 3.2s ease-out infinite;
+  pointer-events: none;
+}
+@keyframes hera-mascot-ring {
+  0%, 55% { box-shadow: 0 0 0 0 rgba(233, 217, 138, 0); }
+  62%     { box-shadow: 0 0 0 5px rgba(233, 217, 138, 0.35); }
+  78%, 100% { box-shadow: 0 0 0 12px rgba(233, 217, 138, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mascot-scan::after, .mascot-scan .scan-ring { animation: none; display: none; }
+}

@@ -14,6 +14,7 @@ import {
   retryBatchItem,
 } from "../../services/screeningBatchService";
 import { formatFileSize } from "../../pages/candidates/screenCandidateUtils";
+import useCountUp from "../../hooks/useCountUp";
 
 export default function ScreeningBatchProgress({
   batchId,
@@ -274,7 +275,7 @@ export default function ScreeningBatchProgress({
         </div>
       )}
 
-      <section className="screening-progress" aria-label="Screening progress">
+      <section className={`screening-progress motion-rise${terminalFiles < totalFiles ? " screening-live" : ""}`} aria-label="Screening progress">
         <div className="screening-progress-heading">
           <span>Files processed</span>
           {progressPercent === null ? (
@@ -311,14 +312,14 @@ export default function ScreeningBatchProgress({
         <div className="stat-card" style={{ padding: 12 }}>
           <div className="stat-info">
             <span>Total CVs</span>
-            <strong>{totalFiles}</strong>
+            <strong><CountUpValue value={totalFiles} /></strong>
           </div>
         </div>
         <div className="stat-card" style={{ padding: 12 }}>
           <div className="stat-info">
             <span>Queued</span>
             <strong style={{ color: "var(--color-amber, #f59e0b)" }}>
-              {queuedFiles}
+              <CountUpValue value={queuedFiles} />
             </strong>
           </div>
         </div>
@@ -326,7 +327,7 @@ export default function ScreeningBatchProgress({
           <div className="stat-info">
             <span>Processing</span>
             <strong style={{ color: "var(--color-blue, #3b82f6)" }}>
-              {runningFiles}
+              <CountUpValue value={runningFiles} />
             </strong>
           </div>
         </div>
@@ -334,7 +335,7 @@ export default function ScreeningBatchProgress({
           <div className="stat-info">
             <span>Done</span>
             <strong style={{ color: "var(--evidence-supported, #067647)" }}>
-              {doneFiles}
+              <CountUpValue value={doneFiles} />
             </strong>
           </div>
         </div>
@@ -342,7 +343,7 @@ export default function ScreeningBatchProgress({
           <div className="stat-info">
             <span>Failed</span>
             <strong style={{ color: "var(--decision-reject, #b42318)" }}>
-              {failedFiles}
+              <CountUpValue value={failedFiles} />
             </strong>
           </div>
         </div>
@@ -351,7 +352,7 @@ export default function ScreeningBatchProgress({
             <div className="stat-info">
               <span>Duplicates</span>
               <strong style={{ color: "var(--hera-muted, #66736F)" }}>
-                {duplicateFiles}
+                <CountUpValue value={duplicateFiles} />
               </strong>
             </div>
           </div>
@@ -527,4 +528,9 @@ export default function ScreeningBatchProgress({
       </div>
     </div>
   );
+}
+
+function CountUpValue({ value }) {
+  const display = useCountUp(typeof value === "number" ? value : 0);
+  return <>{typeof value === "number" ? display : value}</>;
 }

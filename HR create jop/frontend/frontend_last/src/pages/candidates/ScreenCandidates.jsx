@@ -200,8 +200,8 @@ export default function ScreenCandidates() {
 
   return (
     <>
-      <section className="content-grid screen-candidates-grid" aria-label="Candidate screening setup">
-        <div className="panel screen-setup-panel">
+      <section className="content-grid screen-candidates-grid motion-rise" aria-label="Candidate screening setup">
+        <div className="panel screen-setup-panel motion-card">
           <div className="panel-title">
             <div>
               <p className="eyebrow">STEP 1 · JOB & CRITERIA</p>
@@ -428,7 +428,7 @@ export default function ScreenCandidates() {
           )}
         </div>
 
-        <div className="panel screen-upload-panel">
+        <div className="panel screen-upload-panel motion-card">
           <div className="panel-title">
             <div>
               <p className="eyebrow">STEP 2 · CANDIDATE CVS</p>
@@ -473,8 +473,8 @@ export default function ScreenCandidates() {
                 </strong>
               </div>
               <div className="file-list">
-                {files.map((f) => (
-                  <div className="file file-valid" key={f.fingerprint}>
+                {files.map((f, index) => (
+                  <div className="file file-valid motion-stagger-pop" style={{ "--i": Math.min(index, 10) }} key={f.fingerprint}>
                     <FileText
                       size={18}
                       aria-hidden="true"
@@ -547,8 +547,8 @@ export default function ScreenCandidates() {
                 These files were not added to the screening batch because they did not pass pre-submission checks:
               </p>
               <div className="file-list">
-                {rejectedFiles.map((rf) => (
-                  <div className="file file-rejected" key={rf.id}>
+                {rejectedFiles.map((rf, index) => (
+                  <div className="file file-rejected motion-stagger-pop" style={{ "--i": Math.min(index, 10) }} key={rf.id}>
                     <AlertCircle
                       size={18}
                       aria-hidden="true"
