@@ -678,8 +678,8 @@ export default function JobForm() {
             aria-pressed={creationMethod === "linkedin_import"}
             onClick={() => selectCreationMethod("linkedin_import")}>
             <span className="job-method-icon" aria-hidden="true"><FileUp size={18} /></span>
-            <span className="job-method-title">Import from LinkedIn</span>
-            <span className="job-method-description">Start with a public job listing</span>
+            <span className="job-method-title">Import from LinkedIn <span className="job-method-badge">Fastest</span></span>
+            <span className="job-method-description">Skip writing: start from a public job listing</span>
           </button>}
           <button type="button" className={creationMethod === "ai_generated" ? "primary" : "secondary"}
             aria-label="Generate with AI"

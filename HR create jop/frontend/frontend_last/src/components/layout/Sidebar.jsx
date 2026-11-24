@@ -5,6 +5,7 @@ import {
   BriefcaseBusiness,
   FileUp,
   ListOrdered,
+  Radar,
   Users,
   ClipboardList,
   CalendarClock,
@@ -22,6 +23,7 @@ const PRIMARY_NAV_ITEMS = [
   { to: "/jobs", label: "Jobs", icon: BriefcaseBusiness },
   { to: "/candidates/screen", label: "Screening", icon: FileUp },
   { to: "/matching-results", label: "Matching Results", icon: ListOrdered },
+  { to: "/sourcing", label: "LinkedIn Sourcing", icon: Radar },
   { to: "/candidates", label: "Candidates", icon: Users },
   { to: "/applications", label: "Applications", icon: ClipboardList },
 ];

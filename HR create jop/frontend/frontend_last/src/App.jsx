@@ -26,6 +26,7 @@ import TalentPoolList from "./pages/talent-pool/TalentPoolList";
 import TalentPoolConsent from "./pages/talent-pool/TalentPoolConsent";
 import GitHubEvidenceConsent from "./pages/github-evidence/GitHubEvidenceConsent";
 import MatchingResults from "./pages/matching/MatchingResults";
+import LinkedInSourcing from "./pages/sourcing/LinkedInSourcing";
 import AnalyticsPage from "./pages/analytics/AnalyticsPage";
 import AISettings from "./pages/settings/AISettings";
 import InterviewsList from "./pages/interviews/InterviewsList";
@@ -83,6 +84,7 @@ function AuthenticatedRoutes() {
           <Route path="/talent-pool" element={<TalentPoolList />} />
           <Route path="/matching-results" element={<MatchingResults />} />
           <Route path="/matching" element={<MatchingResults />} />
+          <Route path="/sourcing" element={<LinkedInSourcing />} />
           <Route path="/analytics" element={<AnalyticsPage />} />
 
           {/* Admin-only settings route */}

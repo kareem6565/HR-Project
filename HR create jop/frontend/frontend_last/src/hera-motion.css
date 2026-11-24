@@ -311,3 +311,78 @@
 
 .brand-icon.mascot-scan { border-radius: 10px; }
 .brand-icon.mascot-scan .scan-ring { inset: -4px; border-radius: 13px; }
+
+/* ---------------- LinkedIn sourcing page ---------------- */
+.sourcing-grid { grid-template-columns: minmax(340px, 5fr) minmax(360px, 6fr); align-items: start; }
+.sourcing-hero { animation: hmRiseIn 650ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.sourcing-hero .eyebrow { display: inline-flex; align-items: center; gap: 6px; color: #0a66c2; }
+.sourcing-hero-sub { color: #475467; margin-top: 4px; }
+.sourcing-form { display: grid; gap: 10px; margin-top: 18px; }
+.sourcing-form textarea, .sourcing-form select {
+  border: 1.5px solid #d0d5dd;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font: inherit;
+  transition: border-color 250ms ease, box-shadow 250ms ease;
+}
+.sourcing-form textarea:focus, .sourcing-form select:focus {
+  outline: none;
+  border-color: #0a66c2;
+  box-shadow: 0 0 0 4px rgba(10, 102, 194, 0.14);
+}
+.sourcing-submit {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  transition: transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 250ms ease;
+}
+.sourcing-submit:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 10px 24px -8px rgba(10, 102, 194, 0.5); }
+.sourcing-submit:active:not(:disabled) { transform: scale(0.97); }
+
+.sourcing-results { min-height: 340px; display: grid; place-items: center; animation: hmRiseIn 650ms cubic-bezier(0.22, 1, 0.36, 1) 120ms both; }
+.sourcing-idle, .sourcing-empty, .sourcing-searching { text-align: center; color: #667085; max-width: 380px; }
+.sourcing-idle h3, .sourcing-empty h3 { color: #1B3A3A; margin: 10px 0 6px; }
+.sourcing-idle-icon { color: #0a66c2; opacity: 0.85; }
+.sourcing-criteria { display: inline-flex; align-items: center; gap: 6px; background: #f4f3ff; color: #6941c6; border-radius: 999px; padding: 6px 14px; font-size: 13px; }
+
+.sourcing-radar {
+  position: relative;
+  width: 84px; height: 84px;
+  margin: 0 auto 14px;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  color: #0a66c2;
+  background: radial-gradient(circle, rgba(10,102,194,0.10), rgba(10,102,194,0.03) 65%);
+  border: 1px solid rgba(10,102,194,0.25);
+  overflow: hidden;
+}
+.sourcing-radar-sweep {
+  position: absolute; inset: 0;
+  background: conic-gradient(from 0deg, rgba(10,102,194,0.45), transparent 90deg);
+  animation: hmRadarSpin 1.6s linear infinite;
+}
+@keyframes hmRadarSpin { to { transform: rotate(360deg); } }
+.sourcing-phase-text { font-weight: 600; color: #1B3A3A; animation: hmFadeSlideUp 400ms ease both; }
+.sourcing-skeleton-list { display: grid; gap: 10px; margin-top: 18px; }
+.sourcing-candidate-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; width: 100%; }
+.sourcing-candidate-card { text-align: left; border: 1px solid #eaecf0; border-radius: 12px; padding: 14px 16px; display: grid; gap: 2px; }
+
+/* Job method prominence badge */
+.job-method-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #1B3A3A;
+  background: linear-gradient(120deg, #E9D98A, #f4e9b8);
+  box-shadow: 0 1px 4px rgba(27, 58, 58, 0.25);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sourcing-radar-sweep { animation: none; }
+  .sourcing-hero, .sourcing-results, .sourcing-phase-text { animation: none; }
+  .sourcing-submit { transition: none; }
+}
+.sourcing-in-mark { font-weight: 800; font-size: 26px; color: #0a66c2; font-family: inherit; }
