@@ -1,5 +1,6 @@
 import React from "react";
 import { formatScore, parseScore } from "../../utils/score";
+import useCountUp from "../../hooks/useCountUp";
 
 // Authoritative grouping bands from backend (Phase 4.5 candidate_pool_service.py):
 // >=70: must_review -> "green" ("Must Review")
@@ -49,18 +50,25 @@ export function labelForScore(score, group) {
 
 export default function ScoreBadge({ value, group, size = 40, showLabel = false }) {
   const displayValue = formatScore(value, { suffix: "" });
+  const numeric = parseScore(value);
+  const animated = useCountUp(numeric !== null ? Math.round(numeric) : 0);
+  const shown = numeric === null
+    ? displayValue
+    : animated >= Math.round(numeric)
+      ? displayValue
+      : String(animated);
   const effectiveGroup = parseScore(value) === null ? "lower_priority" : group || groupForScore(value);
   const tone = BAND_CONFIG[effectiveGroup]?.tone || "grey";
   const label = BAND_CONFIG[effectiveGroup]?.label || "Lower Priority";
 
   const badgeNode = (
     <div
-      className={`score-badge score-badge-${tone}`}
+      className={`score-badge score-badge-${tone} motion-pop`}
       style={{ width: size, height: size, fontSize: size * 0.34 }}
       aria-label={`Score: ${displayValue}, Band: ${label}`}
       title={`Score: ${displayValue} (${label})`}
     >
-      {displayValue}
+      {shown}
     </div>
   );
 
