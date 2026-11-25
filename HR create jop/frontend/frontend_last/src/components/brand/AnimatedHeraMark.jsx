@@ -1,0 +1,42 @@
+import React from "react";
+import "./AnimatedHeraMark.css";
+
+// The HERA R-with-smile mark, alive: it blinks, its smile grows when it
+// "notices" you, and the little lens pulses a scan every loop. All motion is
+// CSS/SMIL inside the SVG - no JS timers, honors reduced motion.
+
+export default function AnimatedHeraMark({ size = 40, title = "HERA" }) {
+  return (
+    <svg
+      className="hera-mark-animated"
+      viewBox="0 0 210 190"
+      width={size}
+      height={(size * 190) / 210}
+      role="img"
+      aria-label={title}
+    >
+      {/* R body */}
+      <path className="hm-rise" fill="#1B3A3A" d="M50 109V43c0-19 13-32 32-32h47c31 0 51 18 54 43-10-11-22-16-39-16H87v39c13 2 24 8 33 18l-20 20c-7-8-15-12-26-12-17 0-29 12-29 29v19H26v-16c0-13 8-24 24-27z" />
+      <path className="hm-rise" fill="#1B3A3A" d="M40 86c-22 8-34 26-34 48 0 21 12 37 32 45l17-22c-9-4-14-12-14-23s5-19 15-23z" />
+      {/* gold accent strokes */}
+      <path className="hm-rise" fill="#E9D98A" d="M156 60c17 16 27 36 27 57 0 26-15 47-42 61l22 1-15-31c18-12 29-30 29-51 0-13-4-25-13-37z" />
+      <path className="hm-rise" fill="#E9D98A" d="M132 90c-15 14-22 25-22 42 0 14 6 27 17 38l-4 11h46l-15-33c15-10 23-25 23-41 0-13-5-24-14-33z" />
+      {/* eyes: blink */}
+      <circle className="hm-eye" cx="91" cy="53" r="7" fill="#1B3A3A" />
+      <circle className="hm-eye" cx="127" cy="53" r="7" fill="#1B3A3A" />
+      {/* smile: grows and relaxes once per loop */}
+      <path className="hm-smile" d="M95 70c9 8 20 8 29 0" fill="none" stroke="#1B3A3A" strokeWidth="5" strokeLinecap="round">
+        <animate
+          attributeName="d"
+          dur="4s"
+          repeatCount="indefinite"
+          values="M95 70c9 8 20 8 29 0; M95 70c9 8 20 8 29 0; M92 70c12 11 24 11 35 0; M92 70c12 11 24 11 35 0; M95 70c9 8 20 8 29 0; M95 70c9 8 20 8 29 0"
+          keyTimes="0; 0.4; 0.52; 0.62; 0.74; 1"
+        />
+      </path>
+      {/* lens: pulse + scan ring */}
+      <circle className="hm-lens" cx="116" cy="119" r="16" fill="#6FA8B8" stroke="#fff" strokeWidth="6" />
+      <circle className="hm-scan" cx="116" cy="119" r="16" fill="none" stroke="#6FA8B8" strokeWidth="3" />
+    </svg>
+  );
+}

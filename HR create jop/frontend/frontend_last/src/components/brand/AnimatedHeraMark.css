@@ -1,0 +1,59 @@
+/* AnimatedHeraMark: idle loop is 4s. Entrance plays once. */
+.hera-mark-animated .hm-rise {
+  animation: hm-rise-in 0.7s var(--hm-ease, ease-out) both;
+}
+.hera-mark-animated .hm-rise:nth-of-type(2) { animation-delay: 0.08s; }
+.hera-mark-animated .hm-rise:nth-of-type(3) { animation-delay: 0.16s; }
+.hera-mark-animated .hm-rise:nth-of-type(4) { animation-delay: 0.24s; }
+
+@keyframes hm-rise-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Eyes blink twice per 4s loop */
+.hera-mark-animated .hm-eye {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: hm-blink 4s linear infinite;
+}
+@keyframes hm-blink {
+  0%, 23%, 27%, 100% { transform: scaleY(1); }
+  24.5%, 25.5% { transform: scaleY(0.12); }
+  78%, 82% { transform: scaleY(1); }
+  79.5%, 80.5% { transform: scaleY(0.12); }
+}
+
+/* Lens breathes; scan ring pings once per loop */
+.hera-mark-animated .hm-lens {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: hm-lens-pulse 4s ease-in-out infinite;
+}
+@keyframes hm-lens-pulse {
+  0%, 55%, 100% { transform: scale(1); }
+  62% { transform: scale(1.12); }
+  70% { transform: scale(1); }
+}
+.hera-mark-animated .hm-scan {
+  transform-box: fill-box;
+  transform-origin: center;
+  opacity: 0;
+  animation: hm-scan-ping 4s ease-out infinite;
+}
+@keyframes hm-scan-ping {
+  0%, 56% { opacity: 0; transform: scale(1); }
+  60% { opacity: 0.9; transform: scale(1); }
+  78% { opacity: 0; transform: scale(2.1); }
+  100% { opacity: 0; transform: scale(2.1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hera-mark-animated .hm-rise,
+  .hera-mark-animated .hm-eye,
+  .hera-mark-animated .hm-lens,
+  .hera-mark-animated .hm-scan {
+    animation: none !important;
+  }
+  .hera-mark-animated .hm-scan { opacity: 0; }
+}

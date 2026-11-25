@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import {
   FileUp, Sparkles, Target, ClipboardCheck, CalendarClock, MessagesSquare, Radar, ArrowDown,
 } from "lucide-react";
+import AnimatedHeraMark from "../../components/brand/AnimatedHeraMark";
 import "./LandingPage.css";
 
 // Public marketing landing page. No auth, no app chrome, no data access.
@@ -115,7 +116,7 @@ export default function LandingPage() {
   return (
     <main className={`lp${skipHero ? " lp-nohero" : ""}`} ref={rootRef}>
       <nav className="lp-nav" aria-label="Landing">
-        <span className="lp-brand"><img src="/brand/hera-icon-dark.svg" alt="" /> HERA</span>
+        <span className="lp-brand"><AnimatedHeraMark size={30} /> HERA</span>
         <div className="lp-nav-links">
           <a href="#lp-journey">How it works</a>
           <a href="#lp-features">Features</a>
@@ -187,7 +188,7 @@ export default function LandingPage() {
           <p>Talk to us about bringing HERA to your team.</p>
           <Link to="/login" className="lp-btn lp-btn-gold">Get started</Link>
         </div>
-        <p className="lp-legal">HERA Recruitment System</p>
+        <p className="lp-legal"><AnimatedHeraMark size={18} /> HERA Recruitment System</p>
       </footer>
     </main>
   );
