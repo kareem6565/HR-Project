@@ -44,20 +44,44 @@ def candidate_from_provider_item(item: dict[str, Any]) -> SourcingCandidate | No
 
     if not isinstance(item, dict):
         return None
-    full_name = _first_str(item, "fullName", "full_name", "name", "title", max_length=255)
-    headline = _first_str(item, "headline", "occupation", "summary", max_length=512)
+    full_name = _first_str(item, "fullName", "full_name", "name", max_length=255)
+    if not full_name:
+        parts = [
+            p
+            for p in (_first_str(item, "firstName"), _first_str(item, "lastName"))
+            if p
+        ]
+        full_name = " ".join(parts)[:255] if parts else None
+    headline = _first_str(item, "headline", "occupation", "title", max_length=512)
     if not full_name and not headline:
         return None
+    location = _first_str(item, "address", "addressWithCountry", max_length=255)
+    raw_location = item.get("location")
+    if not location and isinstance(raw_location, str):
+        location = raw_location.strip()[:255] or None
+    if not location and isinstance(raw_location, dict):
+        parsed = raw_location.get("parsed") if isinstance(raw_location.get("parsed"), dict) else {}
+        location = _first_str(raw_location, "linkedinText") or _first_str(parsed, "text")
+        if location:
+            location = location[:255]
+    current_title = _first_str(
+        item, "currentJobTitle", "current_job_title", "jobTitle", max_length=255
+    )
+    current_company = _first_str(item, "currentCompany", "companyName", "company", max_length=255)
+    current_position = item.get("currentPosition")
+    if isinstance(current_position, list) and current_position:
+        first = current_position[0]
+        if isinstance(first, dict):
+            current_title = current_title or _first_str(first, "position", "title", max_length=255)
+            current_company = current_company or _first_str(
+                first, "companyName", "company", max_length=255
+            )
     return SourcingCandidate(
         full_name=full_name,
         headline=headline,
-        location=_first_str(item, "location", "address", "addressWithCountry", max_length=255),
-        current_title=_first_str(
-            item, "currentJobTitle", "current_job_title", "jobTitle", max_length=255
-        ),
-        current_company=_first_str(
-            item, "currentCompany", "companyName", "company", max_length=255
-        ),
+        location=location,
+        current_title=current_title,
+        current_company=current_company,
         profile_url=_first_str(
             item, "linkedinUrl", "profileUrl", "profile_url", "url", max_length=512
         ),

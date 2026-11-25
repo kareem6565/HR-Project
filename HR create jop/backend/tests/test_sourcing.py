@@ -142,3 +142,27 @@ def test_failed_actor_run_marks_search_failed(db_session, monkeypatch):
     asyncio.run(ApifySourcingProvider().refresh(record, db_session))
     assert record.status == "failed"
     assert record.error_code is not None
+
+
+def test_candidate_mapper_handles_real_harvestapi_search_shape():
+    # Shape observed from a live harvestapi/linkedin-profile-search run
+    # (Short mode): firstName/lastName, location as object, currentPosition list.
+    candidate = candidate_from_provider_item(
+        {
+            "firstName": "Ahmed",
+            "lastName": "Taha",
+            "headline": "Backend Engineer @ Bosta",
+            "location": {
+                "linkedinText": "Giza, Al Jizah, Egypt",
+                "parsed": {"text": "Giza, Egypt"},
+            },
+            "currentPosition": [{"position": "Backend Engineer", "companyName": "Bosta"}],
+            "linkedinUrl": "https://www.linkedin.com/in/ahmed-taha1",
+        }
+    )
+    assert candidate is not None
+    assert candidate.full_name == "Ahmed Taha"
+    assert candidate.location == "Giza, Al Jizah, Egypt"
+    assert candidate.current_title == "Backend Engineer"
+    assert candidate.current_company == "Bosta"
+    assert candidate.profile_url == "https://www.linkedin.com/in/ahmed-taha1"
