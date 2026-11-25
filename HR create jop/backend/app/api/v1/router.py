@@ -30,6 +30,7 @@ from app.api.v1.routes.job_profiles import router as job_profiles_router
 from app.api.v1.routes.jobs import public_router as public_jobs_router
 from app.api.v1.routes.jobs import router as jobs_router
 from app.api.v1.routes.linkedin_job_imports import router as linkedin_job_imports_router
+from app.api.v1.routes.sourcing import router as sourcing_router
 from app.api.v1.routes.observability import router as observability_router
 from app.api.v1.routes.resumes import router as resumes_router
 from app.api.v1.routes.screening_batches import router as screening_batches_router
@@ -50,6 +51,7 @@ recruitment_router.include_router(job_drafts_router, tags=["jobs"])
 recruitment_router.include_router(job_distributions_router, tags=["job-distributions"])
 recruitment_router.include_router(job_profiles_router, tags=["job-profiles"])
 recruitment_router.include_router(linkedin_job_imports_router, tags=["job-imports"])
+recruitment_router.include_router(sourcing_router, tags=["sourcing"])
 recruitment_router.include_router(candidates_router, tags=["candidates"])
 recruitment_router.include_router(candidate_pool_router, tags=["candidates"])
 recruitment_router.include_router(resumes_router, tags=["resumes"])

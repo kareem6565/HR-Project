@@ -89,6 +89,11 @@ class Settings(BaseSettings):
         validation_alias="APIFY_LINKEDIN_JOBS_ACTOR_ID",
     )
     apify_import_enabled: bool = Field(default=False, validation_alias="APIFY_IMPORT_ENABLED")
+    apify_sourcing_actor_id: str = Field(
+        default="harvestapi/linkedin-profile-search",
+        validation_alias="APIFY_SOURCING_ACTOR_ID",
+    )
+    apify_sourcing_enabled: bool = Field(default=False, validation_alias="APIFY_SOURCING_ENABLED")
     application_privacy_notice_text: str = Field(
         default="", validation_alias="APPLICATION_PRIVACY_NOTICE_TEXT"
     )

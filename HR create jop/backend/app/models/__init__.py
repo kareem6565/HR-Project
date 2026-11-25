@@ -23,6 +23,7 @@ from app.models.job_application import JobApplication
 from app.models.job_distribution import JobDistribution, JobDistributionView
 from app.models.job_profile import JobProfile
 from app.models.linkedin_job_import import LinkedInJobImport
+from app.models.sourcing import SourcingCandidate, SourcingSearch
 from app.models.match_evidence import MatchEvidence
 from app.models.organization import Organization
 from app.models.public_application_rate_limit import PublicApplicationRateLimit
@@ -63,6 +64,8 @@ __all__ = [
     "JobDistribution",
     "JobDistributionView",
     "LinkedInJobImport",
+    "SourcingCandidate",
+    "SourcingSearch",
     "JobProfile",
     "MatchEvidence",
     "Organization",
