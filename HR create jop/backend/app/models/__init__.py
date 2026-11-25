@@ -30,6 +30,7 @@ from app.models.public_application_rate_limit import PublicApplicationRateLimit
 from app.models.resume import Resume
 from app.models.screening_batch import ScreeningBatch
 from app.models.screening_batch_item import ScreeningBatchItem
+from app.models.subscription import OrganizationSubscription, Plan
 from app.models.talent_pool_consent import TalentPoolConsent
 from app.models.transactional_email_outbox import TransactionalEmailOutbox
 from app.models.user import User
@@ -69,6 +70,8 @@ __all__ = [
     "JobProfile",
     "MatchEvidence",
     "Organization",
+    "OrganizationSubscription",
+    "Plan",
     "PublicApplicationRateLimit",
     "Resume",
     "ScreeningBatch",

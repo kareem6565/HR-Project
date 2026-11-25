@@ -12,6 +12,7 @@ import {
   Star,
   BarChart3,
   Settings,
+  CreditCard,
 } from "lucide-react";
 import BrandIcon from "../common/BrandIcon";
 import { BRAND } from "../../config/brand";
@@ -38,6 +39,7 @@ const SECONDARY_NAV_ITEMS = [
 // Administrator-only configuration and observability
 const ADMIN_NAV_ITEMS = [
   { to: "/settings", label: "Settings", icon: Settings },
+  { to: "/billing", label: "Billing", icon: CreditCard },
 ];
 
 export default function Sidebar({ isOpen = false }) {

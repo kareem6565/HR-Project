@@ -10249,3 +10249,125 @@ html[dir="rtl"] .main { margin-left: 0; margin-right: 240px; width: calc(100% - 
   .screening-live .screening-progress-bar::-moz-progress-bar { animation: none; }
   .screening-progress ~ div > .stat-card { animation: none; }
 }
+
+/* Billing & plans (monetization v1) */
+.billing-plans {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  margin-top: 4px;
+}
+
+.billing-plan-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 22px;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.billing-plan-card:hover {
+  transform: translateY(-2px);
+}
+
+.billing-plan-card h3 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.billing-plan-current {
+  border-color: var(--color-accent, #0f766e);
+  box-shadow: 0 0 0 1px var(--color-accent, #0f766e), 0 12px 28px rgba(15, 118, 110, 0.14);
+}
+
+.billing-plan-flag {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.billing-plan-price {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  background: linear-gradient(120deg, var(--color-accent, #0f766e), #b8860b);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.billing-plan-desc {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--color-text-muted, #5b6b68);
+  min-height: 36px;
+}
+
+.billing-plan-features {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+  display: grid;
+  gap: 7px;
+  font-size: 13px;
+  flex: 1;
+}
+
+.billing-plan-features li {
+  padding-left: 18px;
+  position: relative;
+}
+
+.billing-plan-features li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 7px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: linear-gradient(120deg, var(--color-accent, #0f766e), #b8860b);
+}
+
+.usage-meters {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 1rem;
+}
+
+.usage-meter-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12.5px;
+  margin-bottom: 5px;
+}
+
+.usage-meter-header span {
+  color: var(--color-text-muted, #5b6b68);
+  font-weight: 600;
+}
+
+.usage-meter-track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--color-border-soft, #e3eae8);
+  overflow: hidden;
+}
+
+.usage-meter-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--color-accent, #0f766e), #b8860b);
+  transition: width 0.5s ease;
+}
+
+.success-message {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}

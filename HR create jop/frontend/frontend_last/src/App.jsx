@@ -30,6 +30,7 @@ import MatchingResults from "./pages/matching/MatchingResults";
 import LinkedInSourcing from "./pages/sourcing/LinkedInSourcing";
 import AnalyticsPage from "./pages/analytics/AnalyticsPage";
 import AISettings from "./pages/settings/AISettings";
+import Billing from "./pages/settings/Billing";
 import InterviewsList from "./pages/interviews/InterviewsList";
 import ScheduleInterview from "./pages/interviews/ScheduleInterview";
 import InterviewFeedback from "./pages/interviews/InterviewFeedback";
@@ -95,6 +96,14 @@ function AuthenticatedRoutes() {
             element={
 <ProtectedRoute allowedRoles={["admin", "administrator"]}>
                 <AISettings />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/billing"
+            element={
+              <ProtectedRoute allowedRoles={["admin", "administrator", "recruiter"]}>
+                <Billing />
               </ProtectedRoute>
             }
           />
