@@ -78,6 +78,8 @@ jobs:
       - name: Install optional A5 runtime for its test collection and parity checks
         working-directory: HR create jop/backend
         run: python -m pip install --require-hashes -r requirements-a5.lock
+      - name: Upgrade setuptools used by the dependency audit
+        run: python -m pip install --upgrade "setuptools>=84.1.0"
       - name: Audit Python dependencies
         working-directory: HR create jop/backend
         run: pip-audit
