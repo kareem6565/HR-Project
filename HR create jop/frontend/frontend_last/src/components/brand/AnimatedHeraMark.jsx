@@ -24,6 +24,7 @@ export default function AnimatedHeraMark({ size = 40, variant = "dark", title = 
     >
       {/* rounded-square badge */}
       <rect width="512" height="512" rx="116" fill={c.bg} />
+      <g className="hm-sway">
       {/* R figure: hood, left arm and left leg */}
       <path
         fill={c.figure}
@@ -59,6 +60,7 @@ export default function AnimatedHeraMark({ size = 40, variant = "dark", title = 
         fill={c.cape}
         d="M 316 248 L 422 162 C 452 216, 444 286, 394 328 C 412 348, 424 372, 430 398 H 376 C 366 352, 344 316, 310 292 C 322 278, 324 260, 316 248 Z"
       />
+      </g>
     </svg>
   );
 }

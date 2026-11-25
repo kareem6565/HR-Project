@@ -57,3 +57,19 @@
   }
   .hera-mark-animated .hm-scan { opacity: 0; }
 }
+
+/* The R figure sways gently around its base - subtle, letterform always intact */
+.hera-mark-animated .hm-sway {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: hm-sway 4s ease-in-out infinite;
+}
+@keyframes hm-sway {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(1.4deg); }
+  50% { transform: rotate(0deg); }
+  75% { transform: rotate(-1.4deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hera-mark-animated .hm-sway { animation: none !important; }
+}
