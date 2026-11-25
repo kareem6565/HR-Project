@@ -18,6 +18,7 @@ from app.ai.providers.errors import ProviderRateLimitError, ProviderUnavailableE
 from app.ai.providers.openrouter import OpenRouterProvider
 from app.core.config import Settings
 from app.core.database import Base
+from app.core import logging as app_logging
 from app.models.ai_usage import AIPolicyControl, AIUsageCounter, AIUsageEvent
 
 
@@ -74,6 +75,46 @@ def test_invalid_tester_allowlist_never_grants_elevated_limits():
     assert cost_policy._user_quota_limits(
         UUID("0b56197f-512d-4a61-92b7-8127283dfcfc"), settings
     ) == (5, 20)
+
+
+def test_output_validation_failure_updates_provider_attempt_and_keeps_safe_field_paths(monkeypatch):
+    request_id = "test-request-output-schema"
+    from types import SimpleNamespace
+
+    event = SimpleNamespace(status="succeeded", error_category=None)
+
+    class SessionContext:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def scalar(self, _query):
+            return event
+
+    class SessionFactory:
+        @staticmethod
+        def begin():
+            return SessionContext()
+
+    monkeypatch.setattr(cost_policy, "SessionLocal", SessionFactory)
+    token = app_logging.set_request_id(request_id)
+    try:
+        cost_policy.record_ai_output_validation_failure(error_code="invalid_ai_output")
+    finally:
+        app_logging.request_id_context.reset(token)
+
+    assert event.status == "failed"
+    assert event.error_category == "invalid_ai_output"
+    safe_errors = app_logging._safe_diagnostic_context(
+        "validation_errors",
+        [{"location": ["title"], "type": "missing"}],
+    )
+    assert safe_errors == [{"location": ["title"], "type": "missing"}]
+    assert app_logging._safe_diagnostic_context(
+        "provider_request_id", "gen-1234567890123-abc"
+    ) == "gen-1234567890123-abc"
 
 
 def _catalog_model(*, prompt="0", completion="0", supported=None):

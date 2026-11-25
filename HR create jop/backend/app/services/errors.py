@@ -9,6 +9,10 @@ class NotFoundError(ApplicationError):
 class ValidationError(ApplicationError):
     """Raised when supplied data violates deterministic domain rules."""
 
+    def __init__(self, message: str, *, code: str | None = None) -> None:
+        super().__init__(message)
+        self.code = code
+
 
 class InvalidStateError(ApplicationError):
     """Raised when an operation is invalid for the record's current state."""

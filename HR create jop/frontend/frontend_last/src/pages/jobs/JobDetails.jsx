@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useLocation, useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   Pencil,
@@ -307,6 +307,7 @@ function JobProfileCard({ profile, profileBusy, onApprove }) {
 export default function JobDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [job, setJob] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -580,6 +581,11 @@ export default function JobDetails() {
 
   return (
     <section className="job-details-page">
+      {location.state?.jobSaveNotice && (
+        <p className="hera-note hera-success job-save-notice" role="status">
+          {location.state.jobSaveNotice}
+        </p>
+      )}
       <div className="job-details-toolbar">
         <button className="btn btn-secondary job-details-back" onClick={() => navigate("/jobs")}>
           <ArrowLeft size={16} aria-hidden="true" /> Back to Jobs

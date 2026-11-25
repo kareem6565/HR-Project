@@ -1,17 +1,21 @@
 import logging
 import re
 import threading
+import traceback
 import uuid
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.ai.providers.errors import (
+    ProviderBudgetExceededError,
     ProviderError,
     ProviderInsufficientCreditsError,
     ProviderInvalidRequestError,
+    ProviderInvalidResponseError,
     ProviderRateLimitError,
     ProviderTimeoutError,
 )
@@ -29,6 +33,65 @@ from app.services.errors import (
 )
 
 logger = logging.getLogger("app.main")
+
+
+def _provider_error_response(request: Request, exc: ProviderError) -> JSONResponse:
+    request_id = getattr(request.state, "request_id", None) or get_request_id()
+    route = (
+        request.scope.get("route").path
+        if request.scope.get("route") and hasattr(request.scope.get("route"), "path")
+        else request.url.path
+    )
+    if isinstance(exc, ProviderBudgetExceededError):
+        status_code = 429
+    elif isinstance(exc, ProviderRateLimitError):
+        status_code = 429
+    elif isinstance(exc, ProviderInsufficientCreditsError):
+        status_code = 402
+    elif isinstance(exc, ProviderTimeoutError):
+        status_code = 504
+    elif isinstance(exc, ProviderInvalidResponseError):
+        status_code = 502
+    elif isinstance(exc, ProviderInvalidRequestError):
+        status_code = 502
+    else:
+        status_code = 503
+
+    logger.log(
+        logging.WARNING if status_code < 500 else logging.ERROR,
+        "AI request failed during %s (%s)",
+        exc.stage,
+        exc.error_code,
+        extra={
+            "request_id": request_id,
+            "method": request.method,
+            "route": route,
+            "status_code": status_code,
+            "error_type": type(exc).__name__,
+            "error_code": exc.error_code,
+            "processing_stage": exc.stage,
+            "provider_status": exc.provider_status,
+            "provider_request_id": exc.provider_request_id,
+            "retryable": exc.retryable,
+        },
+    )
+    legacy_error_type = {
+        "provider_timeout": "timeout",
+        "provider_rate_limit": "rate_limit",
+        "provider_credits_exhausted": "insufficient_credits",
+    }.get(exc.error_code, exc.error_code)
+    response_body = {
+        "detail": exc.safe_message,
+        "error_type": legacy_error_type,
+        "error_code": exc.error_code,
+        "request_id": request_id,
+        "retryable": exc.retryable,
+    }
+    return JSONResponse(
+        status_code=status_code,
+        content=response_body,
+        headers={"X-Request-ID": request_id} if request_id else None,
+    )
 
 
 @asynccontextmanager
@@ -138,6 +201,9 @@ def create_app() -> FastAPI:
         content = {"detail": str(exc)}
         if hasattr(exc, "code") and exc.code:
             content["code"] = exc.code
+            if exc.code == "invalid_ai_output":
+                content["error_code"] = "invalid_ai_output"
+                content["request_id"] = getattr(request.state, "request_id", None) or get_request_id()
         return JSONResponse(status_code=422, content=content)
 
     @app.exception_handler(InvalidStateError)
@@ -156,39 +222,11 @@ def create_app() -> FastAPI:
     async def provider_rate_limit_handler(
         request: Request, exc: ProviderRateLimitError
     ) -> JSONResponse:
-        return JSONResponse(
-            status_code=429,
-            content={
-                "detail": "AI provider rate limit reached. Try again later.",
-                "error_type": "rate_limit",
-            },
-        )
+        return _provider_error_response(request, exc)
 
     @app.exception_handler(ProviderError)
     async def provider_error_handler(request: Request, exc: ProviderError) -> JSONResponse:
-        if isinstance(exc, ProviderInsufficientCreditsError):
-            message = "AI provider credits are insufficient or the key spending limit was reached."
-            error_type = "insufficient_credits"
-            status_code = 402
-        elif isinstance(exc, ProviderTimeoutError):
-            message = "AI provider timed out. Try again."
-            error_type = "timeout"
-            status_code = 503
-        elif isinstance(exc, ProviderInvalidRequestError):
-            message = "AI provider returned an invalid response. Try again."
-            error_type = "invalid_request"
-            status_code = 503
-        else:
-            message = "AI provider is currently unavailable. Try again."
-            error_type = "unavailable"
-            status_code = 503
-        return JSONResponse(
-            status_code=status_code,
-            content={
-                "detail": message,
-                "error_type": error_type,
-            },
-        )
+        return _provider_error_response(request, exc)
 
     @app.exception_handler(Exception)
     async def unhandled_error_handler(request: Request, exc: Exception) -> JSONResponse:
@@ -208,6 +246,14 @@ def create_app() -> FastAPI:
                 "error_type": type(exc).__name__,
                 "route": route_path,
                 "method": request.method,
+                "exception_frames": [
+                    {
+                        "file": Path(frame.filename).name,
+                        "function": frame.name,
+                        "line": frame.lineno,
+                    }
+                    for frame in traceback.extract_tb(exc.__traceback__)[-8:]
+                ],
             },
         )
         return JSONResponse(

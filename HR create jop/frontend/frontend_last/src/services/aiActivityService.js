@@ -24,8 +24,8 @@ function formatTimestamp(value) {
 }
 
 function normalizeStatus(status) {
-  if (status === "completed") return "success";
-  if (status === "failed") return "error";
+  if (status === "completed" || status === "succeeded") return "success";
+  if (status === "failed" || status === "cost_alert") return "error";
   return status || "running";
 }
 
@@ -65,6 +65,26 @@ export async function getAIActivityStats() {
     avgLatency:
       data.avg_latency_ms == null ? "—" : formatDuration(data.avg_latency_ms),
   };
+}
+
+export async function getAIProviderRequests() {
+  const { data } = await apiClient.get("/ai-activity/provider-requests");
+  return (Array.isArray(data) ? data : []).map((item) => ({
+    id: item.id,
+    requestId: item.request_id || "—",
+    providerRequestId: item.provider_request_id || "—",
+    provider: item.provider || "unknown",
+    model: item.model || "unknown",
+    feature: item.feature || "AI request",
+    status: normalizeStatus(item.status),
+    errorCode: item.error_code || "",
+    providerStatus: item.provider_status,
+    inputTokens: item.input_tokens,
+    outputTokens: item.output_tokens,
+    cost: item.reported_cost_usd,
+    duration: formatDuration(item.duration_ms),
+    timestamp: formatTimestamp(item.created_at),
+  }));
 }
 
 export async function retryRun(id) {

@@ -23,6 +23,13 @@ from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.ai.providers.errors import (
+    ProviderBudgetExceededError,
+    ProviderError,
+    ProviderInsufficientCreditsError,
+    ProviderRateLimitError,
+    ProviderTimeoutError,
+)
 from app.ai.providers import get_provider
 from app.ai.workflows import CandidateEvaluationWorkflow, CandidateProfileExtractionWorkflow
 from app.core.config import settings
@@ -36,7 +43,7 @@ from app.models import (
     ScreeningBatchItem,
 )
 from app.services.candidate_service import CandidateService
-from app.services.errors import UploadValidationError
+from app.services.errors import UploadValidationError, ValidationError as ServiceValidationError
 from app.services.job_application_service import JobApplicationService
 from app.services.resume_details_service import derive_screening_payloads
 from app.services.screening_batch_service import ScreeningBatchService
@@ -46,6 +53,41 @@ from app.services.text_extraction_service import extract_text
 
 logger = logging.getLogger("app.worker")
 _SAFE_DIAGNOSTIC_FIELD = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
+
+
+def _screening_error_details(error: Exception) -> tuple[str, str, bool]:
+    """Return safe UI details and retry policy without exposing provider payloads."""
+    if isinstance(error, ProviderBudgetExceededError):
+        return (
+            "AI_BUDGET_EXCEEDED",
+            "Screening paused because the approved OpenRouter test budget would be exceeded. No request was sent for this step; raise the cap and retry.",
+            False,
+        )
+    if isinstance(error, ProviderRateLimitError):
+        return "AI_PROVIDER_RATE_LIMIT", error.safe_message, error.retryable
+    if isinstance(error, ProviderTimeoutError):
+        return "AI_PROVIDER_TIMEOUT", error.safe_message, error.retryable
+    if isinstance(error, ProviderInsufficientCreditsError):
+        return "AI_PROVIDER_CREDITS", error.safe_message, error.retryable
+    if isinstance(error, ProviderError):
+        return f"AI_{error.error_code.upper()}", error.safe_message, error.retryable
+    if isinstance(error, ServiceValidationError):
+        if getattr(error, "code", None) == "invalid_ai_output":
+            return (
+                "AI_OUTPUT_INVALID",
+                "OpenRouter replied, but its screening result did not match the required format. No score was saved. Review the setup and retry.",
+                False,
+            )
+        return (
+            "SCREENING_VALIDATION_FAILED",
+            "Screening stopped because a required check failed. Review the job criteria or CV, then retry.",
+            False,
+        )
+    return (
+        "SCREENING_INTERNAL_ERROR",
+        "Screening stopped because of an unexpected system error. The technical trace is available in the screening logs.",
+        False,
+    )
 
 
 def _safe_exception_diagnostics(error: Exception) -> dict[str, object]:
@@ -214,6 +256,7 @@ class ScreeningWorker:
             return False
 
         processing_stage = "load_job_context"
+        self._publish_item_stage(db, item_id, claim_token, processing_stage)
         try:
             batch = item.batch
             org_id = batch.organization_id
@@ -268,6 +311,8 @@ class ScreeningWorker:
                 return False
 
         # Read stored file
+        processing_stage = "storage_read"
+        self._publish_item_stage(db, item_id, claim_token, processing_stage)
         try:
             raw_bytes = self.storage.read(file_uri=item.storage_key)
         except Exception as exc:
@@ -287,6 +332,8 @@ class ScreeningWorker:
             return False
 
         # Extract text and validate format
+        processing_stage = "cv_text_extraction"
+        self._publish_item_stage(db, item_id, claim_token, processing_stage)
         try:
             text = extract_text(
                 raw_bytes,
@@ -311,6 +358,7 @@ class ScreeningWorker:
         # Execute candidate profile extraction and evaluation pipeline
         created_resume_uri = None
         processing_stage = "candidate_creation"
+        self._publish_item_stage(db, item_id, claim_token, processing_stage)
         try:
             with db.begin_nested():
                 # Verify claim token still valid before writing records
@@ -327,6 +375,7 @@ class ScreeningWorker:
                         db, organization_id=org_id, full_name=candidate_name
                     )
                     processing_stage = "resume_storage"
+                    self._publish_item_stage(db, item_id, claim_token, processing_stage)
                     resume_id = uuid.uuid4()
                     extension = Path(item.filename).suffix.lower().lstrip(".")
                     created_resume_uri = self.storage.save(
@@ -354,6 +403,7 @@ class ScreeningWorker:
 
                 # 3. Profile extraction
                 processing_stage = "candidate_profile_extraction"
+                self._publish_item_stage(db, item_id, claim_token, processing_stage)
                 screening_requirements, _ = get_effective_job_requirements(
                     job, approved_profile
                 )
@@ -377,6 +427,7 @@ class ScreeningWorker:
                 # Manual upload creates its application here; public applications already have one.
                 if item_source == "manual_upload":
                     processing_stage = "application_creation"
+                    self._publish_item_stage(db, item_id, claim_token, processing_stage)
                     application = JobApplicationService().create(
                         db, organization_id=org_id, job_id=job.id,
                         candidate_id=candidate.id, resume_id=resume.id,
@@ -384,6 +435,7 @@ class ScreeningWorker:
 
                 # 5. Candidate evaluation
                 processing_stage = "candidate_evaluation"
+                self._publish_item_stage(db, item_id, claim_token, processing_stage)
                 eval_result = CandidateEvaluationWorkflow(
                     evidence_provider=get_provider(
                         settings,
@@ -406,6 +458,7 @@ class ScreeningWorker:
 
                 # 6. Mark item done
                 processing_stage = "batch_finalize"
+                self._publish_item_stage(db, item_id, claim_token, processing_stage)
                 item.candidate_id = candidate.id
                 item.resume_id = resume.id
                 item.application_id = application.id
@@ -444,14 +497,49 @@ class ScreeningWorker:
                 exc,
                 context=failure_context,
             )
-            self._handle_transient_failure(
-                item_id,
-                claim_token,
-                str(type(exc).__name__),
-                db=db,
-                processing_stage=processing_stage,
-            )
+            error_code, error_message, retryable = _screening_error_details(exc)
+            if retryable:
+                self._handle_transient_failure(
+                    item_id,
+                    claim_token,
+                    error_code,
+                    db=db,
+                    processing_stage=processing_stage,
+                    error_message=error_message,
+                )
+            else:
+                self._record_permanent_failure(
+                    item_id,
+                    claim_token,
+                    error_code,
+                    error_message,
+                    db=db,
+                )
             return False
+
+    def _publish_item_stage(
+        self,
+        db: Session,
+        item_id: uuid.UUID,
+        claim_token: str,
+        stage: str,
+    ) -> None:
+        """Persist active work stages so the UI can show real screening progress."""
+        if db.get_bind().dialect.name != "postgresql":
+            item = db.get(ScreeningBatchItem, item_id)
+            if item and item.claim_token == claim_token:
+                item.stage = stage
+                db.flush()
+            return
+
+        # The processing transaction intentionally stays open while profile and
+        # evaluation work runs. Publish progress through a short independent
+        # session so status polling can observe each stage immediately.
+        with self.session_factory() as stage_db:
+            item = stage_db.get(ScreeningBatchItem, item_id)
+            if item and item.claim_token == claim_token and item.status == "running":
+                item.stage = stage
+                stage_db.commit()
 
     @staticmethod
     def _log_item_failure(
@@ -513,6 +601,7 @@ class ScreeningWorker:
         reason: str,
         db: Session | None = None,
         processing_stage: str = "candidate_evaluation",
+        error_message: str | None = None,
     ) -> None:
         """Requeue an item with exponential backoff or fail if attempts exhausted."""
         def _apply(session: Session) -> None:
@@ -522,6 +611,8 @@ class ScreeningWorker:
                     delay = self.initial_retry_delay_seconds * (2 ** max(0, item.attempts - 1))
                     item.status = "queued"
                     item.stage = "retry_scheduled"
+                    item.error_code = reason if error_message else None
+                    item.error_message = error_message
                     item.claim_token = None
                     item.lease_expires_at = None
                     item.next_attempt_at = datetime.now(UTC) + timedelta(seconds=delay)
@@ -532,14 +623,16 @@ class ScreeningWorker:
                             "item_id": str(item.id),
                             "attempt_number": item.attempts,
                             "processing_stage": processing_stage,
-                            "error_code": "TRANSIENT_ERROR",
+                            "error_code": reason,
                         },
                     )
                 else:
                     item.status = "failed"
                     item.stage = "failed"
-                    item.error_code = "MAX_ATTEMPTS_EXCEEDED"
-                    item.error_message = f"Exceeded maximum attempts ({item.max_attempts}). Last error: {reason}"
+                    item.error_code = reason if error_message else "MAX_ATTEMPTS_EXCEEDED"
+                    item.error_message = error_message or (
+                        f"Exceeded maximum attempts ({item.max_attempts}). Last error: {reason}"
+                    )
                     item.claim_token = None
                     item.lease_expires_at = None
                     logger.warning(
@@ -549,7 +642,7 @@ class ScreeningWorker:
                             "item_id": str(item.id),
                             "attempt_number": item.attempts,
                             "processing_stage": processing_stage,
-                            "error_code": "MAX_ATTEMPTS_EXCEEDED",
+                            "error_code": reason,
                         },
                     )
 

@@ -13,7 +13,9 @@ from pydantic import BaseModel
 from app.ai.contracts import CandidateProfileExtractionOutput
 from app.ai.providers import (
     OpenRouterProvider,
-    ProviderInvalidRequestError,
+    ProviderConfigurationError,
+    ProviderInsufficientCreditsError,
+    ProviderInvalidResponseError,
     ProviderRateLimitError,
     ProviderTimeoutError,
     StructuredGenerationRequest,
@@ -119,14 +121,23 @@ def test_free_router_constraint_is_sent_in_supported_request_body(monkeypatch) -
     assert body["provider"] == {"require_parameters": True}
 
 
-def test_invalid_json_returns_empty_structured_result_without_network_retries(monkeypatch) -> None:
-    monkeypatch.setattr("app.ai.providers.openai_compatible.time.sleep", lambda _delay: None)
-    provider = _provider(lambda _request: _response("not json"))
+def test_invalid_json_is_a_traced_failure_without_paid_retries(monkeypatch) -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return _response("not json")
+
+    provider = _provider(handler)
     request = StructuredGenerationRequest(
         input="extract", output_schema=CandidateProfileExtractionOutput
     )
 
-    assert provider.generate_structured(request).data is None
+    with pytest.raises(ProviderInvalidResponseError) as raised:
+        provider.generate_structured(request)
+
+    assert raised.value.error_code == "invalid_structured_response"
+    assert len(requests) == 1
 
 
 def test_unsupported_response_format_retries_without_parameter(monkeypatch) -> None:
@@ -171,10 +182,20 @@ def test_timeout_is_classified() -> None:
         _provider(handler).generate_text(TextGenerationRequest(input="hello"))
 
 
-def test_authentication_error_is_sanitized_into_provider_error() -> None:
+def test_authentication_error_is_classified_as_bad_key() -> None:
     provider = _provider(
         lambda _request: httpx.Response(401, json={"error": {"message": "invalid API key"}})
     )
 
-    with pytest.raises(ProviderInvalidRequestError):
+    with pytest.raises(ProviderConfigurationError) as raised:
+        provider.generate_text(TextGenerationRequest(input="hello"))
+    assert raised.value.error_code == "invalid_api_key"
+
+
+def test_provider_credit_error_is_classified_separately() -> None:
+    provider = _provider(
+        lambda _request: httpx.Response(402, json={"error": {"message": "insufficient credits"}})
+    )
+
+    with pytest.raises(ProviderInsufficientCreditsError):
         provider.generate_text(TextGenerationRequest(input="hello"))

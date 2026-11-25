@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   UploadCloud,
@@ -12,6 +12,7 @@ import { getJobs } from "../../services/jobService";
 import { createScreeningBatch, getJobBatches } from "../../services/screeningBatchService";
 import ScreeningBatchProgress from "../../components/screening/ScreeningBatchProgress";
 import LoadingSpinner from "../../components/common/LoadingSpinner";
+import { getAIErrorMessage } from "../../utils/aiError";
 import ErrorState from "../../components/common/ErrorState";
 import {
   formatFileSize,
@@ -37,6 +38,14 @@ export default function ScreenCandidates() {
   const [recentBatches, setRecentBatches] = useState([]);
   const [loadingBatches, setLoadingBatches] = useState(false);
   const [batchesLoadError, setBatchesLoadError] = useState("");
+
+  const handleBatchData = useCallback((data) => {
+    const updatedId = data?.batch_id || data?.id;
+    if (!updatedId) return;
+    setRecentBatches((previous) =>
+      previous.map((batch) => batch.id === updatedId ? { ...batch, ...data } : batch)
+    );
+  }, []);
 
   const loadJobs = async () => {
     setLoadingJobs(true);
@@ -184,13 +193,14 @@ export default function ScreenCandidates() {
       loadBatches(jobId);
     } catch (err) {
       const isRateLimit =
-        err?.response?.status === 429 || err?.response?.data?.error_type === "rate_limit";
+        err?.response?.status === 429 ||
+        err?.response?.data?.error_code === "provider_rate_limit" ||
+        err?.response?.data?.error_type === "rate_limit";
       setErrorType(isRateLimit ? "rate_limit" : "");
-      setError(
-        isRateLimit
-          ? "AI provider rate limit reached. Check the provider configuration in Settings."
-          : err?.response?.data?.detail || err?.message || "Could not start screening batch. Please try again."
-      );
+      setError(getAIErrorMessage(
+        err,
+        "Could not start screening batch. Please try again."
+      ));
     } finally {
       setSubmitting(false);
     }
@@ -374,10 +384,12 @@ export default function ScreenCandidates() {
                   const statusVariant =
                     batch.status === "completed"
                       ? "green"
-                      : batch.status === "processing"
+                      : batch.status === "processing" || batch.status === "running"
                       ? "blue"
                       : batch.status === "failed"
                       ? "red"
+                      : batch.status === "queued"
+                      ? "amber"
                       : "grey";
                   return (
                     <div
@@ -624,6 +636,7 @@ export default function ScreenCandidates() {
           batchId={activeBatchId}
           initialData={batchData}
           job={selectedJob}
+          onBatchData={handleBatchData}
         />
       )}
     </>

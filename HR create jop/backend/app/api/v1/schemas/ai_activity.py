@@ -38,6 +38,25 @@ class AIActivityStatsResponse(BaseModel):
     avg_latency_ms: int | None = None
 
 
+class AIProviderRequestResponse(BaseModel):
+    """Payload-free diagnostics for one provider attempt."""
+
+    id: UUID
+    request_id: str | None = None
+    provider_request_id: str | None = None
+    provider: str
+    model: str
+    feature: str
+    status: str
+    error_code: str | None = None
+    provider_status: int | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    reported_cost_usd: float | None = None
+    duration_ms: int | None = None
+    created_at: datetime
+
+
 class AIActivityRetryResponse(BaseModel):
     run_id: UUID
     status: str

@@ -161,13 +161,7 @@ export default function LandingPage() {
         <div className="lp-aurora" aria-hidden="true" />
         <div className="lp-hero-inner">
           <div className="lp-hero-mark mascot-hero" aria-hidden="true">
-            <span>H</span>
-            <video
-              className="lp-hero-clip"
-              src="/landing/clip-mascot-scan-square.mp4"
-              autoPlay muted loop playsInline
-              aria-label="HERA mark with a scanning beam animation"
-            />
+            <AnimatedHeraMark size={132} />
           </div>
           <h1>Hiring that reads<br />like a story, not a spreadsheet.</h1>
           <p className="lp-hero-sub">

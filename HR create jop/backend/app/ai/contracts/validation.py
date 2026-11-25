@@ -7,6 +7,7 @@ rely on a single error hierarchy. These helpers never persist anything and never
 call an external provider.
 """
 
+import logging
 from typing import Any, TypeVar
 
 from pydantic import BaseModel
@@ -20,6 +21,8 @@ from app.ai.contracts.job_profile import JobProfileExtractionOutput, JobRequirem
 from app.ai.contracts.match_evidence import MatchEvidenceListOutput, MatchEvidenceOutput
 from app.services.errors import ValidationError
 
+logger = logging.getLogger("app.ai.validation")
+
 T = TypeVar("T", bound=BaseModel)
 
 
@@ -27,7 +30,34 @@ def _validate_contract(contract_type: type[T], data: Any) -> T:
     try:
         return contract_type.model_validate(data)
     except PydanticValidationError as error:
-        raise ValidationError(f"Invalid AI output contract: {error}") from error
+        safe_errors = [
+            {"location": list(item.get("loc", ())), "type": item.get("type", "unknown")}
+            for item in error.errors(include_input=False)[:20]
+        ]
+        logger.warning(
+            "AI response did not match the expected output schema.",
+            extra={
+                "error_code": "invalid_ai_output",
+                "processing_stage": "output_validation",
+                "validation_errors": safe_errors,
+            },
+        )
+        try:
+            from app.ai.cost_policy import record_ai_output_validation_failure
+
+            record_ai_output_validation_failure(error_code="invalid_ai_output")
+        except Exception as tracking_error:  # noqa: BLE001 - keep the original contract error
+            logger.error(
+                "AI output validation trace could not be updated.",
+                extra={
+                    "error_code": "ai_trace_update_failed",
+                    "exception_class": type(tracking_error).__name__,
+                },
+            )
+        raise ValidationError(
+            "Invalid AI output contract: the response did not match the expected schema.",
+            code="invalid_ai_output",
+        ) from error
 
 
 def validate_job_profile_extraction(data: Any) -> JobProfileExtractionOutput:
@@ -121,8 +151,8 @@ def validate_match_evidence_list(data: Any, *, allowed_keys: set[str]) -> MatchE
     """
     try:
         output = _validate_contract(MatchEvidenceListOutput, data)
-    except ValidationError as error:
-        raise ValidationError(f"Invalid AI output contract: {error}") from error
+    except ValidationError:
+        raise
     for item in output.evidence_items:
         key = item.requirement_ref["requirement_key"]
         if key not in allowed_keys:

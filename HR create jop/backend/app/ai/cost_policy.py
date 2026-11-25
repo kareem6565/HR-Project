@@ -8,16 +8,22 @@ import threading
 from datetime import UTC, datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import httpx
-from sqlalchemy import case, or_
+from sqlalchemy import case, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from app.ai.actor_context import ai_actor_context
-from app.ai.providers.errors import ProviderRateLimitError, ProviderUnavailableError
+from app.ai.providers.errors import (
+    ProviderBudgetExceededError,
+    ProviderConfigurationError,
+    ProviderRateLimitError,
+    ProviderUnavailableError,
+    ProviderUsageCheckError,
+)
 from app.core.config import Settings, get_settings
 from app.core.database import SessionLocal
 from app.core.logging import get_request_id
@@ -32,6 +38,9 @@ _SSN_PATTERN = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
 _URL_PATTERN = re.compile(r"https?://\S+", re.IGNORECASE)
 _catalog_lock = threading.Lock()
 _catalog_cache: tuple[datetime, dict[str, dict[str, Any]]] | None = None
+_paid_budget_lock = threading.Lock()
+_paid_pending: dict[UUID, Decimal] = {}
+_paid_local_spend = Decimal("0")
 
 
 def minimize_hr_identifiers(text: str) -> str:
@@ -69,8 +78,18 @@ def _fetch_catalog() -> dict[str, dict[str, Any]]:
                 if isinstance(item, dict) and isinstance(item.get("id"), str)
             }
         except Exception as exc:  # noqa: BLE001 - public catalog failures must fail closed
+            logger.warning(
+                "OpenRouter model catalog check failed; inference was not sent.",
+                extra={
+                    "phase": "preflight_model_catalog",
+                    "exception_class": type(exc).__name__,
+                    "error_code": "provider_pricing_unavailable",
+                },
+            )
             raise ProviderUnavailableError(
-                "Could not verify free-model eligibility from the OpenRouter catalog."
+                "Could not verify model pricing and eligibility from the OpenRouter catalog.",
+                error_code="provider_pricing_unavailable",
+                stage="preflight",
             ) from exc
         _catalog_cache = (now, catalog)
         return catalog
@@ -83,6 +102,97 @@ def _zero_price(value: Any) -> bool:
         return Decimal(str(value)) == 0
     except (InvalidOperation, ValueError):
         return False
+
+
+def _fetch_key_usage(api_key: str) -> Decimal:
+    """Read current key spend from OpenRouter without sending inference input."""
+    try:
+        response = httpx.get(
+            "https://openrouter.ai/api/v1/key",
+            headers={"Authorization": f"Bearer {api_key}"},
+            timeout=8.0,
+        )
+        response.raise_for_status()
+        usage = response.json().get("data", {}).get("usage")
+        if usage is None:
+            raise ValueError("OpenRouter key usage was not returned.")
+        return Decimal(str(usage))
+    except Exception as exc:  # noqa: BLE001 - paid calls fail closed without live spend data
+        logger.warning(
+            "OpenRouter usage preflight failed; inference was not sent.",
+            extra={
+                "phase": "preflight_usage_check",
+                "exception_class": type(exc).__name__,
+                "error_code": "provider_usage_check_failed",
+            },
+        )
+        raise ProviderUsageCheckError(
+            "Could not verify OpenRouter key usage before the paid request.",
+            error_code="provider_usage_check_failed",
+        ) from exc
+
+
+def _paid_request_estimate(
+    *, model: str, prompt_characters: int, max_output_tokens: int, catalog: dict[str, dict[str, Any]]
+) -> Decimal:
+    item = catalog.get(model)
+    if not item:
+        raise ProviderUnavailableError("The selected paid model is missing from the catalog.")
+    pricing = item.get("pricing") or {}
+    try:
+        prompt_price = Decimal(str(pricing["prompt"]))
+        completion_price = Decimal(str(pricing["completion"]))
+    except (KeyError, InvalidOperation, ValueError) as exc:
+        raise ProviderUnavailableError("The selected model has no usable price metadata.") from exc
+    if prompt_price <= 0 or completion_price <= 0:
+        raise ProviderUnavailableError("Paid inference requires positive model pricing metadata.")
+    # Character count is intentionally treated as a conservative token count,
+    # then doubled to leave room for non-English tokenization and provider variance.
+    estimated_input_tokens = max(1, prompt_characters * 2)
+    estimate = (
+        Decimal(estimated_input_tokens) * prompt_price
+        + Decimal(max_output_tokens) * completion_price
+    )
+    return estimate * Decimal("2")
+
+
+def _database_paid_spend(
+    *, catalog: dict[str, dict[str, Any]], budget: Decimal
+) -> Decimal:
+    """Use persisted usage rows to retain a conservative cap across process restarts."""
+    with SessionLocal() as session:
+        events = session.scalars(
+            select(AIUsageEvent).where(
+                AIUsageEvent.model != "openrouter/free",
+                ~AIUsageEvent.model.like("%:free"),
+            )
+        ).all()
+    total = Decimal("0")
+    for event in events:
+        if event.status == "started":
+            # A crashed in-flight request has unknown cost; fail closed for this cap.
+            raise ProviderBudgetExceededError(
+                "A previous AI request has unknown final usage.",
+                error_code="in_flight_cost_unknown",
+            )
+        if event.reported_cost_usd is not None:
+            total += Decimal(str(event.reported_cost_usd)) * Decimal("2")
+            continue
+        if event.input_tokens is None or event.output_tokens is None:
+            # Provider-reported key usage is checked live before every paid
+            # request. Older OpenRouter responses can omit token usage, so
+            # don't treat an unmetered historical row as if it exhausted the
+            # entire budget; that permanently blocks later calls.
+            continue
+        pricing = (catalog.get(event.model) or {}).get("pricing") or {}
+        try:
+            total += (
+                Decimal(event.input_tokens) * Decimal(str(pricing["prompt"]))
+                + Decimal(event.output_tokens) * Decimal(str(pricing["completion"]))
+            ) * Decimal("2")
+        except (KeyError, InvalidOperation, ValueError):
+            return budget
+    return total
 
 
 def _approved_model(
@@ -179,7 +289,9 @@ def _new_event(
         state = session.get(AIPolicyControl, "cost_alert")
         if state and state.enabled:
             raise ProviderUnavailableError(
-                "AI requests are paused after an unexpected non-zero model cost."
+                "AI requests are paused after an unexpected non-zero model cost.",
+                error_code="cost_guard_paused",
+                stage="preflight",
             )
         try:
             checks = [
@@ -198,7 +310,9 @@ def _new_event(
             for key, window, limit in checks:
                 if not _reserve_counter(session, key, window, limit):
                     raise ProviderRateLimitError(
-                        "AI free-tier request limit reached. Try again later."
+                        "AI request rate limit reached. Try again later.",
+                        error_code="app_rate_limit",
+                        stage="preflight",
                     )
         except ProviderRateLimitError:
             raise
@@ -207,7 +321,9 @@ def _new_event(
         except Exception as exc:  # noqa: BLE001 - storage failures fail closed
             logger.error("AI request metering could not reserve a request (%s)", type(exc).__name__)
             raise ProviderUnavailableError(
-                "AI request metering is temporarily unavailable."
+                "AI request metering is temporarily unavailable.",
+                error_code="ai_metering_unavailable",
+                stage="preflight",
             ) from exc
         event = AIUsageEvent(
             user_id=user_id,
@@ -216,7 +332,7 @@ def _new_event(
             provider=provider,
             model=model,
             status="started",
-            request_id=get_request_id(),
+            request_id=get_request_id() or str(uuid4()),
         )
         session.add(event)
         session.flush()
@@ -244,24 +360,61 @@ def authorize_and_reserve(
     base_url: str,
     structured: bool,
     metadata: dict[str, Any] | None,
-    has_api_key: bool,
+    api_key: str | None = None,
+    prompt_characters: int = 0,
+    max_output_tokens: int | None = None,
+    has_api_key: bool | None = None,
     settings: Settings | None = None,
 ) -> UUID:
     """Fail closed before network access, then reserve shared quota atomically."""
     active = settings or get_settings()
-    if active.ai_paid_mode_enabled or active.ai_paid_budget_usd != 0:
-        raise ProviderUnavailableError(
-            "Paid AI mode has no owner-approved authorization and is disabled."
+    paid_model = model != "openrouter/free" and not model.endswith(":free")
+    if active.ai_paid_mode_enabled and active.ai_paid_budget_usd <= 0:
+        raise ProviderConfigurationError("Paid AI mode requires a positive spend cap.")
+    if active.ai_paid_budget_usd != 0 and not active.ai_paid_mode_enabled:
+        raise ProviderConfigurationError(
+            "Paid AI mode is disabled; enable it explicitly before setting a paid budget."
+        )
+    if paid_model and (not active.ai_paid_mode_enabled or active.ai_paid_budget_usd <= 0):
+        raise ProviderConfigurationError("Paid AI mode is disabled or has no positive test cap.")
+    if not api_key and not has_api_key:
+        raise ProviderConfigurationError(
+            "OPENROUTER_API_KEY is required for AI inference.", error_code="missing_api_key"
         )
     normalized_url = base_url.rstrip("/").lower()
     if provider != "openrouter" or normalized_url != "https://openrouter.ai/api/v1":
-        raise ProviderUnavailableError(
-            "Only the approved OpenRouter free-model route is enabled for AI inference."
+        raise ProviderConfigurationError(
+            "Only the configured OpenRouter route is enabled for AI inference."
         )
-    if not has_api_key:
-        raise ProviderUnavailableError("OpenRouter is not configured for free AI inference.")
-    catalog = None
-    if model != "openrouter/free":
+    catalog = _fetch_catalog() if paid_model or model != "openrouter/free" else None
+    estimate = Decimal("0")
+    current_key_usage: Decimal | None = None
+    if paid_model:
+        if max_output_tokens is None:
+            raise ProviderConfigurationError("Paid AI requests require a finite output-token limit.")
+        item = (catalog or {}).get(model)
+        if not item:
+            raise ProviderConfigurationError("The selected paid model is missing from OpenRouter.")
+        architecture = item.get("architecture") or {}
+        if "text" not in (architecture.get("input_modalities") or []) or "text" not in (
+            architecture.get("output_modalities") or []
+        ):
+            raise ProviderConfigurationError("The selected model does not support text inference.")
+        if structured and "response_format" not in (item.get("supported_parameters") or []):
+            raise ProviderConfigurationError("The selected model does not support structured output.")
+        estimate = _paid_request_estimate(
+            model=model,
+            prompt_characters=prompt_characters,
+            max_output_tokens=max_output_tokens,
+            catalog=catalog or {},
+        )
+        current_key_usage = _fetch_key_usage(api_key or "")
+        if current_key_usage < active.ai_paid_budget_baseline_usd:
+            raise ProviderUsageCheckError(
+                "OpenRouter key usage is below the configured baseline; paid requests are paused.",
+                error_code="usage_baseline_mismatch",
+            )
+    elif model != "openrouter/free":
         allowlist = {
             entry.strip() for entry in active.ai_free_model_allowlist.split(",") if entry.strip()
         }
@@ -269,9 +422,44 @@ def authorize_and_reserve(
             raise ProviderUnavailableError(
                 "The configured AI model is not approved for free inference."
             )
-        catalog = _fetch_catalog()
-    _approved_model(model=model, structured=structured, settings=active, catalog=catalog)
-    return _new_event(provider=provider, model=model, metadata=metadata, settings=active)
+    if not paid_model:
+        _approved_model(model=model, structured=structured, settings=active, catalog=catalog)
+
+    if not paid_model:
+        return _new_event(provider=provider, model=model, metadata=metadata, settings=active)
+
+    global _paid_local_spend
+    assert current_key_usage is not None
+    provider_spend = Decimal(str(current_key_usage)) - Decimal(
+        str(active.ai_paid_budget_baseline_usd)
+    )
+    database_spend = _database_paid_spend(
+        catalog=catalog or {}, budget=Decimal(str(active.ai_paid_budget_usd))
+    )
+    with _paid_budget_lock:
+        spent = max(provider_spend, database_spend, _paid_local_spend)
+        pending = sum(_paid_pending.values(), Decimal("0"))
+        budget = Decimal(str(active.ai_paid_budget_usd))
+        if spent + pending + estimate > budget:
+            logger.warning(
+                "AI request stopped by the application test budget; inference was not sent.",
+                extra={
+                    "phase": "preflight_budget_check",
+                    "error_code": "app_test_budget_exceeded",
+                    "provider": provider,
+                    "model": model,
+                    "estimated_cost_usd": str(estimate),
+                    "spent_usd": str(spent),
+                    "budget_usd": str(budget),
+                    "remaining_usd": str(max(Decimal("0"), budget - spent - pending)),
+                },
+            )
+            raise ProviderBudgetExceededError(
+                "The configured OpenRouter test spend cap would be exceeded by this request."
+            )
+        event_id = _new_event(provider=provider, model=model, metadata=metadata, settings=active)
+        _paid_pending[event_id] = estimate
+        return event_id
 
 
 def record_result(
@@ -280,7 +468,9 @@ def record_result(
     status: str,
     response: Any = None,
     error: Exception | None = None,
+    prompt_characters: int | None = None,
 ) -> None:
+    global _paid_local_spend
     usage = (
         response.get("usage") if isinstance(response, dict) else getattr(response, "usage", None)
     )
@@ -302,13 +492,29 @@ def record_result(
     provider_request_id = (
         response.get("id") if isinstance(response, dict) else getattr(response, "id", None)
     )
-    http_status = getattr(error, "status_code", None) if error else None
-    error_category = type(error).__name__[:64] if error else None
+    if not provider_request_id and error is not None:
+        provider_request_id = getattr(error, "provider_request_id", None)
+    http_status = (
+        getattr(error, "provider_status", None) or getattr(error, "status_code", None)
+        if error
+        else (200 if response is not None else None)
+    )
+    error_category = (
+        getattr(error, "error_code", type(error).__name__)[:64] if error else None
+    )
     cost_alert = cost is not None and cost > 0
+    paid_model = False
+    reserved = Decimal("0")
+    log_fields: dict[str, Any] = {}
     with SessionLocal.begin() as session:
         event = session.get(AIUsageEvent, event_id)
         if event is None:
             raise ProviderUnavailableError("AI usage event could not be finalized.")
+        paid_model = event.model != "openrouter/free" and not event.model.endswith(":free")
+        if paid_model:
+            cost_alert = False
+            with _paid_budget_lock:
+                reserved = _paid_pending.pop(event_id, Decimal("0"))
         event.status = "cost_alert" if cost_alert else status
         event.http_status = http_status if isinstance(http_status, int) else None
         event.error_category = "unexpected_nonzero_cost" if cost_alert else error_category
@@ -316,7 +522,43 @@ def record_result(
         event.input_tokens = input_tokens if isinstance(input_tokens, int) else None
         event.output_tokens = output_tokens if isinstance(output_tokens, int) else None
         event.reported_cost_usd = cost
-        event.completed_at = datetime.now(UTC)
+        completed_at = datetime.now(UTC)
+        event.completed_at = completed_at
+        started_at = event.created_at
+        latency_ms = (
+            round((completed_at - started_at).total_seconds() * 1000)
+            if started_at is not None
+            else None
+        )
+        log_fields = {
+            "request_id": event.request_id,
+            "provider": event.provider,
+            "model": event.model,
+            "feature": event.feature,
+            "phase": "provider_call",
+            "status": "cost_alert" if cost_alert else status,
+            "duration_ms": latency_ms,
+            "input_characters": prompt_characters,
+            "provider_status": http_status,
+            "provider_request_id": str(provider_request_id)[:160] if provider_request_id else None,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "error_code": error_category,
+            "retryable": getattr(error, "retryable", False) if error else False,
+        }
+        if paid_model:
+            actual_cost = cost if cost is not None else reserved
+            with _paid_budget_lock:
+                _paid_local_spend += actual_cost
+                active = get_settings()
+                over_cap = _paid_local_spend > Decimal(str(active.ai_paid_budget_usd))
+                estimate_exceeded = cost is not None and cost > reserved
+            if over_cap or estimate_exceeded:
+                event.status = "cost_alert"
+                event.error_category = (
+                    "paid_spend_cap_exceeded" if over_cap else "paid_cost_estimate_exceeded"
+                )
+                cost_alert = True
         if cost_alert:
             dialect = session.get_bind().dialect.name
             insert_stmt = (
@@ -330,13 +572,34 @@ def record_result(
                     index_elements=[table.c.control_key], set_={"enabled": True}
                 )
             )
+    logger.log(
+        logging.WARNING if status != "succeeded" or cost_alert else logging.INFO,
+        "AI provider call completed with an error"
+        if status != "succeeded" or cost_alert
+        else "AI provider call completed",
+        extra=log_fields,
+    )
     if cost_alert:
         logger.critical(
-            "AI free-model response reported nonzero cost; global AI circuit breaker enabled."
+            "AI spend policy detected an unexpected charge; global AI circuit breaker enabled."
         )
         raise ProviderUnavailableError(
             "AI requests are paused after an unexpected non-zero model cost."
         )
+
+
+def record_ai_output_validation_failure(*, error_code: str) -> None:
+    """Mark the matching provider attempt failed when its JSON violates our schema."""
+    request_id = get_request_id()
+    if not request_id:
+        return
+    with SessionLocal.begin() as session:
+        event = session.scalar(
+            select(AIUsageEvent).where(AIUsageEvent.request_id == request_id)
+        )
+        if event is not None and event.status == "succeeded":
+            event.status = "failed"
+            event.error_category = error_code[:64]
 
 
 def add_free_routing_constraints(kwargs: dict[str, Any], *, model: str, structured: bool) -> None:

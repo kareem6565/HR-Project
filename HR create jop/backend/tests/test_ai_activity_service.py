@@ -5,6 +5,7 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.models import (
+    AIUsageEvent,
     AITrace,
     Candidate,
     Job,
@@ -105,6 +106,50 @@ def test_list_runs_includes_title_labels_and_steps(db_session: Session) -> None:
     step_names = [step["name"] for step in view["steps"]]
     assert "Evaluate Candidate" in step_names
     assert "Generate Match Evidence" in step_names
+
+
+def test_provider_requests_are_payload_free_and_scoped_to_org(db_session: Session) -> None:
+    organization, _job = create_org_and_job(db_session)
+    other_org = Organization(name="Private Other Org")
+    db_session.add(other_org)
+    db_session.flush()
+    now = datetime.now(UTC)
+    event = AIUsageEvent(
+        organization_id=organization.id,
+        feature="job_structuring",
+        provider="openrouter",
+        model="deepseek/deepseek-v4.1-flash-1017",
+        status="failed",
+        http_status=429,
+        error_category="provider_rate_limit",
+        request_id="app-request-123",
+        provider_request_id="provider-request-456",
+        input_tokens=120,
+        output_tokens=0,
+        created_at=now - timedelta(seconds=2),
+        completed_at=now,
+    )
+    db_session.add(event)
+    db_session.add(AIUsageEvent(
+        organization_id=other_org.id,
+        feature="private_feature",
+        provider="openrouter",
+        model="private-model",
+        status="succeeded",
+        created_at=now,
+    ))
+    db_session.commit()
+
+    results = AIActivityService().list_provider_requests(
+        db_session, organization_id=organization.id
+    )
+    assert len(results) == 1
+    assert results[0]["request_id"] == "app-request-123"
+    assert results[0]["provider_request_id"] == "provider-request-456"
+    assert results[0]["error_code"] == "provider_rate_limit"
+    assert results[0]["provider_status"] == 429
+    assert results[0]["duration_ms"] == 2000
+    assert "private_feature" not in str(results)
 
 
 def test_list_runs_scoped_to_org(db_session: Session) -> None:
