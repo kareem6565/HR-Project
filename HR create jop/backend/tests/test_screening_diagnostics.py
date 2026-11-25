@@ -108,6 +108,7 @@ def test_formatter_redacts_unrecognized_diagnostic_fields() -> None:
 def test_worker_pipeline_failure_logs_actual_stage_without_sensitive_values(
     monkeypatch, caplog
 ) -> None:
+    from app.services.text_extraction_service import ExtractedDocumentText
     canary = "HERA_CV_CANARY_1e4ab9"
     mock_secret = "MOCK_API_SECRET_51cf02"
     error = _synthetic_validation_exception(canary, mock_secret)
@@ -141,7 +142,20 @@ def test_worker_pipeline_failure_logs_actual_stage_without_sensitive_values(
         id=item.batch.job_id,
         organization_id=item.batch.organization_id,
         title="Synthetic Engineer",
-        profiles=[SimpleNamespace(status="approved", profile_data={"requirements": []})],
+        profiles=[
+            SimpleNamespace(
+                status="approved",
+                profile_data={
+                    "requirements": [
+                        {
+                            "text": "Relevant professional experience",
+                            "category": "must_have",
+                            "dimension": "experience",
+                        }
+                    ]
+                },
+            )
+        ],
     )
 
     class FakeStorage:
@@ -197,8 +211,8 @@ def test_worker_pipeline_failure_logs_actual_stage_without_sensitive_values(
 
     monkeypatch.setattr(
         worker_module,
-        "extract_text",
-        lambda *args, **kwargs: "synthetic CV text",
+        "extract_document_text",
+        lambda *args, **kwargs: ExtractedDocumentText(text="synthetic CV text"),
     )
     monkeypatch.setattr(
         worker_module,
@@ -216,7 +230,7 @@ def test_worker_pipeline_failure_logs_actual_stage_without_sensitive_values(
         result = worker.process_item(session, item.id, item.claim_token)
 
     assert result is False
-    assert item.status == "queued"
+    assert item.status == "failed"
     record = next(
         record
         for record in caplog.records

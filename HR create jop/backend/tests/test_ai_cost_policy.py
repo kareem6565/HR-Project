@@ -14,8 +14,14 @@ from sqlalchemy.orm import sessionmaker
 from app.ai import cost_policy
 from app.ai.actor_context import ai_actor_context
 from app.ai.providers.base import StructuredGenerationRequest, TextGenerationRequest
-from app.ai.providers.errors import ProviderRateLimitError, ProviderUnavailableError
+from app.ai.providers.errors import (
+    ProviderBudgetExceededError,
+    ProviderConfigurationError,
+    ProviderRateLimitError,
+    ProviderUnavailableError,
+)
 from app.ai.providers.openrouter import OpenRouterProvider
+from app.core import logging as app_logging
 from app.core.config import Settings
 from app.core.database import Base
 from app.models.ai_usage import AIPolicyControl, AIUsageCounter, AIUsageEvent
@@ -126,6 +132,46 @@ def test_self_hosted_quota_limit_fails_closed_without_consuming_external_quota(p
         assert keys == {"self_hosted:global:minute", "self_hosted:global:day"}
 
 
+def test_output_validation_failure_updates_provider_attempt_and_keeps_safe_field_paths(monkeypatch):
+    request_id = "test-request-output-schema"
+    from types import SimpleNamespace
+
+    event = SimpleNamespace(status="succeeded", error_category=None)
+
+    class SessionContext:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def scalar(self, _query):
+            return event
+
+    class SessionFactory:
+        @staticmethod
+        def begin():
+            return SessionContext()
+
+    monkeypatch.setattr(cost_policy, "SessionLocal", SessionFactory)
+    token = app_logging.set_request_id(request_id)
+    try:
+        cost_policy.record_ai_output_validation_failure(error_code="invalid_ai_output")
+    finally:
+        app_logging.request_id_context.reset(token)
+
+    assert event.status == "failed"
+    assert event.error_category == "invalid_ai_output"
+    safe_errors = app_logging._safe_diagnostic_context(
+        "validation_errors",
+        [{"location": ["title"], "type": "missing"}],
+    )
+    assert safe_errors == [{"location": ["title"], "type": "missing"}]
+    assert app_logging._safe_diagnostic_context(
+        "provider_request_id", "gen-1234567890123-abc"
+    ) == "gen-1234567890123-abc"
+
+
 def _catalog_model(*, prompt="0", completion="0", supported=None):
     return {
         "id": "example/model:free",
@@ -174,6 +220,7 @@ def test_owner_approved_paid_deepseek_is_metered_with_a_reserved_budget(policy_d
         "_fetch_catalog",
         lambda: {
             model: {
+                "architecture": {"input_modalities": ["text"], "output_modalities": ["text"]},
                 "pricing": {"prompt": "0.00000003", "completion": "0.0000002"},
                 "supported_parameters": ["response_format"],
             }
@@ -184,6 +231,7 @@ def test_owner_approved_paid_deepseek_is_metered_with_a_reserved_budget(policy_d
         ai_paid_budget_usd=0.05,
         ai_paid_model_allowlist=model,
     )
+    monkeypatch.setattr(cost_policy, "_fetch_key_usage", lambda _api_key: 0.0)
     event_id = cost_policy.authorize_and_reserve(
         provider="openrouter",
         model=model,
@@ -199,10 +247,13 @@ def test_owner_approved_paid_deepseek_is_metered_with_a_reserved_budget(policy_d
         event = session.get(AIUsageEvent, event_id)
         assert event.model == model
         assert event.status == "started"
-        assert event.reported_cost_usd > 0
-        assert event.reported_cost_usd < 0.05
+        assert event.reported_cost_usd is None
+    assert 0 < float(cost_policy._paid_pending[event_id]) < 0.05
 
-    with pytest.raises(ProviderUnavailableError, match="budget is exhausted"):
+    with pytest.raises(
+        ProviderBudgetExceededError,
+        match="previous AI request has unknown final usage",
+    ):
         cost_policy.authorize_and_reserve(
             provider="openrouter",
             model=model,
@@ -235,14 +286,15 @@ def test_paid_routing_is_exact_model_and_price_capped():
 
 
 @pytest.mark.parametrize(
-    ("model", "catalog", "allowlist"),
+    ("model", "catalog", "allowlist", "expected_error"),
     [
-        ("deepseek/deepseek-v4.1-flash-1017", {}, ""),
-        ("unlisted/model:free", {}, ""),
+        ("deepseek/deepseek-v4.1-flash-1017", {}, "", ProviderConfigurationError),
+        ("unlisted/model:free", {}, "", ProviderConfigurationError),
         (
             "example/model:free",
             {"example/model:free": _catalog_model(prompt="0.01")},
             "example/model:free",
+            ProviderUnavailableError,
         ),
         (
             "example/model:free",
@@ -253,11 +305,12 @@ def test_paid_routing_is_exact_model_and_price_capped():
                 }
             },
             "example/model:free",
+            ProviderUnavailableError,
         ),
     ],
 )
 def test_paid_unknown_or_unpriced_model_is_rejected_before_inference(
-    policy_db, monkeypatch, model, catalog, allowlist
+    policy_db, monkeypatch, model, catalog, allowlist, expected_error
 ):
     monkeypatch.setattr(cost_policy, "_fetch_catalog", lambda: catalog)
     provider = OpenRouterProvider(api_key="test-only-key", model=model)
@@ -265,7 +318,7 @@ def test_paid_unknown_or_unpriced_model_is_rejected_before_inference(
     provider._client.chat.completions.create = Mock()
     s = _settings(openrouter_model=model, ai_free_model_allowlist=allowlist)
     monkeypatch.setattr(cost_policy, "get_settings", lambda: s)
-    with pytest.raises(ProviderUnavailableError):
+    with pytest.raises(expected_error):
         provider.generate_text(TextGenerationRequest(input="synthetic"))
     provider._client.chat.completions.create.assert_not_called()
 
@@ -276,7 +329,7 @@ def test_direct_provider_construction_is_guarded_by_default():
     )
     provider._client.chat.completions.create = Mock()
     assert provider.cost_policy_enabled is True
-    with pytest.raises(ProviderUnavailableError):
+    with pytest.raises(ProviderConfigurationError):
         provider.generate_text(TextGenerationRequest(input="synthetic"))
     provider._client.chat.completions.create.assert_not_called()
 
@@ -428,7 +481,7 @@ def test_sensitive_identifiers_are_minimized_without_erasing_dates():
 
 def test_paid_mode_or_nonzero_cost_fails_closed(policy_db, monkeypatch):
     s = _settings(ai_paid_mode_enabled=True)
-    with pytest.raises(ProviderUnavailableError):
+    with pytest.raises(ProviderConfigurationError):
         cost_policy.authorize_and_reserve(
             provider="openrouter",
             model="openrouter/free",
@@ -468,7 +521,7 @@ def test_missing_api_key_does_not_activate_fake_provider(monkeypatch):
 
 
 def test_explicit_other_provider_is_blocked_by_policy_before_http(policy_db):
-    with pytest.raises(ProviderUnavailableError):
+    with pytest.raises(ProviderConfigurationError):
         cost_policy.authorize_and_reserve(
             provider="soal",
             model="gemini-3.5-flash",

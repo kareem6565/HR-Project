@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 from typing import Any
 
@@ -11,8 +12,11 @@ from pydantic import BaseModel
 
 from app.ai.providers.base import AIProvider, StructuredGenerationRequest, TextGenerationRequest
 from app.ai.providers.errors import (
+    ProviderConfigurationError,
     ProviderError,
+    ProviderInsufficientCreditsError,
     ProviderInvalidRequestError,
+    ProviderInvalidResponseError,
     ProviderRateLimitError,
     ProviderTimeoutError,
     ProviderTruncatedResponseError,
@@ -20,13 +24,14 @@ from app.ai.providers.errors import (
 )
 from app.ai.results import StructuredAIResult, TextAIResult
 
-_STRUCTURED_MAX_ATTEMPTS = 3
-_STRUCTURED_RETRY_DELAY_SECONDS = 1.0
+logger = logging.getLogger("app.ai.provider")
 _SYSTEM_JSON_PROMPT = (
     "You are a structured data extraction assistant. Respond with a single JSON"
     " object that conforms to the provided JSON schema, and nothing else. No"
     " commentary, no markdown code fences."
 )
+_STRUCTURED_MAX_ATTEMPTS = 3
+_STRUCTURED_RETRY_DELAY_SECONDS = 1.0
 
 
 class OpenAICompatibleProvider(AIProvider):
@@ -67,9 +72,8 @@ class OpenAICompatibleProvider(AIProvider):
         started = time.monotonic()
         payload = None
         data: dict[str, Any] | None = None
-        transient_error: Exception | None = None
-        attempts = 0
         use_response_format = request.output_schema is not None
+        attempts = 0
         while True:
             attempts += 1
             try:
@@ -83,29 +87,27 @@ class OpenAICompatibleProvider(AIProvider):
             except ProviderInvalidRequestError as error:
                 if use_response_format and _looks_like_json_format_rejection(error):
                     use_response_format = False
-                    attempts -= 1
+                    continue
+                raise
+            except ProviderInvalidResponseError:
+                paid_single_shot = self.model_name == "deepseek/deepseek-v4.1-flash-1017"
+                if not paid_single_shot and attempts < _STRUCTURED_MAX_ATTEMPTS:
+                    time.sleep(_STRUCTURED_RETRY_DELAY_SECONDS * attempts)
                     continue
                 raise
             except ProviderError:
                 raise
             except Exception as error:  # noqa: BLE001 - normalize vendor/network failures
-                mapped = _map_exception(error)
-                if mapped is None:
-                    raise ProviderUnavailableError(str(error)) from error
+                mapped = _normalize_exception(error)
                 if (
                     isinstance(mapped, ProviderInvalidRequestError)
                     and use_response_format
                     and _looks_like_json_format_rejection(mapped)
                 ):
                     use_response_format = False
-                    attempts -= 1
                     continue
                 if isinstance(mapped, (ProviderRateLimitError, ProviderUnavailableError)):
-                    transient_error = mapped
-                    if attempts >= _STRUCTURED_MAX_ATTEMPTS:
-                        raise mapped from error
-                    time.sleep(_STRUCTURED_RETRY_DELAY_SECONDS * attempts)
-                    continue
+                    raise mapped from error
                 raise mapped from error
 
             if request.output_schema is None:
@@ -116,16 +118,18 @@ class OpenAICompatibleProvider(AIProvider):
                     "was discarded."
                 )
             data = _extract_dict(_extract_content(payload))
-            if data is not None or attempts >= _STRUCTURED_MAX_ATTEMPTS:
-                break
-            time.sleep(_STRUCTURED_RETRY_DELAY_SECONDS * attempts)
-
-        if data is None and transient_error is not None:
-            raise transient_error
-        if request.output_schema is not None and data is None:
-            raise ProviderInvalidRequestError(
-                "The provider did not return a complete JSON object for structured output."
-            )
+            if data is None:
+                # The approved paid DeepSeek route is strictly single-shot to
+                # keep its cost reservation bounded. Preserve the existing
+                # bounded repair attempt for non-paid compatible providers.
+                paid_single_shot = self.model_name == "deepseek/deepseek-v4.1-flash-1017"
+                if not paid_single_shot and attempts < _STRUCTURED_MAX_ATTEMPTS:
+                    time.sleep(_STRUCTURED_RETRY_DELAY_SECONDS * attempts)
+                    continue
+                raise ProviderInvalidResponseError(
+                    "OpenRouter returned a successful response without usable structured JSON."
+                )
+            break
 
         return StructuredAIResult(
             provider=self.provider_name,
@@ -145,10 +149,7 @@ class OpenAICompatibleProvider(AIProvider):
         except ProviderError:
             raise
         except Exception as error:  # noqa: BLE001 - normalize vendor/network failures
-            mapped = _map_exception(error)
-            if mapped is not None:
-                raise mapped from error
-            raise ProviderUnavailableError(str(error)) from error
+            raise _normalize_exception(error) from error
         return TextAIResult(
             provider=self.provider_name,
             model=self.model_name,
@@ -179,7 +180,11 @@ class OpenAICompatibleProvider(AIProvider):
         minimized_input = minimize_hr_identifiers(input_text)
         messages: list[dict[str, Any]] = []
         if output_schema is not None:
-            schema_json = json.dumps(output_schema.model_json_schema())
+            schema_json = json.dumps(
+                _compact_json_schema(output_schema.model_json_schema()),
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
             messages.append(
                 {
                     "role": "system",
@@ -187,30 +192,23 @@ class OpenAICompatibleProvider(AIProvider):
                 }
             )
         messages.append({"role": "user", "content": minimized_input})
+        prompt_characters = sum(
+            len(str(message.get("content", ""))) for message in messages
+        )
         kwargs: dict[str, Any] = {"model": self.model_name, "messages": messages}
         if self.max_tokens is not None:
             kwargs["max_tokens"] = self.max_tokens
         if use_response_format:
             kwargs["response_format"] = {"type": "json_object"}
         if self.cost_policy_enabled and not self.self_hosted:
-            from app.core.config import get_settings
-
-            active_settings = get_settings()
-            if active_settings.ai_paid_mode_enabled:
-                # OpenRouter's current catalog marks the explicitly approved
-                # DeepSeek route as reasoning-enabled by default. Its reasoning
-                # tokens share max_tokens with the JSON response, so disable
-                # reasoning for this extraction-only paid route.
-                if (
-                    self.provider_name == "openrouter"
-                    and self.model_name == "deepseek/deepseek-v4.1-flash-1017"
-                ):
-                    kwargs.setdefault("extra_body", {})["reasoning"] = {"enabled": False}
-                add_paid_routing_constraints(kwargs, model=self.model_name)
-            else:
+            if self.model_name == "openrouter/free":
                 add_free_routing_constraints(
                     kwargs, model=self.model_name, structured=output_schema is not None
                 )
+            elif not self.model_name.endswith(":free"):
+                # The approved DeepSeek route uses one price-capped provider and no fallback.
+                kwargs.setdefault("extra_body", {})["reasoning"] = {"enabled": False}
+                add_paid_routing_constraints(kwargs, model=self.model_name)
         event_id = None
         if self.cost_policy_enabled:
             if self.self_hosted:
@@ -224,27 +222,63 @@ class OpenAICompatibleProvider(AIProvider):
                     base_url=self.base_url,
                     structured=output_schema is not None,
                     metadata=metadata,
+                    api_key=self.api_key,
                     has_api_key=bool(self.api_key),
-                    input_bytes=len(
-                        (
-                            minimized_input
-                            + (
-                                json.dumps(output_schema.model_json_schema())
-                                if output_schema
-                                else ""
-                            )
-                        ).encode("utf-8")
-                    ),
-                    max_output_tokens=self.max_tokens or 4096,
+                    prompt_characters=prompt_characters,
+                    input_bytes=len(minimized_input.encode("utf-8")),
+                    max_output_tokens=self.max_tokens,
                 )
         try:
             response = self._client.chat.completions.create(**kwargs)
         except Exception as error:
             if event_id is not None:
-                record_result(event_id, status="failed", error=error)
+                record_result(
+                    event_id,
+                    status="failed",
+                    error=_normalize_exception(error),
+                    prompt_characters=prompt_characters,
+                )
             raise
+        if output_schema is not None and _extract_dict(_extract_content(response)) is None:
+            finish_reason = _finish_reason(response)
+            truncated = finish_reason in {"length", "max_tokens"}
+            error_class = ProviderTruncatedResponseError if truncated else ProviderInvalidResponseError
+            error = error_class(
+                "OpenRouter returned a truncated structured response."
+                if truncated
+                else "OpenRouter returned a successful response without usable structured JSON.",
+                error_code=("provider_response_truncated" if truncated else None),
+                provider_status=200,
+                provider_request_id=getattr(response, "id", None),
+            )
+            if event_id is not None:
+                record_result(
+                    event_id,
+                    status="failed",
+                    response=response,
+                    error=error,
+                    prompt_characters=prompt_characters,
+                )
+            logger.warning(
+                "AI provider response could not be parsed as the requested structured output.",
+                extra={
+                    "phase": "response_validation",
+                    "provider": self.provider_name,
+                    "model": self.model_name,
+                    "error_code": error.error_code,
+                    "finish_reason": finish_reason,
+                    "output_tokens": _usage_count(response, "completion_tokens", "output_tokens"),
+                    "provider_request_id": getattr(response, "id", None),
+                },
+            )
+            raise error
         if event_id is not None:
-            record_result(event_id, status="succeeded", response=response)
+            record_result(
+                event_id,
+                status="succeeded",
+                response=response,
+                prompt_characters=prompt_characters,
+            )
         return response
 
 
@@ -269,12 +303,26 @@ def _extract_content(payload: Any) -> Any:
 
 
 def _finish_reason(payload: Any) -> str | None:
-    """Return the provider's completion stop reason without reading response text."""
-    if isinstance(payload, dict):
-        choices = payload.get("choices") or []
-        return choices[0].get("finish_reason") if choices else None
-    choices = getattr(payload, "choices", None)
-    return getattr(choices[0], "finish_reason", None) if choices else None
+    """Return the provider's bounded completion stop reason for diagnostics."""
+    choices = payload.get("choices") if isinstance(payload, dict) else getattr(payload, "choices", None)
+    if not choices:
+        return None
+    choice = choices[0]
+    reason = choice.get("finish_reason") if isinstance(choice, dict) else getattr(choice, "finish_reason", None)
+    return reason if isinstance(reason, str) and len(reason) <= 40 else None
+
+
+def _compact_json_schema(value: Any) -> Any:
+    """Drop prose-only JSON Schema annotations while preserving validation shape."""
+    if isinstance(value, dict):
+        return {
+            key: _compact_json_schema(item)
+            for key, item in value.items()
+            if key not in {"title", "description", "examples", "default"}
+        }
+    if isinstance(value, list):
+        return [_compact_json_schema(item) for item in value]
+    return value
 
 
 def _extract_dict(content: Any) -> dict[str, Any] | None:
@@ -313,6 +361,20 @@ def _extract_token_usage(payload: Any) -> dict[str, int] | None:
     }
 
 
+def _usage_count(payload: Any, *names: str) -> int | None:
+    usage = payload.get("usage") if isinstance(payload, dict) else getattr(payload, "usage", None)
+    if isinstance(usage, dict):
+        for name in names:
+            if isinstance(usage.get(name), int):
+                return usage[name]
+    elif usage is not None:
+        for name in names:
+            value = getattr(usage, name, None)
+            if isinstance(value, int):
+                return value
+    return None
+
+
 def _looks_like_json_format_rejection(error: ProviderInvalidRequestError) -> bool:
     text = str(error).lower()
     return any(
@@ -335,16 +397,26 @@ def _map_exception(error: Exception) -> ProviderError | None:
             code = candidate
             break
     if code is not None:
+        request_id = getattr(error, "request_id", None)
+        common = {"provider_status": code, "provider_request_id": request_id}
         if code in (408, 504):
-            return ProviderTimeoutError(str(error))
+            return ProviderTimeoutError(str(error), **common)
         if code == 429:
-            return ProviderRateLimitError(str(error))
-        if code in (400, 401, 403, 404, 422):
-            return ProviderInvalidRequestError(str(error))
-        return ProviderUnavailableError(str(error))
+            return ProviderRateLimitError(str(error), **common)
+        if code == 402:
+            return ProviderInsufficientCreditsError(str(error), **common)
+        if code == 401:
+            return ProviderConfigurationError(
+                str(error), error_code="invalid_api_key", **common
+            )
+        if code == 403:
+            return ProviderConfigurationError(str(error), error_code="provider_access_denied", **common)
+        if code in (400, 404, 422):
+            return ProviderInvalidRequestError(str(error), **common)
+        return ProviderUnavailableError(str(error), **common)
     message, error_type = str(error).lower(), type(error).__name__.lower()
     if any(term in message or term in error_type for term in ("timeout", "deadline exceeded")):
-        return ProviderTimeoutError(str(error))
+            return ProviderTimeoutError(str(error))
     if any(
         term in message or term in error_type
         for term in (
@@ -375,3 +447,15 @@ def _map_exception(error: Exception) -> ProviderError | None:
     ):
         return ProviderUnavailableError(str(error))
     return None
+
+
+def _normalize_exception(error: Exception) -> ProviderError:
+    mapped = _map_exception(error)
+    if mapped is not None:
+        return mapped
+    return ProviderUnavailableError(
+        "OpenRouter returned an unclassified provider error.",
+        error_code="unclassified_provider_error",
+        provider_status=getattr(error, "status_code", None),
+        provider_request_id=getattr(error, "request_id", None),
+    )

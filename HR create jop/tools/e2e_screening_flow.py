@@ -187,7 +187,8 @@ def main():
     # ---------------------------------------------------------
     job_payload = {
         "title": "Staff Platform Engineer (E2E Validation)",
-        "status": "active",
+        "status": "draft",
+        "job_type": "full_time",
         "department": "Infrastructure",
         "location": "London, UK (Hybrid)",
         "raw_description": "Build high-throughput distributed systems using Python, Postgres, Docker, and Kubernetes.",
@@ -200,7 +201,6 @@ def main():
     job_data = job_resp.json()
     job_id = job_data["id"]
     print(f"    Created Job ID: {job_id}")
-
     # ---------------------------------------------------------
     # STAGE B: Analyze & Profile Approval Check
     # ---------------------------------------------------------
@@ -226,6 +226,9 @@ def main():
 
     approve_resp = client.post(f"/job-profiles/{profile_id}/approve")
     check("Stage B: Approve Job Profile Version", approve_resp.status_code == 200, f"status={approve_resp.status_code}")
+
+    activate_resp = client.patch(f"/jobs/{job_id}", json={"status": "active"})
+    check("Stage B2: Activate Job (after profile approval)", activate_resp.status_code == 200, f"status={activate_resp.status_code} body={activate_resp.text[:200]}")
 
     # ---------------------------------------------------------
     # STAGE C: Multi-Format CV Ingestion & Screening (DOCX & PDF)
@@ -316,6 +319,16 @@ def main():
     )
     check("Stage F: Record Authoritative Advance Decision", adv_decision.status_code == 201)
 
+    # Talent pool is consent-gated: HR issues a consent link, candidate accepts
+    consent_link = client.post(f"/candidates/{docx_row['candidate_id']}/talent-pool-consent-link")
+    check("Stage F: Issue Talent Pool Consent Link", consent_link.status_code == 201)
+    consent_token = consent_link.json()["token"]
+    consent_resp = client.post(
+        "/candidate-portal/talent-pool-consent/respond",
+        json={"token": consent_token, "decision": "accepted", "self_attested": True},
+    )
+    check("Stage F: Candidate Accepts Talent Pool Consent", consent_resp.status_code == 200)
+
     # Verify candidate appears in talent pool
     pool_resp = client.get("/talent-pool")
     check("Stage F: Talent Pool Sync", pool_resp.status_code == 200)
@@ -350,10 +363,17 @@ def main():
     # ---------------------------------------------------------
     # STAGE I: Candidate Self-Service Slot Selection & Booking
     # ---------------------------------------------------------
-    portal_resp = client.get(f"/candidate-portal/invitations/{invite_token}")
+    portal_resp = client.post(
+        "/candidate-portal/interview/preview",
+        json={"token": invite_token},
+    )
     check("Stage I: Candidate Views Role via Portal", portal_resp.status_code == 200)
 
-    slots_resp = client.get(f"/candidate-portal/invitations/{invite_token}/slots")
+    slots_month = (date.today() + timedelta(days=2)).replace(day=1).isoformat()
+    slots_resp = client.post(
+        "/candidate-portal/interview/slots",
+        json={"token": invite_token, "month": slots_month},
+    )
     check("Stage I: Candidate Retrieves Open Slots", slots_resp.status_code == 200)
     available_slots = slots_resp.json()
     check("Stage I: Available Slots Offered to Candidate", len(available_slots) >= 1)
@@ -361,32 +381,32 @@ def main():
     print(f"    Selected Slot: {chosen_slot['date']} {chosen_slot['start_time']} - {chosen_slot['end_time']}")
 
     # Book chosen slot
+    book_payload = {
+        "token": invite_token,
+        "availability_id": chosen_slot["availability_id"],
+        "scheduled_time": chosen_slot["start_time"],
+    }
     book_resp = client.post(
-        f"/candidate-portal/invitations/{invite_token}/book",
-        json={
-            "interviewer_user_id": chosen_slot["interviewer_id"],
-            "scheduled_date": chosen_slot["date"],
-            "scheduled_time": chosen_slot["start_time"],
-            "duration_minutes": chosen_slot["duration_minutes"],
-        },
+        "/candidate-portal/interview/book",
+        json=book_payload,
     )
     check("Stage I: Candidate Confirms Booking", book_resp.status_code == 201)
     booking_data = book_resp.json()
-    interview_id = booking_data["id"]
+    interview_id = booking_data["interview_id"]
     print(f"    Confirmed Interview ID: {interview_id}")
 
-    # Concurrency / Double-booking protection check: booking again with same token or same slot must be rejected
+    # Same-token rebooking of a future interview is an atomic reschedule by design
+    # (cross-candidate overlap is enforced by the InterviewSlotReservation DB constraint,
+    # covered by backend unit tests).
     dup_book_resp = client.post(
-        f"/candidate-portal/invitations/{invite_token}/book",
-        json={
-            "interviewer_user_id": chosen_slot["interviewer_id"],
-            "scheduled_date": chosen_slot["date"],
-            "scheduled_time": chosen_slot["start_time"],
-            "duration_minutes": chosen_slot["duration_minutes"],
-        },
+        "/candidate-portal/interview/book",
+        json=book_payload,
     )
-    check("Stage I: Concurrency / Double Booking Blocked", dup_book_resp.status_code in (400, 409, 422),
-          f"status={dup_book_resp.status_code}")
+    check("Stage I: Atomic Reschedule via Same Token", dup_book_resp.status_code == 201 and dup_book_resp.json().get("rescheduled") is True,
+          f"status={dup_book_resp.status_code} body={dup_book_resp.json()}")
+    # Revert to the originally booked interview id for downstream stages (reschedule keeps the same interview)
+    if dup_book_resp.json().get("interview_id"):
+        interview_id = dup_book_resp.json()["interview_id"]
 
     # ---------------------------------------------------------
     # STAGE J: Post-Interview Feedback & Subsequent Decision

@@ -9,6 +9,8 @@ from app.api.v1.deps import RequestContext, get_request_context
 from app.api.v1.schemas.resumes import ResumeResponse
 from app.core.config import settings
 from app.core.database import get_db
+from app.services.ocr_service import get_ocr_provider
+from app.services.resume_scan_service import ResumeScanService
 from app.services.resume_service import ResumeService
 from app.services.storage_service import LocalFileSystemStorage
 from app.services.upload_stream_service import read_upload_file_bounded
@@ -39,6 +41,34 @@ def upload_resume(
         file_bytes=file_bytes,
         max_upload_bytes=settings.max_upload_bytes,
         storage=LocalFileSystemStorage(settings.storage_root_dir),
+        checksum=checksum,
+    )
+
+
+@router.post(
+    "/candidates/{candidate_id}/resumes/scan",
+    response_model=ResumeResponse,
+    status_code=201,
+)
+def scan_resume(
+    candidate_id: str,
+    file: UploadFile = File(...),
+    ctx: RequestContext = Depends(get_request_context),
+    db: Session = Depends(get_db),
+):
+    """Photograph/scan a CV (PNG/JPEG/WEBP) straight into the pipeline via OCR."""
+    file_bytes, _size, checksum = read_upload_file_bounded(
+        file, max_bytes=settings.ocr_max_image_bytes
+    )
+    return ResumeScanService().create_from_scan(
+        db,
+        candidate_id=uuid.UUID(candidate_id),
+        organization_id=ctx.organization_id,
+        filename=file.filename or "",
+        file_bytes=file_bytes,
+        max_image_bytes=settings.ocr_max_image_bytes,
+        storage=LocalFileSystemStorage(settings.storage_root_dir),
+        ocr_provider=get_ocr_provider(settings),
         checksum=checksum,
     )
 

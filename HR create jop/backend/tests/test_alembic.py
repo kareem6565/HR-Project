@@ -20,7 +20,7 @@ def test_single_alembic_head() -> None:
     cfg.set_main_option("script_location", str(backend_root / "alembic"))
     script = ScriptDirectory.from_config(cfg)
     heads = script.get_heads()
-    assert heads == ["034_pipeline_stages"], f"Expected single head, got {heads}"
+    assert heads == ["035_merge_billing_pipeline"], f"Expected single head, got {heads}"
 
 
 def test_pipeline_migration_backfills_and_downgrades_on_throwaway_sqlite() -> None:

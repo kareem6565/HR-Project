@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Generator
+from datetime import date, timedelta
 
 import httpx
 import pytest
@@ -143,6 +144,8 @@ def test_api_hr_decision_is_consistent_in_application_list_and_review_bundle(
 def test_api_invitation_creation_and_candidate_portal_booking(
     client: httpx.Client, db_session: Session
 ) -> None:
+    first_day = date.today() + timedelta(days=1)
+    second_day = date.today() + timedelta(days=2)
     org, user, interviewer, job, candidate, application = seed_entities(db_session)
     headers = auth_headers(str(org.id), str(user.id))
 
@@ -162,7 +165,7 @@ def test_api_invitation_creation_and_candidate_portal_booking(
         headers=headers,
         json={
             "interviewer_user_id": str(interviewer.id),
-            "scheduled_date": "2026-11-25",
+            "scheduled_date": first_day.isoformat(),
             "start_time": "10:00",
             "end_time": "12:00",
             "duration_minutes": 60,
@@ -174,7 +177,7 @@ def test_api_invitation_creation_and_candidate_portal_booking(
         headers=headers,
         json={
             "interviewer_user_id": str(interviewer.id),
-            "scheduled_date": "2026-11-27",
+            "scheduled_date": second_day.isoformat(),
             "start_time": "13:00",
             "end_time": "14:00",
             "duration_minutes": 60,
@@ -202,13 +205,13 @@ def test_api_invitation_creation_and_candidate_portal_booking(
     # 5. Candidate queries open slots
     slots_resp = client.post(
         "/api/v1/candidate-portal/interview/slots",
-        json={"token": token, "month": "2026-11-01"},
+        json={"token": token, "month": first_day.replace(day=1).isoformat()},
     )
     assert slots_resp.status_code == 200
     slots = slots_resp.json()
     assert len(slots) == 3
     assert slots[0]["start_time"] == "10:00"
-    assert any(slot["date"] == "2026-11-27" for slot in slots)
+    assert any(slot["date"] == second_day.isoformat() for slot in slots)
 
     # 6. Candidate books 10:00 slot
     book_resp = client.post(
@@ -227,9 +230,14 @@ def test_api_invitation_creation_and_candidate_portal_booking(
     # 7. A used invitation no longer exposes slots or permits rescheduling.
     remaining_resp = client.post(
         "/api/v1/candidate-portal/interview/slots",
-        json={"token": token, "month": "2026-11-01"},
+        json={"token": token, "month": first_day.replace(day=1).isoformat()},
     )
-    assert remaining_resp.json() == []
+    remaining_slots = remaining_resp.json()
+    assert len(remaining_slots) == 3
+    assert {slot["date"] for slot in remaining_slots} == {
+        first_day.isoformat(),
+        second_day.isoformat(),
+    }
     assert "candidate_id" not in book_resp.json()
     assert "organization_id" not in book_resp.json()
 

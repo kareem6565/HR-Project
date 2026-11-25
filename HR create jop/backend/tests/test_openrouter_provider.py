@@ -13,7 +13,9 @@ from pydantic import BaseModel
 from app.ai.contracts import CandidateProfileExtractionOutput
 from app.ai.providers import (
     OpenRouterProvider,
-    ProviderInvalidRequestError,
+    ProviderConfigurationError,
+    ProviderInsufficientCreditsError,
+    ProviderInvalidResponseError,
     ProviderRateLimitError,
     ProviderTimeoutError,
     ProviderTruncatedResponseError,
@@ -170,30 +172,36 @@ def test_paid_deepseek_disables_reasoning_to_reserve_tokens_for_json(monkeypatch
     assert body["provider"]["allow_fallbacks"] is False
 
 
-def test_invalid_json_raises_typed_error_after_bounded_retries(monkeypatch) -> None:
+def test_invalid_json_is_typed_failure_after_bounded_retries(monkeypatch) -> None:
     monkeypatch.setattr("app.ai.providers.openai_compatible.time.sleep", lambda _delay: None)
-    provider = _provider(lambda _request: _response("not json"))
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return _response("not json")
+
+    provider = _provider(handler)
     request = StructuredGenerationRequest(
         input="extract", output_schema=CandidateProfileExtractionOutput
     )
-
-    with pytest.raises(ProviderInvalidRequestError, match="complete JSON object"):
+    with pytest.raises(ProviderInvalidResponseError) as raised:
         provider.generate_structured(request)
 
+    assert raised.value.error_code == "invalid_structured_response"
+    assert len(requests) == 3
 
-def test_truncated_structured_response_raises_without_retries(monkeypatch) -> None:
-    monkeypatch.setattr("app.ai.providers.openai_compatible.time.sleep", lambda _delay: None)
+
+def test_truncated_structured_response_raises_typed_error_without_retry(monkeypatch) -> None:
     requests: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
         return _response('{"answer":', finish_reason="length")
 
-    with pytest.raises(ProviderTruncatedResponseError, match="output-token limit"):
+    with pytest.raises(ProviderTruncatedResponseError, match="truncated"):
         _provider(handler).generate_structured(
             StructuredGenerationRequest(input="extract", output_schema=_Answer)
         )
-
     assert len(requests) == 1
 
 
@@ -239,10 +247,20 @@ def test_timeout_is_classified() -> None:
         _provider(handler).generate_text(TextGenerationRequest(input="hello"))
 
 
-def test_authentication_error_is_sanitized_into_provider_error() -> None:
+def test_authentication_error_is_classified_as_bad_key() -> None:
     provider = _provider(
         lambda _request: httpx.Response(401, json={"error": {"message": "invalid API key"}})
     )
 
-    with pytest.raises(ProviderInvalidRequestError):
+    with pytest.raises(ProviderConfigurationError) as raised:
+        provider.generate_text(TextGenerationRequest(input="hello"))
+    assert raised.value.error_code == "invalid_api_key"
+
+
+def test_provider_credit_error_is_classified_separately() -> None:
+    provider = _provider(
+        lambda _request: httpx.Response(402, json={"error": {"message": "insufficient credits"}})
+    )
+
+    with pytest.raises(ProviderInsufficientCreditsError):
         provider.generate_text(TextGenerationRequest(input="hello"))

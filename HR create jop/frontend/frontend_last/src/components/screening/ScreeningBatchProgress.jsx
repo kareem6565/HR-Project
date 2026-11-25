@@ -14,11 +14,28 @@ import {
   retryBatchItem,
 } from "../../services/screeningBatchService";
 import { formatFileSize } from "../../pages/candidates/screenCandidateUtils";
+import useCountUp from "../../hooks/useCountUp";
+
+const SCREENING_STAGE_COUNT = 5;
+const SCREENING_STAGE_INFO = {
+  claimed: { step: 1, label: "Preparing job criteria" },
+  load_job_context: { step: 1, label: "Preparing job criteria" },
+  storage_read: { step: 2, label: "Opening the CV" },
+  cv_text_extraction: { step: 2, label: "Reading the CV" },
+  candidate_creation: { step: 3, label: "Preparing candidate profile" },
+  resume_storage: { step: 3, label: "Preparing candidate profile" },
+  candidate_profile_extraction: { step: 3, label: "Extracting skills and experience" },
+  application_creation: { step: 4, label: "Checking the CV against the job" },
+  candidate_evaluation: { step: 4, label: "Checking the CV against the job" },
+  batch_finalize: { step: 4, label: "Saving screening results" },
+  retry_scheduled: { step: 1, label: "Retrying after a temporary issue" },
+};
 
 export default function ScreeningBatchProgress({
   batchId,
   initialData = null,
   job = null,
+  onBatchData = null,
 }) {
   const navigate = useNavigate();
   const [batchData, setBatchData] = useState(initialData);
@@ -38,13 +55,20 @@ export default function ScreeningBatchProgress({
     let timerId = null;
 
     const checkBatch = async () => {
-      if (inFlightRef.current || !mounted) return;
+      if (!mounted) return;
+      if (inFlightRef.current) {
+        // React StrictMode can restart this effect while the previous request
+        // is still settling. Keep polling once that request releases the lock.
+        timerId = setTimeout(checkBatch, 250);
+        return;
+      }
       inFlightRef.current = true;
       try {
         const data = await getScreeningBatch(batchId);
         if (!mounted || !data) return;
 
         setBatchData(data);
+        onBatchData?.(data);
         consecutiveErrorsRef.current = 0;
         setPollError("");
 
@@ -75,15 +99,13 @@ export default function ScreeningBatchProgress({
           setPollPaused(true);
         } else {
           // Network or transient server error - DO NOT treat as batch failure
-          if (consecutiveErrorsRef.current >= 5) {
+          if (consecutiveErrorsRef.current >= 3) {
             setPollError(
-              "Connection issues detected. Polling paused to prevent excessive requests."
+              getProgressErrorMessage(err)
             );
             setPollPaused(true);
           } else {
-            setPollError(
-              "Temporary connection issue while checking batch status. Retrying..."
-            );
+            setPollError("Temporary connection issue while checking batch status. Retrying automatically...");
             timerId = setTimeout(checkBatch, 3000);
           }
         }
@@ -98,7 +120,7 @@ export default function ScreeningBatchProgress({
       mounted = false;
       if (timerId) clearTimeout(timerId);
     };
-  }, [batchId, pollPaused, pollTrigger]);
+  }, [batchId, onBatchData, pollPaused, pollTrigger]);
 
   const handleManualRefresh = () => {
     setPollPaused(false);
@@ -127,7 +149,7 @@ export default function ScreeningBatchProgress({
 
   if (!batchData) {
     return (
-      <div className="panel" style={{ marginTop: 24 }}>
+      <section className="panel screening-connection-panel" style={{ marginTop: 24 }} aria-label="Screening status">
         {pollError ? (
           <div
             className="form-error"
@@ -141,14 +163,22 @@ export default function ScreeningBatchProgress({
           >
             <AlertTriangle size={16} aria-hidden="true" />
             <span>{pollError}</span>
+            {pollPaused && (
+              <button type="button" className="btn btn-secondary btn-small" onClick={handleManualRefresh}>
+                Try again
+              </button>
+            )}
           </div>
         ) : (
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <RefreshCw size={16} className="spin" aria-hidden="true" />
-            <span>Connecting to screening batch {batchId}...</span>
+          <div className="screening-connection-state" role="status" aria-live="polite">
+            <progress className="screening-progress-bar screening-connection-bar" max={1} aria-label="Loading screening progress" />
+            <div>
+              <strong>Loading your CV’s screening progress</strong>
+              <p className="muted-note">Your upload is in the queue. The current step will appear here shortly.</p>
+            </div>
           </div>
         )}
-      </div>
+      </section>
     );
   }
 
@@ -275,7 +305,7 @@ export default function ScreeningBatchProgress({
         </div>
       )}
 
-      <section className="screening-progress" aria-label="Screening progress">
+      <section className={`screening-progress motion-rise${terminalFiles < totalFiles ? " screening-live" : ""}`} aria-label="Screening progress">
         <div className="screening-progress-heading">
           <span>Files processed</span>
           {progressPercent === null ? (
@@ -318,14 +348,14 @@ export default function ScreeningBatchProgress({
         <div className="stat-card" style={{ padding: 12 }}>
           <div className="stat-info">
             <span>Total CVs</span>
-            <strong>{totalFiles}</strong>
+            <strong><CountUpValue value={totalFiles} /></strong>
           </div>
         </div>
         <div className="stat-card" style={{ padding: 12 }}>
           <div className="stat-info">
             <span>Queued</span>
             <strong style={{ color: "var(--color-amber, #f59e0b)" }}>
-              {queuedFiles}
+              <CountUpValue value={queuedFiles} />
             </strong>
           </div>
         </div>
@@ -333,7 +363,7 @@ export default function ScreeningBatchProgress({
           <div className="stat-info">
             <span>Processing</span>
             <strong style={{ color: "var(--color-blue, #3b82f6)" }}>
-              {runningFiles}
+              <CountUpValue value={runningFiles} />
             </strong>
           </div>
         </div>
@@ -341,7 +371,7 @@ export default function ScreeningBatchProgress({
           <div className="stat-info">
             <span>Done</span>
             <strong style={{ color: "var(--evidence-supported, #067647)" }}>
-              {doneFiles}
+              <CountUpValue value={doneFiles} />
             </strong>
           </div>
         </div>
@@ -349,7 +379,7 @@ export default function ScreeningBatchProgress({
           <div className="stat-info">
             <span>Failed</span>
             <strong style={{ color: "var(--decision-reject, #b42318)" }}>
-              {failedFiles}
+              <CountUpValue value={failedFiles} />
             </strong>
           </div>
         </div>
@@ -358,7 +388,7 @@ export default function ScreeningBatchProgress({
             <div className="stat-info">
               <span>Duplicates</span>
               <strong style={{ color: "var(--hera-muted, #66736F)" }}>
-                {duplicateFiles}
+                <CountUpValue value={duplicateFiles} />
               </strong>
             </div>
           </div>
@@ -446,17 +476,10 @@ export default function ScreeningBatchProgress({
                   </td>
                   <td>
                     {item.status === "failed" ? (
-                      <span
-                        dir="auto"
-                        style={{
-                          color: "var(--decision-reject, #b42318)",
-                          fontSize: 13,
-                        }}
-                      >
-                        {item.error_message ||
-                          item.error_code ||
-                          "Failed to process"}
-                      </span>
+                      <div className="screening-item-error" dir="auto" role="alert">
+                        <span>{item.error_message || "We couldn't finish screening this CV. Try again."}</span>
+                        {item.error_code && <code>{item.error_code}</code>}
+                      </div>
                     ) : item.status === "duplicate" ? (
                       <span className="muted-note">
                         {item.error_message || "Duplicate CV file content"}
@@ -464,9 +487,9 @@ export default function ScreeningBatchProgress({
                     ) : item.status === "waiting_for_quota" ? (
                       <span className="muted-note">{item.reason || "Waiting for provider quota; will resume automatically."}</span>
                     ) : item.status === "running" ? (
-                      <span className="muted-note">
-                        Processing resume & evaluating...
-                      </span>
+                      <ScreeningItemProgress item={item} />
+                    ) : item.status === "queued" && item.error_message ? (
+                      <span className="muted-note">{item.error_message}</span>
                     ) : item.status === "done" ? (
                       <span className="muted-note">
                         Profile created & evaluated
@@ -536,4 +559,42 @@ export default function ScreeningBatchProgress({
       </div>
     </div>
   );
+}
+
+function ScreeningItemProgress({ item }) {
+  const progress = SCREENING_STAGE_INFO[item.stage] || {
+    step: 1,
+    label: "Preparing to screen this CV",
+  };
+
+  return (
+    <div className="screening-item-progress" role="status" aria-live="polite">
+      <span>{progress.label}</span>
+      <progress
+        className="screening-progress-bar"
+        value={progress.step}
+        max={SCREENING_STAGE_COUNT}
+        aria-label={`${progress.label}, step ${progress.step} of ${SCREENING_STAGE_COUNT}`}
+        aria-valuetext={`Step ${progress.step} of ${SCREENING_STAGE_COUNT}: ${progress.label}`}
+      />
+      <small className="muted-note">Step {progress.step} of {SCREENING_STAGE_COUNT}</small>
+    </div>
+  );
+}
+
+function getProgressErrorMessage(error) {
+  const status = error?.response?.status;
+  if (error?.code === "ECONNABORTED" || error?.code === "ETIMEDOUT") {
+    return "The server took too long to return screening progress. Check the preview API, then try again.";
+  }
+  if (status >= 500) {
+    const requestId = error?.response?.data?.request_id || error?.response?.headers?.["x-request-id"];
+    return `The server couldn't load screening progress.${requestId ? ` Reference: ${requestId}` : " Check the backend logs, then try again."}`;
+  }
+  return "We couldn't connect to screening progress after several attempts. Check your connection and try again.";
+}
+
+function CountUpValue({ value }) {
+  const display = useCountUp(typeof value === "number" ? value : 0);
+  return <>{typeof value === "number" ? display : value}</>;
 }

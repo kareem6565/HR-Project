@@ -315,7 +315,7 @@ def test_job_extraction_provider_failure_commits_safe_failure_status(
     response = client.post(f"/api/v1/jobs/{job['id']}/extract-profile", headers=headers)
 
     assert response.status_code == 503
-    assert "currently unavailable" in response.json()["detail"]
+    assert response.json()["detail"] == "OpenRouter is temporarily unavailable. Try again shortly."
     db_session.expire_all()
     persisted = db_session.get(models.JobProfile, profile_id)
     assert persisted.provenance["ai_extraction"]["status"] == "failed"
@@ -3058,6 +3058,19 @@ class TestTriggerEvaluation:
         application, _job, _candidate, resume = _seed_application_records(
             db_session, organization, user_obj
         )
+        job_profile = db_session.scalar(
+            select(models.JobProfile).where(models.JobProfile.job_id == application.job_id)
+        )
+        job_profile.profile_data = {
+            **job_profile.profile_data,
+            "requirements": [
+                {
+                    "text": "Relevant professional experience",
+                    "category": "must_have",
+                    "dimension": "experience",
+                }
+            ],
+        }
         assert resume.extracted_text is None
 
         resp = client.post(f"/api/v1/job-applications/{application.id}/evaluations", headers=h)

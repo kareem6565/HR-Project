@@ -25,6 +25,11 @@ def test_settings_require_encryption_in_production_and_require_key_when_enabled(
             app_env="production",
             jwt_secret_key="secure-test-jwt-secret-key-0123456789",
             resume_encryption_enabled=False,
+            google_calendar_mode="google",
+            google_oauth_client_id="test-client-id",
+            google_oauth_client_secret="test-client-secret",
+            google_oauth_redirect_uri="https://example.test/oauth/callback",
+            google_token_encryption_key="test-google-token-encryption-key-32chars",
         )
     with pytest.raises(ValueError, match="RESUME_ENCRYPTION_KEYS"):
         Settings(
@@ -34,6 +39,11 @@ def test_settings_require_encryption_in_production_and_require_key_when_enabled(
             resume_encryption_enabled=True,
             resume_encryption_key_id="missing-key",
             resume_encryption_keys={},
+            google_calendar_mode="google",
+            google_oauth_client_id="test-client-id",
+            google_oauth_client_secret="test-client-secret",
+            google_oauth_redirect_uri="https://example.test/oauth/callback",
+            google_token_encryption_key="test-google-token-encryption-key-32chars",
         )
     key_id, keys = _keyring()
     production_settings = Settings(
@@ -43,6 +53,11 @@ def test_settings_require_encryption_in_production_and_require_key_when_enabled(
         resume_encryption_enabled=True,
         resume_encryption_key_id=key_id,
         resume_encryption_keys=keys,
+        google_calendar_mode="google",
+        google_oauth_client_id="test-client-id",
+        google_oauth_client_secret="test-client-secret",
+        google_oauth_redirect_uri="https://example.test/oauth/callback",
+        google_token_encryption_key="test-google-token-encryption-key-32chars",
     )
     assert production_settings.resume_encryption_enabled is True
 

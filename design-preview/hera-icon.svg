@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Rounded Square Background -->
+  <rect width="512" height="512" rx="116" fill="#F6F1E3" />
+
+  <!-- Dark Teal Hood, Left Arm & Left Leg -->
+  <path fill="#103B3D" d="
+    M 230 96
+    H 322
+    C 374 96, 408 134, 408 184
+    C 386 154, 348 140, 296 140
+    H 234
+    C 218 140, 208 150, 208 166
+    V 242
+    C 226 232, 250 232, 266 244
+    C 254 256, 252 274, 262 288
+    C 228 310, 206 346, 200 398
+    H 148
+    V 344
+    C 104 334, 82 292, 92 246
+    C 100 208, 128 186, 166 184
+    V 160
+    C 166 122, 192 96, 230 96
+    Z
+  " />
+
+  <!-- Negative Space Cutout inside Left Arm -->
+  <path fill="#F6F1E3" d="
+    M 148 232
+    C 128 236, 122 264, 134 282
+    C 138 288, 144 290, 148 288
+    Z
+  " />
+
+  <!-- Eyes -->
+  <circle cx="274" cy="186" r="13.5" fill="#103B3D" />
+  <circle cx="336" cy="186" r="13.5" fill="#103B3D" />
+
+  <!-- Smile -->
+  <path d="M 290 212 Q 305 227 320 212" fill="none" stroke="#103B3D" stroke-width="11" stroke-linecap="round" />
+
+  <!-- Center Clasp / Button -->
+  <circle cx="288" cy="264" r="17" fill="#5EA6BC" />
+
+  <!-- Warm Yellow Right Cape & Right Leg -->
+  <path fill="#F6D57E" d="
+    M 316 248
+    L 422 162
+    C 452 216, 444 286, 394 328
+    C 412 348, 424 372, 430 398
+    H 376
+    C 366 352, 344 316, 310 292
+    C 322 278, 324 260, 316 248
+    Z
+  " />
+</svg>

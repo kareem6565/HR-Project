@@ -62,8 +62,8 @@ const mockJobs = [
 ];
 
 describe("UI-07: Helper Functions and Constants", () => {
-  it("defines supported resume file formats", () => {
-    expect(ACCEPTED_EXTENSIONS).toEqual([".pdf", ".docx"]);
+  it("accepts supported documents and scanned CV image formats", () => {
+    expect(ACCEPTED_EXTENSIONS).toEqual([".pdf", ".docx", ".png", ".jpg", ".jpeg", ".webp"]);
   });
 
   it("formats file sizes cleanly for human readability", () => {
@@ -91,7 +91,7 @@ describe("UI-07: Helper Functions and Constants", () => {
     const txtResult = validateFile(invalidTxt);
     expect(txtResult.valid).toBe(false);
     expect(txtResult.code).toBe("unsupported_type");
-    expect(txtResult.reason).toContain("only PDF and DOCX");
+    expect(txtResult.reason).toContain("PDF, DOCX");
   });
 
   it("validates file size against the server-provided limit", () => {
@@ -214,7 +214,7 @@ describe("UI-07: File Selection, Pre-Submission Validation & Removal", () => {
     expect(screen.getByText("candidate_notes.txt")).toBeInTheDocument();
     expect(screen.getByText("Invalid")).toBeInTheDocument();
     expect(
-      screen.getByText(/Unsupported file format \(only PDF and DOCX files are supported\)/i)
+      screen.getByText(/Unsupported file format/i)
     ).toBeInTheDocument();
   });
 
@@ -300,7 +300,7 @@ describe("UI-07: File Selection, Pre-Submission Validation & Removal", () => {
       type: "application/pdf",
       lastModified: 5000,
     });
-    const invalidFile = new File(["invalid"], "bad.png", {
+    const invalidFile = new File(["invalid"], "bad.gif", {
       type: "image/png",
       lastModified: 6000,
     });
@@ -317,11 +317,11 @@ describe("UI-07: File Selection, Pre-Submission Validation & Removal", () => {
 
     // Dismiss rejected file
     const dismissRejectedBtn = screen.getByRole("button", {
-      name: "Dismiss rejected file bad.png",
+      name: "Dismiss rejected file bad.gif",
     });
     expect(dismissRejectedBtn).toHaveAttribute("type", "button");
     await user.click(dismissRejectedBtn);
-    expect(screen.queryByText("bad.png")).not.toBeInTheDocument();
+    expect(screen.queryByText("bad.gif")).not.toBeInTheDocument();
   });
 
   it("clears all rejected items with the clear rejected list button", async () => {
@@ -336,21 +336,21 @@ describe("UI-07: File Selection, Pre-Submission Validation & Removal", () => {
     await screen.findByText("Senior Full Stack Engineer");
     const input = screen.getByLabelText(/Upload candidate CV files/i);
 
-    const bad1 = new File(["1"], "file1.png", { type: "image/png" });
+    const bad1 = new File(["1"], "file1.gif", { type: "image/gif" });
     const bad2 = new File(["2"], "file2.txt", { type: "text/plain" });
 
     fireEvent.change(input, {
       target: { files: [bad1, bad2] },
     });
 
-    expect(screen.getByText("file1.png")).toBeInTheDocument();
+    expect(screen.getByText("file1.gif")).toBeInTheDocument();
     expect(screen.getByText("file2.txt")).toBeInTheDocument();
 
     const clearBtn = screen.getByRole("button", { name: /Clear rejected list/i });
     expect(clearBtn).toHaveAttribute("type", "button");
     await user.click(clearBtn);
 
-    expect(screen.queryByText("file1.png")).not.toBeInTheDocument();
+    expect(screen.queryByText("file1.gif")).not.toBeInTheDocument();
     expect(screen.queryByText("file2.txt")).not.toBeInTheDocument();
     expect(screen.queryByRole("alert", { name: /Rejected files/i })).not.toBeInTheDocument();
   });
@@ -653,9 +653,9 @@ describe("Screening setup loading and empty states", () => {
     await waitFor(() => {
       expect(screeningBatchService.getScreeningBatch).toHaveBeenCalledWith("batch-running");
     });
-    expect(
-      screen.getByText("Connecting to screening batch batch-running...")
-    ).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Loading your CV’s screening progress"
+    );
 
     await user.click(screen.getByRole("button", { name: "View" }));
 

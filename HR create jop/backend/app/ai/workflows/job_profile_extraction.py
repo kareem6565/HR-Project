@@ -502,19 +502,4 @@ class JobProfileExtractionWorkflow:
 
 def _safe_provider_error_message(error: ProviderError) -> str:
     """Return a non-sensitive, stable error description for persisted traces."""
-    from app.ai.providers.errors import (
-        ProviderConfigurationError,
-        ProviderInvalidRequestError,
-        ProviderRateLimitError,
-        ProviderTimeoutError,
-        ProviderUnavailableError,
-    )
-
-    messages = {
-        ProviderConfigurationError: "AI provider configuration is incomplete.",
-        ProviderInvalidRequestError: "AI provider rejected the extraction request.",
-        ProviderRateLimitError: "AI provider rate limit was reached.",
-        ProviderTimeoutError: "AI provider request timed out.",
-        ProviderUnavailableError: "AI provider is temporarily unavailable.",
-    }
-    return messages.get(type(error), "AI provider extraction failed.")
+    return error.safe_message

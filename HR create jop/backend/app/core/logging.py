@@ -45,12 +45,14 @@ _DB_URL_PATTERN = re.compile(
 )
 _CONTROL_CHAR_PATTERN = re.compile(r"[\r\n\t\x00-\x1f\x7f]")
 _DIAGNOSTIC_NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
+_DIAGNOSTIC_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,160}$")
 _DIAGNOSTIC_ERROR_TYPE_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 _DIAGNOSTIC_FILE_PATTERN = re.compile(r"^[a-z][a-z0-9_.-]{0,119}$")
 _UUID_PATTERN = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 _SCREENING_STAGES = {
+    "output_validation",
     "load_job_context",
     "storage_read",
     "cv_text_extraction",
@@ -63,6 +65,9 @@ _SCREENING_STAGES = {
 }
 _SAFE_VALIDATION_FIELDS = {
     "schema_version",
+    "title",
+    "summary",
+    "needs_confirmation",
     "full_name",
     "summary",
     "skills",
@@ -92,11 +97,16 @@ _SAFE_VALIDATION_FIELDS = {
     "category",
     "dimension",
     "key",
+    "source",
+    "source_quote",
 }
 
 
 def _safe_diagnostic_context(key: str, value: Any) -> Any:
     """Allow only bounded, non-payload diagnostic values into structured logs."""
+    if key in {"request_id", "provider_request_id"}:
+        text = str(value)
+        return text if _DIAGNOSTIC_ID_PATTERN.fullmatch(text) else "[REDACTED]"
     if key in {"batch_id", "item_id"}:
         text = str(value)
         return text if _UUID_PATTERN.fullmatch(text) else "[REDACTED]"
@@ -225,6 +235,7 @@ class StructuredJsonFormatter(logging.Formatter):
             "method",
             "route",
             "status_code",
+            "status",
             "duration_ms",
             "error_type",
             "workflow_id",
@@ -238,6 +249,20 @@ class StructuredJsonFormatter(logging.Formatter):
             "exception_class",
             "validation_errors",
             "exception_frames",
+            "provider",
+            "model",
+            "feature",
+            "phase",
+            "input_characters",
+            "input_tokens",
+            "output_tokens",
+            "provider_status",
+            "provider_request_id",
+            "retryable",
+            "estimated_cost_usd",
+            "spent_usd",
+            "budget_usd",
+            "remaining_usd",
         )
         for key in context_keys:
             if hasattr(record, key):

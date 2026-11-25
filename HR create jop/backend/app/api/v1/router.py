@@ -6,6 +6,7 @@ from app.api.v1.routes.ai_settings import router as ai_settings_router
 from app.api.v1.routes.audit_logs import router as audit_logs_router
 from app.api.v1.routes.auth import router as auth_router
 from app.api.v1.routes.availability import router as availability_router
+from app.api.v1.routes.billing import router as billing_router
 from app.api.v1.routes.candidate_pool import router as candidate_pool_router
 from app.api.v1.routes.candidate_portal import router as candidate_portal_router
 from app.api.v1.routes.candidate_profiles import router as candidate_profiles_router
@@ -30,6 +31,7 @@ from app.api.v1.routes.job_profiles import router as job_profiles_router
 from app.api.v1.routes.jobs import public_router as public_jobs_router
 from app.api.v1.routes.jobs import router as jobs_router
 from app.api.v1.routes.linkedin_job_imports import router as linkedin_job_imports_router
+from app.api.v1.routes.sourcing import router as sourcing_router
 from app.api.v1.routes.observability import router as observability_router
 from app.api.v1.routes.resumes import router as resumes_router
 from app.api.v1.routes.screening_batches import router as screening_batches_router
@@ -44,12 +46,14 @@ api_router.include_router(health_router, tags=["health"])
 api_router.include_router(auth_router, tags=["auth"])
 api_router.include_router(employee_chat_router, tags=["employee-chat"])
 recruitment_router.include_router(audit_logs_router, tags=["audit-logs"])
+recruitment_router.include_router(billing_router, tags=["billing"])
 recruitment_router.include_router(users_router, tags=["users"])
 recruitment_router.include_router(jobs_router, tags=["jobs"])
 recruitment_router.include_router(job_drafts_router, tags=["jobs"])
 recruitment_router.include_router(job_distributions_router, tags=["job-distributions"])
 recruitment_router.include_router(job_profiles_router, tags=["job-profiles"])
 recruitment_router.include_router(linkedin_job_imports_router, tags=["job-imports"])
+recruitment_router.include_router(sourcing_router, tags=["sourcing"])
 recruitment_router.include_router(candidates_router, tags=["candidates"])
 recruitment_router.include_router(candidate_pool_router, tags=["candidates"])
 recruitment_router.include_router(resumes_router, tags=["resumes"])

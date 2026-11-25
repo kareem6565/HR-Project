@@ -916,7 +916,10 @@ class TestB2LargeBatch:
         assert item.stage == "waiting_for_quota"
         assert item.error_code == "WAITING_FOR_QUOTA"
         assert "resume automatically" in item.error_message
-        assert item.next_attempt_at > datetime.now(UTC)
+        next_attempt_at = item.next_attempt_at
+        if next_attempt_at.tzinfo is None:
+            next_attempt_at = next_attempt_at.replace(tzinfo=UTC)
+        assert next_attempt_at > datetime.now(UTC)
 
     def test_300_synthetic_files_complete_with_isolated_failure_reporting(
         self, client, db_session, job_a, recruiter_a, monkeypatch

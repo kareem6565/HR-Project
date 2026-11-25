@@ -139,7 +139,7 @@ def verify_ai_api_key(
     else:
         return VerifyApiKeyResponse(
             ok=False,
-            message="Only OpenRouter's approved free-model route is enabled for verification.",
+            message="Only OpenRouter is enabled for AI verification.",
             model=model,
         )
 

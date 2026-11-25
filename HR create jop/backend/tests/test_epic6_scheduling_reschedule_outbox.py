@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, timedelta
+from datetime import UTC, date, timedelta
 
 import pytest
 from sqlalchemy import select
@@ -21,8 +21,8 @@ from app.models import (
     TransactionalEmailOutbox,
     User,
 )
-from app.services.scheduling_workflow_service import SchedulingWorkflowService
 from app.services.calendar_outbox_service import CalendarOutboxService
+from app.services.scheduling_workflow_service import SchedulingWorkflowService
 
 
 def _seed_advanced_app(db):
@@ -196,8 +196,14 @@ def test_failed_reschedule_rolls_back_old_booking_and_event(db_session, monkeypa
     db_session.expire_all()
 
     restored = db_session.get(Interview, interview.id)
-    assert restored.scheduled_start_at == old_start
-    assert restored.scheduled_end_at == old_end
+    restored_start = restored.scheduled_start_at
+    restored_end = restored.scheduled_end_at
+    if restored_start.tzinfo is None:
+        restored_start = restored_start.replace(tzinfo=UTC)
+    if restored_end.tzinfo is None:
+        restored_end = restored_end.replace(tzinfo=UTC)
+    assert restored_start == old_start.astimezone(UTC)
+    assert restored_end == old_end.astimezone(UTC)
     assert restored.google_event_id == "evt-old"
     active_reservations = db_session.scalars(
         select(InterviewSlotReservation).where(

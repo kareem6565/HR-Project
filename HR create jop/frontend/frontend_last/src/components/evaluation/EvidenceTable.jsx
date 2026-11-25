@@ -411,13 +411,22 @@ export default function EvidenceTable({
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => {
+              {rows.map((row, rowIndex) => {
                 const isExpanded = Boolean(expandedRows[row.id]);
                 const { candidateData } = row;
+                const rowState =
+                  row.evidenceType === "matched"
+                    ? "supported"
+                    : row.evidenceType === "partial"
+                      ? "partial"
+                      : "none";
 
                 return (
                   <React.Fragment key={row.id}>
-                    <tr className={isExpanded ? "evidence-row-expanded" : ""}>
+                    <tr
+                      className={`evidence-row evidence-row--${rowState}${isExpanded ? " evidence-row-expanded" : ""}`}
+                      style={{ "--row-i": Math.min(rowIndex, 12) }}
+                    >
                       {/* Requirement Column */}
                       <td className="evidence-req-cell">
                         <span className="evidence-req-name" dir="auto">{row.name}</span>

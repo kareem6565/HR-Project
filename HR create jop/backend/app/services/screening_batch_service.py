@@ -213,10 +213,20 @@ class ScreeningBatchService:
                     error_message = "An identical resume has already been applied to this job."
 
                 # 3. Check obvious permanent format invalidity per Prompt 5
+                elif detected_extension in ("png", "jpg", "jpeg", "webp"):
+                    # Validate the actual image signature; never infer its type from the name.
+                    from app.services.ocr_service import detect_image_extension
+
+                    if detect_image_extension(payload.data) != detected_extension:
+                        status = "failed"
+                        error_code = UPLOAD_ERROR_UNSUPPORTED_TYPE
+                        error_message = "File content does not match a supported image signature (PNG/JPEG/WEBP)."
+                    else:
+                        seen_batch_checksums[checksum] = item_id
                 elif detected_extension not in ("pdf", "docx"):
                     status = "failed"
                     error_code = UPLOAD_ERROR_UNSUPPORTED_TYPE
-                    error_message = "File content is not a supported PDF or DOCX document."
+                    error_message = "File content is not a supported PDF, DOCX, or image document."
                 else:
                     seen_batch_checksums[checksum] = item_id
 

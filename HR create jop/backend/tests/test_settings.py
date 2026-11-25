@@ -37,6 +37,11 @@ def production_settings(**overrides) -> Settings:
         "RESUME_ENCRYPTION_ENABLED": True,
         "RESUME_ENCRYPTION_KEY_ID": "primary",
         "RESUME_ENCRYPTION_KEYS": {"primary": "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA="},
+        "GOOGLE_CALENDAR_MODE": "google",
+        "GOOGLE_OAUTH_CLIENT_ID": "test-client-id",
+        "GOOGLE_OAUTH_CLIENT_SECRET": "test-client-secret",
+        "GOOGLE_OAUTH_REDIRECT_URI": "https://example.test/oauth/callback",
+        "GOOGLE_TOKEN_ENCRYPTION_KEY": "test-google-token-encryption-key-32chars",
     }
     values.update(overrides)
     return Settings(**values)

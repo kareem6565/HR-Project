@@ -121,7 +121,9 @@ def get_provider(settings: Settings, **fake_kwargs) -> AIProvider:
     if config["provider"] == "openrouter":
         if not config["api_key"]:
             raise ProviderConfigurationError(
-                "OPENROUTER_API_KEY is required when AI_PROVIDER=openrouter."
+                "OPENROUTER_API_KEY is required when AI_PROVIDER=openrouter.",
+                error_code="missing_api_key",
+                stage="preflight",
             )
         provider = OpenRouterProvider(
             api_key=config["api_key"],

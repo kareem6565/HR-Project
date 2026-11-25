@@ -429,7 +429,7 @@ def test_duplicate_requirements_payload_records_validation_failure(
     )
     db_session.commit()
 
-    with pytest.raises(ValidationError, match="[Dd]uplicate"):
+    with pytest.raises(ValidationError, match="Invalid AI output contract"):
         workflow.run(db_session, job_id=job.id, organization_id=organization.id)
     db_session.commit()
 
@@ -665,7 +665,7 @@ def test_provider_timeout_records_failure(db_session: Session) -> None:
     assert run.status == "failed"
     assert step.status == "failed"
     assert step.error_type == "ProviderTimeoutError"
-    assert step.error_message == "AI provider request timed out."
+    assert step.error_message == "OpenRouter took too long to respond. Try again later."
     assert trace.status == "failed"
 
 

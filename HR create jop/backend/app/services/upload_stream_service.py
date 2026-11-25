@@ -229,9 +229,16 @@ def read_batch_bounded(
 
 
 def detect_resume_format(payload: bytes) -> str | None:
-    """Identify supported resumes from contents, including valid DOCX containers."""
+    """Identify supported resumes from contents, including CV scans and DOCX."""
     if payload.startswith(b"%PDF-"):
         return "pdf"
+    # Local import avoids making the bounded ZIP reader depend on OCR at import
+    # time while still classifying images from their signatures, not filenames.
+    from app.services.ocr_service import detect_image_extension
+
+    image_format = detect_image_extension(payload)
+    if image_format is not None:
+        return image_format
     try:
         with zipfile.ZipFile(io.BytesIO(payload)) as archive:
             names = set(archive.namelist())

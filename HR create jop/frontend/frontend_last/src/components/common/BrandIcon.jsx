@@ -1,9 +1,14 @@
 import React from "react";
 import { useThemeMode } from "../../context/ThemeContext";
+import AnimatedHeraMark from "../brand/AnimatedHeraMark";
 
 export default function BrandIcon() {
   const theme = useThemeMode();
-  const icon = theme === "dark" ? "dark" : "light";
+  const variant = theme === "dark" ? "dark" : "light";
 
-  return <img className="brand-image" src={`/brand/hera-icon-${icon}.svg`} alt="HERA" />;
+  return (
+    <span className="brand-image" aria-hidden="true">
+      <AnimatedHeraMark size={38} variant={variant} />
+    </span>
+  );
 }

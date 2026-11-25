@@ -94,6 +94,9 @@ class Settings(BaseSettings):
     ai_paid_mode_enabled: bool = Field(default=False, validation_alias="AI_PAID_MODE_ENABLED")
     ai_paid_budget_usd: float = Field(default=0.0, ge=0, validation_alias="AI_PAID_BUDGET_USD")
     ai_paid_model_allowlist: str = Field(default="", validation_alias="AI_PAID_MODEL_ALLOWLIST")
+    ai_paid_budget_baseline_usd: float = Field(
+        default=0.0, ge=0, validation_alias="AI_PAID_BUDGET_BASELINE_USD"
+    )
     ai_global_rpm_limit: int = Field(default=15, gt=0, validation_alias="AI_GLOBAL_RPM_LIMIT")
     ai_global_daily_limit: int = Field(default=40, gt=0, validation_alias="AI_GLOBAL_DAILY_LIMIT")
     ai_user_rpm_limit: int = Field(default=5, gt=0, validation_alias="AI_USER_RPM_LIMIT")
@@ -106,7 +109,7 @@ class Settings(BaseSettings):
         default=60, gt=0, validation_alias="AI_TESTER_USER_DAILY_LIMIT"
     )
     max_upload_bytes: int = Field(default=5 * 1024 * 1024, validation_alias="MAX_UPLOAD_BYTES")
-    max_batch_files: int = Field(default=300, ge=1, le=1000, validation_alias="MAX_BATCH_FILES")
+    max_batch_files: int = Field(default=20, ge=1, le=1000, validation_alias="MAX_BATCH_FILES")
     max_zip_entries: int = Field(default=500, ge=1, le=2000, validation_alias="MAX_ZIP_ENTRIES")
     max_zip_total_bytes: int = Field(
         default=100 * 1024 * 1024, ge=1, validation_alias="MAX_ZIP_TOTAL_BYTES"
@@ -119,6 +122,14 @@ class Settings(BaseSettings):
     )
     max_concurrent_batches_per_org: int = Field(
         default=2, ge=1, le=20, validation_alias="MAX_CONCURRENT_BATCHES_PER_ORG"
+    )
+    ocr_provider: Literal["none", "tesseract"] = Field(
+        default="tesseract", validation_alias="OCR_PROVIDER"
+    )
+    ocr_languages: str = Field(default="eng", validation_alias="OCR_LANGUAGES")
+    ocr_timeout_seconds: int = Field(default=30, gt=0, le=300, validation_alias="OCR_TIMEOUT_SECONDS")
+    ocr_max_image_bytes: int = Field(
+        default=10 * 1024 * 1024, gt=0, validation_alias="OCR_MAX_IMAGE_BYTES"
     )
     max_batch_bytes: int = Field(default=50 * 1024 * 1024, validation_alias="MAX_BATCH_BYTES")
     max_pdf_pages: int = Field(default=50, validation_alias="MAX_PDF_PAGES")
@@ -170,6 +181,15 @@ class Settings(BaseSettings):
         validation_alias="APIFY_LINKEDIN_JOBS_ACTOR_ID",
     )
     apify_import_enabled: bool = Field(default=False, validation_alias="APIFY_IMPORT_ENABLED")
+    apify_sourcing_actor_id: str = Field(
+        default="harvestapi/linkedin-profile-search",
+        validation_alias="APIFY_SOURCING_ACTOR_ID",
+    )
+    apify_sourcing_enabled: bool = Field(default=False, validation_alias="APIFY_SOURCING_ENABLED")
+    apify_sourcing_enrichment_actor_id: str = Field(
+        default="harvestapi/linkedin-profile-scraper",
+        validation_alias="APIFY_SOURCING_ENRICHMENT_ACTOR_ID",
+    )
     application_privacy_notice_text: str = Field(
         default="", validation_alias="APPLICATION_PRIVACY_NOTICE_TEXT"
     )

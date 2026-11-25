@@ -8,11 +8,29 @@ from app.api.v1.schemas.ai_activity import (
     AIActivityRetryResponse,
     AIActivityRunResponse,
     AIActivityStatsResponse,
+    AIProviderRequestResponse,
 )
 from app.core.database import get_db
 from app.services.ai_activity_service import AIActivityService
 
 router = APIRouter()
+
+
+@router.get(
+    "/ai-activity/provider-requests",
+    response_model=list[AIProviderRequestResponse],
+)
+def list_ai_provider_requests(
+    ctx: RequestContext = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+    limit: int = Query(default=50, ge=1, le=200),
+):
+    """List recent AI provider calls without exposing prompts or model responses."""
+    return AIActivityService().list_provider_requests(
+        db,
+        organization_id=ctx.organization_id,
+        limit=limit,
+    )
 
 
 @router.get(
