@@ -28,7 +28,10 @@ class MatchEvidenceOutput(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: EvidenceSchemaVersion = EVIDENCE_CONTRACT_SCHEMA_VERSION
+    schema_version: EvidenceSchemaVersion = Field(
+        default=EVIDENCE_CONTRACT_SCHEMA_VERSION,
+        json_schema_extra={"const": EVIDENCE_CONTRACT_SCHEMA_VERSION},
+    )
     evidence_type: Literal["matched", "missing", "partial"]
     requirement_ref: dict[str, Any] = Field(
         ...,
@@ -36,6 +39,17 @@ class MatchEvidenceOutput(BaseModel):
             "Must identify the job requirement this evidence concerns via a "
             "``requirement_key`` value matching ``^req-[0-9a-f]{16}$``."
         ),
+        json_schema_extra={
+            "type": "object",
+            "properties": {
+                "requirement_key": {
+                    "type": "string",
+                    "pattern": "^req-[0-9a-f]{16}$",
+                }
+            },
+            "required": ["requirement_key"],
+            "additionalProperties": False,
+        },
     )
     candidate_evidence: dict[str, Any] | None = None
     strength: str | None = None
@@ -54,7 +68,10 @@ class MatchEvidenceListOutput(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: EvidenceSchemaVersion = EVIDENCE_CONTRACT_SCHEMA_VERSION
+    schema_version: EvidenceSchemaVersion = Field(
+        default=EVIDENCE_CONTRACT_SCHEMA_VERSION,
+        json_schema_extra={"const": EVIDENCE_CONTRACT_SCHEMA_VERSION},
+    )
     evidence_items: list[MatchEvidenceOutput]
     provenance: dict[str, Any] | None = None
 

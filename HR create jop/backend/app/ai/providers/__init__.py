@@ -11,12 +11,16 @@ from app.ai.providers.base import (
     TextGenerationRequest,
 )
 from app.ai.providers.errors import (
+    ProviderBudgetExceededError,
     ProviderConfigurationError,
     ProviderError,
+    ProviderInsufficientCreditsError,
     ProviderInvalidRequestError,
+    ProviderInvalidResponseError,
     ProviderRateLimitError,
     ProviderTimeoutError,
     ProviderUnavailableError,
+    ProviderUsageCheckError,
     provider_error_for,
 )
 from app.ai.providers.factory import get_provider
@@ -34,11 +38,15 @@ __all__ = [
     "OpenRouterProvider",
     "SoalProvider",
     "ProviderError",
+    "ProviderBudgetExceededError",
     "ProviderConfigurationError",
+    "ProviderInsufficientCreditsError",
     "ProviderInvalidRequestError",
+    "ProviderInvalidResponseError",
     "ProviderRateLimitError",
     "ProviderTimeoutError",
     "ProviderUnavailableError",
+    "ProviderUsageCheckError",
     "StructuredGenerationRequest",
     "TextGenerationRequest",
     "get_provider",

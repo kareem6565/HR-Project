@@ -67,8 +67,13 @@ export default function Dashboard() {
     : 0;
 
   return (
-    <div className="dashboard dashboard-redesign">
-      <section className="dashboard-intro" aria-labelledby="dashboard-intro-title">
+    <div className="dashboard dashboard-redesign motion-rise">
+      <section className="dashboard-intro dashboard-intro--alive" aria-labelledby="dashboard-intro-title">
+        <div className="hero-aurora" aria-hidden="true">
+          <div className="blob b1" />
+          <div className="blob b2" />
+          <div className="blob b3" />
+        </div>
         <div className="dashboard-intro-copy">
           <p className="dashboard-kicker">
             <HeraAssistantMark size={25} />
@@ -78,7 +83,7 @@ export default function Dashboard() {
           <p>Live totals from your current jobs and applications.</p>
         </div>
         <div className="dashboard-intro-actions">
-          <span className="dashboard-live-indicator"><span aria-hidden="true" />Live workspace snapshot</span>
+          <span className="dashboard-live-indicator"><span className="motion-live-dot" aria-hidden="true" />Live workspace snapshot</span>
           <div className="dashboard-shortcuts" aria-label="Quick actions">
             <Link className="btn btn-primary dashboard-action-primary" to="/jobs/new">
               <Plus size={16} aria-hidden="true" /> Create vacancy
@@ -95,10 +100,16 @@ export default function Dashboard() {
       </section>
 
       <section className="stats-grid dashboard-stats" aria-label="Recruitment summary">
-        <StatCard icon={Users} label="Candidates with applications" value={stats.candidatesWithApplications} />
-        <StatCard icon={BriefcaseBusiness} label="Active jobs" value={stats.activeJobs} />
-        <StatCard icon={ClipboardList} label="Applications" value={stats.applications} />
-        <StatCard icon={UserRoundCheck} label="Advanced applications" value={stats.advancedApplications} />
+        {[
+          { icon: Users, label: "Candidates with applications", value: stats.candidatesWithApplications },
+          { icon: BriefcaseBusiness, label: "Active jobs", value: stats.activeJobs },
+          { icon: ClipboardList, label: "Applications", value: stats.applications },
+          { icon: UserRoundCheck, label: "Advanced applications", value: stats.advancedApplications },
+        ].map((card, i) => (
+          <div key={card.label} className="motion-stagger" style={{ "--i": i }}>
+            <StatCard icon={card.icon} label={card.label} value={card.value} />
+          </div>
+        ))}
       </section>
 
       {stats.totalJobs === 0 && stats.applications === 0 && (

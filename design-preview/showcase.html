@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HERA - Design Preview</title>
+<link rel="stylesheet" href="hera-motion.css">
+<style>
+  /* Brand tokens (mirrors frontend_last/src/index.css) */
+  :root {
+    --hera-teal: #1B3A3A; --hera-teal-deep: #082A24; --hera-teal-light: #EBF2F1;
+    --hera-ink: #292C2A; --hera-cream: #F5EFE2; --hera-cream-subtle: #FAF7F2;
+    --hera-surface: #FFFFFF; --hera-gold: #E9D98A; --hera-sky: #6FA8B8;
+    --hera-border: #E2E5E3; --hera-muted: #66736F;
+    --evidence-supported: #067647; --evidence-supported-bg: #EDFBF2;
+    --evidence-partial: #B54708; --evidence-partial-bg: #FEF6EE;
+  }
+  :root { --skel-a: rgba(8,42,36,0.06); --skel-b: rgba(8,42,36,0.12); }
+  [data-theme="dark"] {
+    --hera-cream-subtle: #0C1F1B; --hera-cream: #082A24;
+    --hera-surface: #12302A; --hera-ink: #EAF1ED;
+    --hera-border: #21453D; --hera-muted: #8FA8A0;
+    --hera-teal-light: #16332D;
+    --evidence-supported-bg: #0F3527; --evidence-partial-bg: #3A2A10;
+    --skel-a: rgba(234,241,237,0.16); --skel-b: rgba(234,241,237,0.30);
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    background: var(--hera-cream-subtle); color: var(--hera-ink);
+    transition: background 400ms, color 400ms;
+  }
+
+  /* ---------- Hero ---------- */
+  .hero {
+    position: relative; min-height: 88vh; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center;
+    background: linear-gradient(160deg, #082A24 0%, #123A33 55%, #1B3A3A 100%);
+    color: #F5EFE2; overflow: hidden; padding: 48px 24px 96px;
+  }
+  .hero-content { position: relative; z-index: 2; max-width: 780px; }
+  .hero-mark { width: 104px; height: auto; margin-bottom: 28px; border-radius: 26px; box-shadow: var(--elev-3); }
+  .hero-eyebrow {
+    font-size: 12px; letter-spacing: 2.5px; font-weight: 700;
+    text-transform: uppercase; color: var(--hera-gold); margin-bottom: 18px;
+  }
+  .hero h1 {
+    font-size: clamp(38px, 6vw, 64px); line-height: 1.08; font-weight: 800;
+    letter-spacing: -0.02em; margin-bottom: 20px;
+  }
+  .hero h1 .accent { color: var(--hera-gold); }
+  .hero p.sub {
+    font-size: clamp(16px, 2vw, 19px); line-height: 1.6; color: #C9D6CF;
+    max-width: 560px; margin: 0 auto 36px;
+  }
+  .hero-cta-row { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+  .btn {
+    border: none; cursor: pointer; font: inherit; font-weight: 700;
+    padding: 14px 30px; border-radius: 12px; font-size: 16px;
+  }
+  .btn-gold { background: var(--hera-gold); color: #082A24; }
+  .btn-ghost {
+    background: transparent; color: #F5EFE2;
+    box-shadow: inset 0 0 0 1.5px rgba(245,239,226,0.4);
+  }
+  .btn-ghost:hover { box-shadow: inset 0 0 0 1.5px rgba(245,239,226,0.8); }
+  .hero-stats {
+    position: relative; z-index: 2; display: flex; gap: 18px; margin-top: 64px; flex-wrap: wrap; justify-content: center;
+  }
+  .hero-chip {
+    background: rgba(245,239,226,0.07); backdrop-filter: blur(8px);
+    border: 1px solid rgba(245,239,226,0.14); border-radius: 14px;
+    padding: 14px 22px; min-width: 130px;
+  }
+  .hero-chip .num { font-size: 26px; font-weight: 800; color: #fff; font-variant-numeric: tabular-nums; }
+  .hero-chip .lbl { font-size: 12px; color: #A9BDB4; margin-top: 2px; }
+  .hero-wave { position: absolute; bottom: -1px; left: 0; right: 0; z-index: 1; display: block; width: 100%; }
+
+  /* ---------- Sections ---------- */
+  .section { max-width: 1080px; margin: 0 auto; padding: 72px 24px; }
+  .section-head { margin-bottom: 36px; }
+  .section-head .kicker {
+    font-size: 11px; letter-spacing: 2px; font-weight: 800; text-transform: uppercase;
+    color: var(--hera-muted); margin-bottom: 8px;
+  }
+  .section-head h2 { font-size: 30px; font-weight: 800; letter-spacing: -0.01em; }
+  .section-head p { color: var(--hera-muted); margin-top: 8px; max-width: 520px; line-height: 1.55; }
+
+  /* KPI cards */
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 18px; }
+  .kpi {
+    background: var(--hera-surface); border: 1px solid var(--hera-border);
+    border-radius: 16px; padding: 22px;
+  }
+  .kpi .lbl { font-size: 13px; font-weight: 600; color: var(--hera-muted); }
+  .kpi .num { font-size: 34px; font-weight: 800; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .kpi .trend { font-size: 12px; font-weight: 700; margin-top: 6px; }
+  .trend.up { color: var(--evidence-supported); }
+  .trend.warn { color: var(--evidence-partial); }
+
+  /* Chart card */
+  .panel {
+    background: var(--hera-surface); border: 1px solid var(--hera-border);
+    border-radius: 16px; padding: 26px;
+  }
+  .panel h3 { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+  .panel .hint { font-size: 13px; color: var(--hera-muted); margin-bottom: 18px; }
+  .bar-row { display: grid; grid-template-columns: 96px 1fr 44px; align-items: center; gap: 12px; margin: 12px 0; font-size: 13px; }
+  .bar-track { height: 10px; background: var(--hera-teal-light); border-radius: 6px; overflow: hidden; }
+  .bar-fill {
+    height: 100%; border-radius: 6px; background: linear-gradient(90deg, var(--hera-teal), var(--hera-sky));
+    width: 0; transition: width 1s var(--motion-ease-out);
+  }
+  .bar-val { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  /* Table */
+  .table-wrap { border-radius: 16px; overflow: hidden; border: 1px solid var(--hera-border); background: var(--hera-surface); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; font-size: 11px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--hera-muted); padding: 14px 18px; border-bottom: 1px solid var(--hera-border); }
+  td { padding: 15px 18px; border-bottom: 1px solid var(--hera-border); }
+  tbody tr { transition: background 160ms, transform 160ms; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: var(--hera-teal-light); }
+  .badge { display: inline-block; padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+  .badge-ok { background: var(--evidence-supported-bg); color: var(--evidence-supported); }
+  .badge-warn { background: var(--evidence-partial-bg); color: var(--evidence-partial); }
+  .badge-neutral { background: var(--hera-teal-light); color: var(--hera-teal); }
+  [data-theme="dark"] .badge-neutral { color: #BFE0D9; }
+
+  /* Skeleton demo */
+  .skel-card { display: flex; gap: 16px; align-items: center; }
+  .skel-avatar { width: 52px; height: 52px; border-radius: 50%; }
+  .motion-skeleton { background: linear-gradient(90deg, var(--skel-a) 25%, var(--skel-b) 37%, var(--skel-a) 63%) !important; background-size: 400% 100% !important; }
+  .skel-lines { flex: 1; display: grid; gap: 10px; }
+  .skel-line { height: 12px; }
+  .skel-line.short { width: 55%; }
+
+  /* Theme toggle */
+  .theme-toggle {
+    position: fixed; top: 18px; right: 18px; z-index: 50;
+    background: var(--hera-surface); color: var(--hera-ink);
+    border: 1px solid var(--hera-border); border-radius: 999px;
+    padding: 9px 18px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+    box-shadow: var(--elev-1);
+  }
+  footer { text-align: center; padding: 40px; color: var(--hera-muted); font-size: 13px; }
+</style>
+</head>
+<body>
+
+<button class="theme-toggle" id="themeToggle">Dark mode</button>
+
+<!-- ================= HERO ================= -->
+<header class="hero">
+  <div class="hero-aurora">
+    <div class="blob b1"></div>
+    <div class="blob b2"></div>
+    <div class="blob b3"></div>
+  </div>
+  <div class="hero-content">
+    <div class="hero-mark motion-float mascot-scan" style="border-radius:26px;"><img src="hera-icon.svg" alt="HERA logo" style="display:block;width:100%;height:auto;"><span class="scan-ring" aria-hidden="true"></span></div>
+    <div class="hero-eyebrow motion-rise" style="--i:0">HERA HR Platform</div>
+    <h1 class="motion-rise" style="--i:1">Hiring that feels<br><span class="accent">alive.</span></h1>
+    <p class="sub motion-rise" style="--i:2">One workspace for your whole HR team - recruitment, attendance, and payroll - with evidence you can actually read.</p>
+    <div class="hero-cta-row motion-rise" style="--i:3">
+      <button class="btn btn-gold motion-btn">Open workspace<span class="sheen"></span></button>
+      <button class="btn btn-ghost motion-btn">See open roles</button>
+    </div>
+  </div>
+  <div class="hero-stats">
+    <div class="hero-chip motion-stagger-pop" style="--i:4"><div class="num" data-count="128">0</div><div class="lbl">Applications</div></div>
+    <div class="hero-chip motion-stagger-pop" style="--i:5"><div class="num" data-count="12">0</div><div class="lbl">Open roles</div></div>
+    <div class="hero-chip motion-stagger-pop" style="--i:6"><div class="num" data-count="86" data-suffix="%">0</div><div class="lbl">Avg. match</div></div>
+    <div class="hero-chip motion-stagger-pop" style="--i:7"><div class="num" data-count="9">0</div><div class="lbl">Interviews</div></div>
+  </div>
+  <svg class="hero-wave" viewBox="0 0 1440 90" preserveAspectRatio="none" aria-hidden="true">
+    <path id="wavePath" fill="#FAF7F2" d="M0,60 C240,90 480,20 720,45 C960,70 1200,30 1440,55 L1440,90 L0,90 Z"></path>
+  </svg>
+</header>
+
+<!-- ================= DASHBOARD ================= -->
+<section class="section" id="dashboard">
+  <div class="section-head motion-rise-sm">
+    <div class="kicker">Dashboard concept</div>
+    <h2>Numbers that arrive with purpose</h2>
+    <p>KPIs count up once when they enter, charts draw themselves, and every card responds to touch. Data stays truthful - motion only carries it in.</p>
+  </div>
+  <div class="kpi-grid">
+    <div class="kpi motion-card motion-stagger" style="--i:0"><div class="lbl">Active applications</div><div class="num" data-count="128">0</div><div class="trend up">+14 this week</div></div>
+    <div class="kpi motion-card motion-stagger" style="--i:1"><div class="lbl">Ready for review</div><div class="num" data-count="23">0</div><div class="trend warn">6 waiting 2+ days</div></div>
+    <div class="kpi motion-card motion-stagger" style="--i:2"><div class="lbl">Interviews scheduled</div><div class="num" data-count="9">0</div><div class="trend up">3 today</div></div>
+    <div class="kpi motion-card motion-stagger" style="--i:3"><div class="lbl">Open roles</div><div class="num" data-count="12">0</div><div class="trend up">2 published</div></div>
+  </div>
+
+  <div style="display:grid; grid-template-columns: 1.4fr 1fr; gap:18px; margin-top:18px;" class="split">
+    <div class="panel motion-card motion-stagger" style="--i:4">
+      <h3>Pipeline this month</h3>
+      <div class="hint">Current snapshot - statuses are independent, not cumulative</div>
+      <div class="bar-row"><span>Applied</span><div class="bar-track"><div class="bar-fill" data-w="92%"></div></div><span class="bar-val" data-count="54">0</span></div>
+      <div class="bar-row"><span>Screening</span><div class="bar-track"><div class="bar-fill" data-w="63%"></div></div><span class="bar-val" data-count="37">0</span></div>
+      <div class="bar-row"><span>Interview</span><div class="bar-track"><div class="bar-fill" data-w="34%"></div></div><span class="bar-val" data-count="20">0</span></div>
+      <div class="bar-row"><span>Advanced</span><div class="bar-track"><div class="bar-fill" data-w="19%"></div></div><span class="bar-val" data-count="11">0</span></div>
+      <div class="bar-row"><span>On hold</span><div class="bar-track"><div class="bar-fill" data-w="10%"></div></div><span class="bar-val" data-count="6">0</span></div>
+    </div>
+    <div class="panel motion-card motion-stagger" style="--i:5">
+      <h3>Loading, with grace</h3>
+      <div class="hint">Shimmer skeletons replace blank spinners</div>
+      <div class="skel-card">
+        <div class="skel-avatar motion-skeleton"></div>
+        <div class="skel-lines">
+          <div class="skel-line motion-skeleton"></div>
+          <div class="skel-line motion-skeleton short"></div>
+        </div>
+      </div>
+      <div class="skel-card" style="margin-top:18px;">
+        <div class="skel-avatar motion-skeleton"></div>
+        <div class="skel-lines">
+          <div class="skel-line motion-skeleton"></div>
+          <div class="skel-line motion-skeleton short"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= TABLE ================= -->
+<section class="section" id="table" style="padding-top:0;">
+  <div class="section-head motion-rise-sm">
+    <div class="kicker">Review concept</div>
+    <h2>Evidence stays the hero</h2>
+    <p>Review screens keep their calm: clear rows, readable badges, a quiet lift on hover. The boldness lives at the edges, not on top of decisions.</p>
+  </div>
+  <div class="table-wrap motion-card motion-rise-sm">
+    <table>
+      <thead><tr><th>Candidate</th><th>Role</th><th>Score</th><th>Evidence</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Mariam Adel</strong></td><td>Backend Engineer</td><td><strong>92.4</strong></td><td><span class="badge badge-ok">Supported</span></td><td><span class="badge badge-neutral">Ready for review</span></td></tr>
+        <tr><td><strong>Omar Hany</strong></td><td>Backend Engineer</td><td><strong>81.7</strong></td><td><span class="badge badge-ok">Supported</span></td><td><span class="badge badge-neutral">Ready for review</span></td></tr>
+        <tr><td><strong>Sara Mostafa</strong></td><td>HR Specialist</td><td><strong>64.2</strong></td><td><span class="badge badge-warn">Partial</span></td><td><span class="badge badge-neutral">Screening</span></td></tr>
+        <tr><td><strong>Karim Nabil</strong></td><td>HR Specialist</td><td><strong>58.9</strong></td><td><span class="badge badge-warn">Partial</span></td><td><span class="badge badge-neutral">Screening</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<footer>HERA design preview - motion foundation v1 - not production UI</footer>
+
+<script>
+  // Count-up numbers, once, when visible
+  const counters = document.querySelectorAll('[data-count]');
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (!e.isIntersecting) return;
+      io.unobserve(e.target);
+      const el = e.target, target = +el.dataset.count, suffix = el.dataset.suffix || '';
+      const dur = 1100, t0 = performance.now();
+      const tick = (t) => {
+        const p = Math.min((t - t0) / dur, 1);
+        const eased = 1 - Math.pow(1 - p, 3);
+        el.textContent = Math.round(target * eased) + suffix;
+        if (p < 1) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+  }, { threshold: 0.4 });
+  counters.forEach(el => io.observe(el));
+
+  // Bar charts grow when visible
+  const bars = document.querySelectorAll('.bar-fill');
+  const io2 = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (!e.isIntersecting) return;
+      io2.unobserve(e.target);
+      requestAnimationFrame(() => { e.target.style.width = e.target.dataset.w; });
+    });
+  }, { threshold: 0.4 });
+  bars.forEach(el => io2.observe(el));
+
+  // Theme toggle + URL hash (#dark)
+  const applyTheme = (t) => {
+    document.documentElement.dataset.theme = t;
+    document.getElementById('wavePath').setAttribute('fill', t === 'dark' ? '#0C1F1B' : '#FAF7F2');
+    document.getElementById('themeToggle').textContent = t === 'dark' ? 'Light mode' : 'Dark mode';
+  };
+  if (location.hash === '#dark') applyTheme('dark');
+  document.getElementById('themeToggle').addEventListener('click', () => {
+    applyTheme(document.documentElement.dataset.theme === 'dark' ? '' : 'dark');
+  });
+
+  // Reduced motion: render final states immediately
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    counters.forEach(el => { el.textContent = el.dataset.count + (el.dataset.suffix || ''); });
+    bars.forEach(el => { el.style.width = el.dataset.w; el.style.transition = 'none'; });
+  }
+
+  // Capture mode (?flat): final states + natural hero height, for screenshots
+  if (location.search.includes('flat')) {
+    const st = document.createElement('style');
+    st.textContent = '* { transition: none !important; }';
+    document.head.appendChild(st);
+    document.querySelector('.hero').style.minHeight = 'auto';
+    document.querySelector('.hero').style.paddingBottom = '120px';
+    counters.forEach(el => { el.textContent = el.dataset.count + (el.dataset.suffix || ''); io.unobserve(el); });
+    bars.forEach(el => { el.style.width = el.dataset.w; el.style.transition = 'none'; io2.unobserve(el); });
+  }
+</script>
+</body>
+</html>

@@ -143,3 +143,82 @@
   background: #1e3930;
   color: #b6e6ce;
 }
+
+/* ---- HERA motion: public careers experience ---- */
+.public-job-card {
+  animation: hmRiseIn 650ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  position: relative;
+  overflow: hidden;
+}
+.public-job-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--hm-teal, #1B3A3A), var(--hm-gold, #E9D98A), var(--hm-sky, #6FA8B8));
+}
+.public-job-mark {
+  animation: hmPopIn 600ms cubic-bezier(0.34, 1.56, 0.64, 1) 150ms both;
+  box-shadow: 0 0 0 0 rgba(233, 217, 138, 0.55);
+  animation: hmPopIn 600ms cubic-bezier(0.34, 1.56, 0.64, 1) 150ms both,
+             hmPulseGold 3.2s ease-in-out 1.2s infinite;
+}
+.public-job-card h1 { animation: hmFadeSlideUp 550ms cubic-bezier(0.22, 1, 0.36, 1) 200ms both; }
+.public-job-company, .public-job-meta { animation: hmFadeSlideUp 550ms cubic-bezier(0.22, 1, 0.36, 1) 300ms both; }
+.public-job-section { animation: hmFadeSlideUp 550ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.public-job-section:nth-of-type(1) { animation-delay: 350ms; }
+.public-job-section:nth-of-type(2) { animation-delay: 430ms; }
+.public-job-section:nth-of-type(3) { animation-delay: 510ms; }
+.public-job-section ul li { transition: transform 200ms ease, color 200ms ease; }
+.public-job-section ul li:hover { transform: translateX(4px); }
+
+.public-job-apply-link, .public-application-submit {
+  position: relative;
+  overflow: hidden;
+  transition: transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 250ms ease, filter 250ms ease;
+}
+.public-job-apply-link:hover, .public-application-submit:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px -8px rgba(27, 58, 58, 0.45);
+}
+.public-job-apply-link:active, .public-application-submit:active:not(:disabled) { transform: translateY(0) scale(0.97); }
+.public-job-apply-link::after, .public-application-submit::after {
+  content: "";
+  position: absolute;
+  top: 0; left: -80%;
+  width: 45%; height: 100%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  transform: skewX(-20deg);
+  transition: left 600ms ease;
+}
+.public-job-apply-link:hover::after, .public-application-submit:hover:not(:disabled)::after { left: 135%; }
+
+.public-application-file input[type="file"] {
+  border: 1.5px dashed #c7d0d8;
+  border-radius: 12px;
+  padding: 14px;
+  width: 100%;
+  background: #fbfcfd;
+  transition: border-color 250ms ease, background 250ms ease, box-shadow 250ms ease;
+}
+.public-application-file input[type="file"]:hover, .public-application-file input[type="file"]:focus-visible {
+  border-color: var(--hm-sky, #6FA8B8);
+  background: #fff;
+  box-shadow: 0 0 0 4px rgba(111, 168, 184, 0.15);
+}
+
+.public-application-success {
+  animation: hmPopIn 650ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  border-left: 4px solid #12b76a;
+}
+.public-application-success h2::before {
+  content: "✓ ";
+  color: #12b76a;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .public-job-card, .public-job-card h1, .public-job-company, .public-job-meta,
+  .public-job-section, .public-job-mark, .public-application-success { animation: none !important; }
+  .public-job-apply-link, .public-application-submit, .public-job-section ul li { transition: none; }
+  .public-job-apply-link::after, .public-application-submit::after { display: none; }
+}

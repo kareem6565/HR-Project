@@ -233,10 +233,43 @@ class DocxTextExtractor(TextExtractor):
         return text
 
 
+class ImageOcrTextExtractor(TextExtractor):
+    """OCR-backed extractor for photographed/scanned CVs (png/jpg/jpeg/webp).
+
+    Delegates to the configured OCR provider at call time so tests can swap it.
+    Only reached for image extensions; the PDF/DOCX upload contract is unchanged.
+    """
+
+    extension = "png"  # registry key for the family; aliases registered below
+
+    def extract(self, data: bytes, *, extension: str | None = None) -> str:
+        from app.services.ocr_service import (
+            detect_image_extension,
+            get_ocr_provider,
+        )
+        from app.services.errors import UploadValidationError as _UploadValidationError
+
+        detected = detect_image_extension(data)
+        if detected is None:
+            raise _UploadValidationError(
+                "File content does not match a supported image signature (PNG/JPEG/WEBP).",
+                code=UPLOAD_ERROR_UNSUPPORTED_TYPE,
+            )
+        return get_ocr_provider().extract_text_from_image(data, extension=detected)
+
+
+_IMAGE_EXTRACTOR = ImageOcrTextExtractor()
+
 _EXTRACTORS: dict[str, TextExtractor] = {
     PdfTextExtractor.extension: PdfTextExtractor(),
     DocxTextExtractor.extension: DocxTextExtractor(),
+    "png": _IMAGE_EXTRACTOR,
+    "jpg": _IMAGE_EXTRACTOR,
+    "jpeg": _IMAGE_EXTRACTOR,
+    "webp": _IMAGE_EXTRACTOR,
 }
+
+IMAGE_EXTENSIONS = frozenset({"png", "jpg", "jpeg", "webp"})
 
 
 def extract_text(
@@ -261,6 +294,8 @@ def extract_text(
             code=UPLOAD_ERROR_UNSUPPORTED_TYPE,
         )
 
+    if isinstance(extractor, ImageOcrTextExtractor):
+        return extractor.extract(data, extension=extension)
     if isinstance(extractor, PdfTextExtractor):
         return extractor.extract(data, max_pages=max_pdf_pages)
     elif isinstance(extractor, DocxTextExtractor):

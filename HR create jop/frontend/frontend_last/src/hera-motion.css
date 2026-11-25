@@ -1,0 +1,467 @@
+/* ============================================================
+   HERA Motion Foundation v1  (design-preview)
+   "HERA, Alive" - a choreographed motion + depth system built
+   on the approved HERA brand tokens (docs/ui-design-direction.md).
+   Every effect is transform/opacity based (GPU-cheap) and has a
+   prefers-reduced-motion fallback at the bottom of this file.
+   ============================================================ */
+
+:root {
+  /* Motion tokens */
+  --hm-instant: 120ms;
+  --hm-fast: 200ms;
+  --hm-standard: 320ms;
+  --hm-slow: 560ms;
+  --hm-cinematic: 900ms;
+  --hm-ease: cubic-bezier(0.22, 1, 0.36, 1);        /* soft settle */
+  --hm-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1); /* gentle overshoot */
+  --hm-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --stagger-step: 70ms;
+
+  /* Depth tokens */
+  --elev-1: 0 1px 2px rgba(8, 42, 36, 0.06), 0 2px 8px rgba(8, 42, 36, 0.06);
+  --elev-2: 0 2px 6px rgba(8, 42, 36, 0.07), 0 12px 28px rgba(8, 42, 36, 0.10);
+  --elev-3: 0 4px 10px rgba(8, 42, 36, 0.08), 0 24px 56px rgba(8, 42, 36, 0.16);
+  --elev-gold-glow: 0 0 0 1px rgba(233, 217, 138, 0.35), 0 12px 40px rgba(233, 217, 138, 0.25);
+}
+
+/* ---------- Keyframes library ---------- */
+
+@keyframes hera-rise {            /* entrance: rise + fade */
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes hera-rise-sm {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes hera-pop {             /* entrance: scale pop */
+  0%   { opacity: 0; transform: scale(0.92); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes hera-drift {           /* ambient: slow floating shapes */
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  33%      { transform: translate3d(4%, -6%, 0) scale(1.08); }
+  66%      { transform: translate3d(-5%, 4%, 0) scale(0.95); }
+}
+@keyframes hera-float {           /* ambient: gentle bob */
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-8px); }
+}
+@keyframes hera-sheen {           /* hover: light sweep across a surface */
+  from { transform: translateX(-120%) skewX(-18deg); }
+  to   { transform: translateX(240%) skewX(-18deg); }
+}
+@keyframes hera-shimmer {         /* skeleton loading */
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+@keyframes hera-draw {            /* SVG stroke draw-on */
+  from { stroke-dashoffset: var(--draw-length, 400); }
+  to   { stroke-dashoffset: 0; }
+}
+@keyframes hera-pulse-ring {      /* attention ring, e.g. live status dot */
+  0%   { box-shadow: 0 0 0 0 rgba(111, 168, 184, 0.45); }
+  70%  { box-shadow: 0 0 0 10px rgba(111, 168, 184, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(111, 168, 184, 0); }
+}
+
+/* ---------- Entrance utilities ---------- */
+
+.motion-rise   { animation: hera-rise var(--hm-slow) var(--hm-ease) both; }
+.motion-rise-sm { animation: hera-rise-sm var(--hm-standard) var(--hm-ease) both; }
+.motion-pop    { animation: hera-pop var(--hm-standard) var(--hm-ease-spring) both; }
+
+/* Stagger: apply .motion-stagger to children, set --i per child (0,1,2,...) */
+.motion-stagger { animation: hera-rise var(--hm-slow) var(--hm-ease) both;
+                  animation-delay: calc(var(--i, 0) * var(--stagger-step)); }
+.motion-stagger-pop { animation: hera-pop var(--hm-standard) var(--hm-ease-spring) both;
+                      animation-delay: calc(var(--i, 0) * var(--stagger-step)); }
+
+/* ---------- Interactive surfaces ---------- */
+
+/* Card that lifts on hover/focus-within */
+.motion-card {
+  transition: transform var(--hm-fast) var(--hm-ease),
+              box-shadow var(--hm-fast) var(--hm-ease);
+  box-shadow: var(--elev-1);
+}
+.motion-card:hover, .motion-card:focus-within {
+  transform: translateY(-4px);
+  box-shadow: var(--elev-2);
+}
+
+/* Button press physics + optional sheen sweep */
+.motion-btn {
+  position: relative;
+  overflow: hidden;
+  transition: transform var(--hm-instant) var(--hm-ease),
+              box-shadow var(--hm-fast) var(--hm-ease),
+              background-color var(--hm-fast) var(--hm-ease);
+}
+.motion-btn:hover  { transform: translateY(-1px); box-shadow: var(--elev-2); }
+.motion-btn:active { transform: translateY(0) scale(0.97); }
+.motion-btn .sheen {
+  position: absolute; top: 0; bottom: 0; width: 40%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent);
+  transform: translateX(-120%) skewX(-18deg);
+  pointer-events: none;
+}
+.motion-btn:hover .sheen { animation: hera-sheen 700ms var(--hm-ease-out); }
+
+/* Skeleton shimmer */
+.motion-skeleton {
+  background: linear-gradient(90deg,
+    rgba(8,42,36,0.06) 25%, rgba(8,42,36,0.12) 37%, rgba(8,42,36,0.06) 63%);
+  background-size: 400% 100%;
+  animation: hera-shimmer 1.4s linear infinite;
+  border-radius: 8px;
+}
+
+/* Live status dot */
+.motion-live-dot { animation: hera-pulse-ring 2s var(--hm-ease-out) infinite; }
+
+/* Ambient float for decorative marks */
+.motion-float { animation: hera-float 6s ease-in-out infinite; }
+
+/* ---------- Cinematic hero layer ---------- */
+
+.hero-aurora { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.hero-aurora .blob {
+  position: absolute; border-radius: 50%; filter: blur(70px); opacity: 0.55;
+  animation: hera-drift 18s ease-in-out infinite;
+}
+.hero-aurora .blob.b1 { width: 46vw; height: 46vw; background: #14443c; top: -18%; left: -10%; }
+.hero-aurora .blob.b2 { width: 34vw; height: 34vw; background: rgba(111,168,184,0.5); bottom: -22%; right: -6%; animation-delay: -6s; }
+.hero-aurora .blob.b3 { width: 22vw; height: 22vw; background: rgba(233,217,138,0.35); top: 12%; right: 18%; animation-delay: -12s; }
+
+/* SVG chart draw-on */
+.chart-draw {
+  stroke-dasharray: var(--draw-length, 400);
+  animation: hera-draw 1.2s var(--hm-ease-out) both;
+}
+
+/* ---------- Reduced motion: everything settles instantly ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-rise, .motion-rise-sm, .motion-pop,
+  .motion-stagger, .motion-stagger-pop,
+  .motion-float, .motion-live-dot,
+  .hero-aurora .blob, .chart-draw {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+  }
+  .motion-card, .motion-btn { transition: none; }
+  .motion-btn:hover .sheen { display: none; }
+  .motion-skeleton { animation: none; }
+}
+
+/* ---------- Mascot scan: the mark "reads a CV" ---------- */
+.mascot-scan {
+  position: relative;
+  overflow: hidden;
+  border-radius: inherit;
+  isolation: isolate;
+}
+.mascot-scan::after {
+  content: "";
+  position: absolute;
+  inset-inline: -20%;
+  top: -30%;
+  height: 34%;
+  background: linear-gradient(180deg,
+    transparent 0%,
+    rgba(111, 168, 184, 0.12) 25%,
+    rgba(233, 217, 138, 0.55) 50%,
+    rgba(111, 168, 184, 0.12) 75%,
+    transparent 100%);
+  animation: hera-mascot-scan 3.2s var(--hm-ease, cubic-bezier(0.22, 1, 0.36, 1)) infinite;
+  pointer-events: none;
+}
+@keyframes hera-mascot-scan {
+  0%   { transform: translateY(0); opacity: 0; }
+  12%  { opacity: 1; }
+  62%  { opacity: 1; }
+  78%, 100% { transform: translateY(390%); opacity: 0; }
+}
+.mascot-scan .scan-ring {
+  position: absolute;
+  inset: -6px;
+  border-radius: 32px;
+  border: 2px solid rgba(233, 217, 138, 0.0);
+  animation: hera-mascot-ring 3.2s ease-out infinite;
+  pointer-events: none;
+}
+@keyframes hera-mascot-ring {
+  0%, 55% { box-shadow: 0 0 0 0 rgba(233, 217, 138, 0); }
+  62%     { box-shadow: 0 0 0 5px rgba(233, 217, 138, 0.35); }
+  78%, 100% { box-shadow: 0 0 0 12px rgba(233, 217, 138, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mascot-scan::after, .mascot-scan .scan-ring { animation: none; display: none; }
+}
+
+/* ---------------- score reveal (review + evaluation summary) ---------------- */
+/* Evidence screens stay calm: single gentle draw-in, no loops. */
+.score-track i {
+  animation: hmTrackDraw 1.2s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both;
+}
+@keyframes hmTrackDraw {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+.score-track i { transform-origin: left center; will-change: transform; }
+
+.review-score-value {
+  display: inline-block;
+  animation: hmFadeSlideUp 500ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .score-track i { animation: none; transform: none; }
+  .review-score-value { animation: none; }
+}
+
+/* ---------------- animated score ring ---------------- */
+.score-badge-wrap { position: relative; display: inline-block; }
+.score-ring { position: absolute; inset: 0; transform: rotate(-90deg); pointer-events: none; }
+.score-ring circle { fill: none; stroke-width: 3; stroke-linecap: round; }
+.score-ring-bg { stroke: rgba(16, 24, 40, 0.08); }
+.score-ring-fill {
+  stroke-dashoffset: var(--ring-target);
+  animation: hmRingDraw 1.4s cubic-bezier(0.22, 1, 0.36, 1) 0.25s both;
+}
+@keyframes hmRingDraw {
+  from { stroke-dashoffset: var(--ring-circ, 9999); }
+  to   { stroke-dashoffset: var(--ring-target); }
+}
+.score-ring-green .score-ring-fill { stroke: #12b76a; }
+.score-ring-amber .score-ring-fill { stroke: #f79009; }
+.score-ring-red .score-ring-fill { stroke: #f04438; }
+.score-ring-grey .score-ring-fill { stroke: #98a2b3; }
+@media (prefers-reduced-motion: reduce) {
+  .score-ring-fill { animation: none; }
+}
+
+/* ---------------- evidence rows: distinct + staggered reveal ---------------- */
+.evidence-row {
+  animation: hmFadeSlideUp 500ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--row-i, 0) * 60ms);
+}
+.evidence-row > td:first-child { position: relative; }
+.evidence-row > td:first-child::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 8px; bottom: 8px;
+  width: 3px;
+  border-radius: 3px;
+  background: transparent;
+}
+.evidence-row--supported > td:first-child::before { background: #12b76a; }
+.evidence-row--partial > td:first-child::before { background: #f79009; }
+.evidence-row--none > td:first-child::before { background: #d0d5dd; }
+.evidence-row--supported { background: linear-gradient(90deg, rgba(18, 183, 106, 0.04), transparent 40%); }
+.evidence-row--partial { background: linear-gradient(90deg, rgba(247, 144, 9, 0.05), transparent 40%); }
+@media (prefers-reduced-motion: reduce) {
+  .evidence-row { animation: none; }
+}
+
+/* ---------------- LinkedIn job import experience ---------------- */
+.linkedin-import { position: relative; overflow: hidden; border-radius: 12px; }
+.linkedin-import::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #0a66c2, var(--hm-sky, #6FA8B8), #0a66c2);
+  background-size: 200% 100%;
+  opacity: 0;
+  transition: opacity 300ms ease;
+}
+.linkedin-import.is-running::before {
+  opacity: 1;
+  animation: hmScanX 1.4s linear infinite;
+}
+.linkedin-import.is-done::before { opacity: 1; background: #12b76a; animation: none; }
+.linkedin-import.is-running input {
+  border-color: #0a66c2;
+  box-shadow: 0 0 0 4px rgba(10, 102, 194, 0.12);
+}
+.job-creation-methods button {
+  transition: transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 250ms ease, border-color 250ms ease;
+}
+.job-creation-methods button:hover { transform: translateY(-3px); box-shadow: 0 12px 26px -10px rgba(27, 58, 58, 0.35); }
+.job-creation-methods button:active { transform: scale(0.97); }
+.job-creation-methods button:hover .job-method-icon { animation: hmWiggle 500ms ease; }
+@keyframes hmScanX {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+@keyframes hmWiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-10deg); }
+  75% { transform: rotate(10deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .linkedin-import.is-running::before, .job-creation-methods button:hover .job-method-icon { animation: none; }
+  .job-creation-methods button { transition: none; }
+}
+
+.brand-icon.mascot-scan { border-radius: 10px; }
+.brand-icon.mascot-scan .scan-ring { inset: -4px; border-radius: 13px; }
+
+/* ---------------- LinkedIn sourcing page ---------------- */
+.sourcing-grid { grid-template-columns: minmax(340px, 5fr) minmax(360px, 6fr); align-items: start; }
+.sourcing-hero { animation: hmRiseIn 650ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.sourcing-hero .eyebrow { display: inline-flex; align-items: center; gap: 6px; color: #0a66c2; }
+.sourcing-hero-sub { color: #475467; margin-top: 4px; }
+.sourcing-form { display: grid; gap: 10px; margin-top: 18px; }
+.sourcing-form textarea, .sourcing-form select {
+  border: 1.5px solid #d0d5dd;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font: inherit;
+  transition: border-color 250ms ease, box-shadow 250ms ease;
+}
+.sourcing-form textarea:focus, .sourcing-form select:focus {
+  outline: none;
+  border-color: #0a66c2;
+  box-shadow: 0 0 0 4px rgba(10, 102, 194, 0.14);
+}
+.sourcing-submit {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  transition: transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 250ms ease;
+}
+.sourcing-submit:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 10px 24px -8px rgba(10, 102, 194, 0.5); }
+.sourcing-submit:active:not(:disabled) { transform: scale(0.97); }
+
+.sourcing-results { min-height: 340px; display: grid; place-items: center; animation: hmRiseIn 650ms cubic-bezier(0.22, 1, 0.36, 1) 120ms both; }
+.sourcing-idle, .sourcing-empty, .sourcing-searching { text-align: center; color: #667085; max-width: 380px; }
+.sourcing-idle h3, .sourcing-empty h3 { color: #1B3A3A; margin: 10px 0 6px; }
+.sourcing-idle-icon { color: #0a66c2; opacity: 0.85; }
+.sourcing-criteria { display: inline-flex; align-items: center; gap: 6px; background: #f4f3ff; color: #6941c6; border-radius: 999px; padding: 6px 14px; font-size: 13px; }
+
+.sourcing-radar {
+  position: relative;
+  width: 84px; height: 84px;
+  margin: 0 auto 14px;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  color: #0a66c2;
+  background: radial-gradient(circle, rgba(10,102,194,0.10), rgba(10,102,194,0.03) 65%);
+  border: 1px solid rgba(10,102,194,0.25);
+  overflow: hidden;
+}
+.sourcing-radar-sweep {
+  position: absolute; inset: 0;
+  background: conic-gradient(from 0deg, rgba(10,102,194,0.45), transparent 90deg);
+  animation: hmRadarSpin 1.6s linear infinite;
+}
+@keyframes hmRadarSpin { to { transform: rotate(360deg); } }
+.sourcing-phase-text { font-weight: 600; color: #1B3A3A; animation: hmFadeSlideUp 400ms ease both; }
+.sourcing-skeleton-list { display: grid; gap: 10px; margin-top: 18px; }
+.sourcing-candidate-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; width: 100%; }
+.sourcing-candidate-card { text-align: left; border: 1px solid #eaecf0; border-radius: 12px; padding: 14px 16px; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease; }
+.sourcing-candidate-card:hover { border-color: #1B3A3A33; box-shadow: 0 6px 18px rgba(27, 58, 58, 0.08); transform: translateY(-1px); }
+.sourcing-candidate-main { display: grid; gap: 2px; min-width: 0; }
+.sourcing-candidate-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: #667085; margin-top: 4px; }
+.sourcing-candidate-meta span { display: inline-flex; align-items: center; gap: 4px; }
+.sourcing-candidate-link { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; color: #1B3A3A; white-space: nowrap; padding: 6px 10px; border-radius: 999px; border: 1px solid #1B3A3A22; }
+.sourcing-candidate-link:hover { background: #1B3A3A0D; }
+
+/* Job method prominence badge */
+.job-method-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #1B3A3A;
+  background: linear-gradient(120deg, #E9D98A, #f4e9b8);
+  box-shadow: 0 1px 4px rgba(27, 58, 58, 0.25);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sourcing-radar-sweep { animation: none; }
+  .sourcing-hero, .sourcing-results, .sourcing-phase-text { animation: none; }
+  .sourcing-submit { transition: none; }
+}
+.sourcing-in-mark { font-weight: 800; font-size: 26px; color: #0a66c2; font-family: inherit; }
+
+/* ---------------- HR decision controls: weighty but clear ---------------- */
+.pipeline-actions .btn {
+  transition: transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 220ms ease, background 200ms ease, color 200ms ease;
+}
+.pipeline-actions .btn:hover:not(:disabled) { transform: translateY(-2px); }
+.pipeline-actions .btn:active:not(:disabled) { transform: scale(0.95); }
+.pipeline-actions .btn.active.btn-shortlist { box-shadow: 0 0 0 3px rgba(18, 183, 106, 0.35), 0 8px 20px -6px rgba(18, 183, 106, 0.5); }
+.pipeline-actions .btn.active.btn-hold { box-shadow: 0 0 0 3px rgba(247, 144, 9, 0.35), 0 8px 20px -6px rgba(247, 144, 9, 0.5); }
+.pipeline-actions .btn.active.btn-reject { box-shadow: 0 0 0 3px rgba(240, 68, 56, 0.35), 0 8px 20px -6px rgba(240, 68, 56, 0.5); }
+.pipeline-actions .btn.active { animation: hmPopIn 350ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+
+/* ---------------- modals: gentle pop ---------------- */
+.modal-panel { animation: hmPopIn 320ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.modal-overlay { animation: hmFadeIn 220ms ease both; }
+.modal-overlay.is-closing .modal-panel, .modal-overlay.is-closing { animation-duration: 160ms; animation-direction: reverse; }
+@keyframes hmFadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* ---------------- interviews: calendar events ---------------- */
+.interview-calendar-event {
+  animation: hmFadeSlideUp 500ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 250ms ease;
+}
+.interview-calendar-event:nth-of-type(1) { animation-delay: 40ms; }
+.interview-calendar-event:nth-of-type(2) { animation-delay: 100ms; }
+.interview-calendar-event:nth-of-type(3) { animation-delay: 160ms; }
+.interview-calendar-event:nth-of-type(4) { animation-delay: 220ms; }
+.interview-calendar-event:nth-of-type(n+5) { animation-delay: 280ms; }
+.interview-calendar-event:hover { transform: translateY(-3px); box-shadow: 0 14px 30px -12px rgba(27, 58, 58, 0.35); }
+.interview-event-avatar { transition: transform 250ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+.interview-calendar-event:hover .interview-event-avatar { transform: scale(1.12); }
+
+/* ---------------- interview questions: list reveal ---------------- */
+.question-list .question-item {
+  animation: hmFadeSlideUp 500ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.question-list .question-item:nth-of-type(1) { animation-delay: 30ms; }
+.question-list .question-item:nth-of-type(2) { animation-delay: 90ms; }
+.question-list .question-item:nth-of-type(3) { animation-delay: 150ms; }
+.question-list .question-item:nth-of-type(4) { animation-delay: 210ms; }
+.question-list .question-item:nth-of-type(5) { animation-delay: 270ms; }
+.question-list .question-item:nth-of-type(n+6) { animation-delay: 330ms; }
+.question-list .question-item { transition: box-shadow 250ms ease; }
+.question-list .question-item:hover { box-shadow: 0 8px 22px -10px rgba(27, 58, 58, 0.3); }
+
+@media (prefers-reduced-motion: reduce) {
+  .pipeline-actions .btn, .interview-calendar-event, .interview-event-avatar,
+  .question-list .question-item { transition: none; animation: none !important; }
+  .modal-panel, .modal-overlay { animation: none; }
+}
+
+/* Sourcing results header */
+.sourcing-results-live { display: grid; gap: 12px; }
+.sourcing-results-head h3 { margin: 0 0 4px; }
+.sourcing-results-head .sourcing-criteria { margin: 0; }
+.sourcing-candidate-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.sourcing-find-email { background: none; cursor: pointer; font-family: inherit; }
+.sourcing-find-email:disabled { opacity: 0.6; cursor: default; }
+.sourcing-spin { animation: sourcing-rotate 0.9s linear infinite; }
+@keyframes sourcing-rotate { to { transform: rotate(360deg); } }
+
+/* Sourcing outreach draft modal */
+.sourcing-draft-overlay { position: fixed; inset: 0; background: rgba(16, 24, 24, 0.45); display: grid; place-items: center; z-index: 60; padding: 20px; }
+.sourcing-draft-modal { background: #fff; border-radius: 16px; padding: 22px 24px; width: min(560px, 100%); display: grid; gap: 8px; box-shadow: 0 24px 64px rgba(16, 24, 24, 0.25); animation: hera-pop var(--hm-standard) var(--hm-ease-spring) both; }
+.sourcing-draft-head { display: flex; align-items: center; justify-content: space-between; }
+.sourcing-draft-head h3 { margin: 0; }
+.sourcing-draft-close { background: none; border: none; cursor: pointer; padding: 6px; border-radius: 8px; color: #667085; }
+.sourcing-draft-close:hover { background: #f2f4f7; }
+.sourcing-draft-modal label { font-size: 12px; font-weight: 700; color: #475467; }
+.sourcing-draft-modal input, .sourcing-draft-modal textarea { border: 1px solid #d0d5dd; border-radius: 10px; padding: 10px 12px; font: inherit; }
+.sourcing-draft-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+.sourcing-send { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+.sourcing-send-disabled { opacity: 0.5; cursor: not-allowed; }

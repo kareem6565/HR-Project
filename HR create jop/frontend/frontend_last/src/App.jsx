@@ -8,6 +8,7 @@ import AuthLayout from "./layouts/AuthLayout";
 import MainLayout from "./layouts/MainLayout";
 
 import Login from "./pages/auth/Login";
+import LandingPage from "./pages/landing/LandingPage";
 import SsoCallback from "./pages/auth/SsoCallback";
 
 import Dashboard from "./pages/dashboard/Dashboard";
@@ -26,8 +27,10 @@ import TalentPoolList from "./pages/talent-pool/TalentPoolList";
 import TalentPoolConsent from "./pages/talent-pool/TalentPoolConsent";
 import GitHubEvidenceConsent from "./pages/github-evidence/GitHubEvidenceConsent";
 import MatchingResults from "./pages/matching/MatchingResults";
+import LinkedInSourcing from "./pages/sourcing/LinkedInSourcing";
 import AnalyticsPage from "./pages/analytics/AnalyticsPage";
 import AISettings from "./pages/settings/AISettings";
+import Billing from "./pages/settings/Billing";
 import InterviewsList from "./pages/interviews/InterviewsList";
 import ScheduleInterview from "./pages/interviews/ScheduleInterview";
 import InterviewFeedback from "./pages/interviews/InterviewFeedback";
@@ -46,6 +49,7 @@ function AuthenticatedRoutes() {
 
         {/* The shared HR portal owns sign-in; keep only the SSO return screen here. */}
         <Route path="/login" element={<Login />} />
+        <Route path="/landing" element={<LandingPage />} />
         <Route element={<AuthLayout />}>
           <Route path="/sso/callback" element={<SsoCallback />} />
         </Route>
@@ -83,6 +87,7 @@ function AuthenticatedRoutes() {
           <Route path="/talent-pool" element={<TalentPoolList />} />
           <Route path="/matching-results" element={<MatchingResults />} />
           <Route path="/matching" element={<MatchingResults />} />
+          <Route path="/sourcing" element={<LinkedInSourcing />} />
           <Route path="/analytics" element={<AnalyticsPage />} />
 
           {/* Admin-only settings route */}
@@ -91,6 +96,14 @@ function AuthenticatedRoutes() {
             element={
 <ProtectedRoute allowedRoles={["admin", "administrator"]}>
                 <AISettings />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/billing"
+            element={
+              <ProtectedRoute allowedRoles={["admin", "administrator", "recruiter"]}>
+                <Billing />
               </ProtectedRoute>
             }
           />

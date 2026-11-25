@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   UploadCloud,
@@ -12,6 +12,7 @@ import { getJobs } from "../../services/jobService";
 import { createScreeningBatch, getJobBatches } from "../../services/screeningBatchService";
 import ScreeningBatchProgress from "../../components/screening/ScreeningBatchProgress";
 import LoadingSpinner from "../../components/common/LoadingSpinner";
+import { getAIErrorMessage } from "../../utils/aiError";
 import ErrorState from "../../components/common/ErrorState";
 import {
   formatFileSize,
@@ -37,6 +38,14 @@ export default function ScreenCandidates() {
   const [recentBatches, setRecentBatches] = useState([]);
   const [loadingBatches, setLoadingBatches] = useState(false);
   const [batchesLoadError, setBatchesLoadError] = useState("");
+
+  const handleBatchData = useCallback((data) => {
+    const updatedId = data?.batch_id || data?.id;
+    if (!updatedId) return;
+    setRecentBatches((previous) =>
+      previous.map((batch) => batch.id === updatedId ? { ...batch, ...data } : batch)
+    );
+  }, []);
 
   const loadJobs = async () => {
     setLoadingJobs(true);
@@ -184,13 +193,14 @@ export default function ScreenCandidates() {
       loadBatches(jobId);
     } catch (err) {
       const isRateLimit =
-        err?.response?.status === 429 || err?.response?.data?.error_type === "rate_limit";
+        err?.response?.status === 429 ||
+        err?.response?.data?.error_code === "provider_rate_limit" ||
+        err?.response?.data?.error_type === "rate_limit";
       setErrorType(isRateLimit ? "rate_limit" : "");
-      setError(
-        isRateLimit
-          ? "AI provider rate limit reached. Check the provider configuration in Settings."
-          : err?.response?.data?.detail || err?.message || "Could not start screening batch. Please try again."
-      );
+      setError(getAIErrorMessage(
+        err,
+        "Could not start screening batch. Please try again."
+      ));
     } finally {
       setSubmitting(false);
     }
@@ -200,8 +210,8 @@ export default function ScreenCandidates() {
 
   return (
     <>
-      <section className="content-grid screen-candidates-grid" aria-label="Candidate screening setup">
-        <div className="panel screen-setup-panel">
+      <section className="content-grid screen-candidates-grid motion-rise" aria-label="Candidate screening setup">
+        <div className="panel screen-setup-panel motion-card">
           <div className="panel-title">
             <div>
               <p className="eyebrow">STEP 1 · JOB & CRITERIA</p>
@@ -374,10 +384,12 @@ export default function ScreenCandidates() {
                   const statusVariant =
                     batch.status === "completed"
                       ? "green"
-                      : batch.status === "processing"
+                      : batch.status === "processing" || batch.status === "running"
                       ? "blue"
                       : batch.status === "failed"
                       ? "red"
+                      : batch.status === "queued"
+                      ? "amber"
                       : "grey";
                   return (
                     <div
@@ -428,7 +440,7 @@ export default function ScreenCandidates() {
           )}
         </div>
 
-        <div className="panel screen-upload-panel">
+        <div className="panel screen-upload-panel motion-card">
           <div className="panel-title">
             <div>
               <p className="eyebrow">STEP 2 · CANDIDATE CVS</p>
@@ -445,7 +457,7 @@ export default function ScreenCandidates() {
           >
             <input
               type="file"
-              accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              accept=".pdf,.docx,.png,.jpg,.jpeg,.webp,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/png,image/jpeg,image/webp"
               multiple
               onChange={onFileInputChange}
               disabled={submitting}
@@ -454,8 +466,8 @@ export default function ScreenCandidates() {
             <div className="upload-icon">
               <UploadCloud size={25} aria-hidden="true" />
             </div>
-            <strong>Drop PDF or DOCX CVs here</strong>
-            <span>or click to browse · Max 5 MB per file · PDF and DOCX only</span>
+            <strong>Drop CVs here - PDF, DOCX, or a photo/scan</strong>
+            <span>or click to browse · Max 5 MB per file · PDF, DOCX, PNG, JPG, WEBP · scans are read with OCR</span>
           </label>
 
           {files.length > 0 && (
@@ -473,8 +485,8 @@ export default function ScreenCandidates() {
                 </strong>
               </div>
               <div className="file-list">
-                {files.map((f) => (
-                  <div className="file file-valid" key={f.fingerprint}>
+                {files.map((f, index) => (
+                  <div className="file file-valid motion-stagger-pop" style={{ "--i": Math.min(index, 10) }} key={f.fingerprint}>
                     <FileText
                       size={18}
                       aria-hidden="true"
@@ -547,8 +559,8 @@ export default function ScreenCandidates() {
                 These files were not added to the screening batch because they did not pass pre-submission checks:
               </p>
               <div className="file-list">
-                {rejectedFiles.map((rf) => (
-                  <div className="file file-rejected" key={rf.id}>
+                {rejectedFiles.map((rf, index) => (
+                  <div className="file file-rejected motion-stagger-pop" style={{ "--i": Math.min(index, 10) }} key={rf.id}>
                     <AlertCircle
                       size={18}
                       aria-hidden="true"
@@ -624,6 +636,7 @@ export default function ScreenCandidates() {
           batchId={activeBatchId}
           initialData={batchData}
           job={selectedJob}
+          onBatchData={handleBatchData}
         />
       )}
     </>

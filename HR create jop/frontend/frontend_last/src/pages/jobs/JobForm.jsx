@@ -16,6 +16,7 @@ import {
   startLinkedInJobImport,
 } from "../../services/jobProfileService";
 import LoadingSpinner from "../../components/common/LoadingSpinner";
+import { getAIErrorMessage } from "../../utils/aiError";
 
 const EMPTY_JOB = {
   title: "",
@@ -43,23 +44,56 @@ const DEFAULT_JOB_TYPE = "Full-time";
 
 function getDescriptionBuilderErrorMessage(error) {
   const status = error?.response?.status;
-  const errorType = error?.response?.data?.error_type;
 
   if (status === 404) {
     return "HERA could not find the job-description service (404). Your source text is still in the form; refresh the page and try again.";
   }
-  if (status === 503 && errorType === "timeout") {
-    return "The AI provider timed out while analyzing this description. Your source text is still in the form; try again later.";
-  }
-  if (status === 503) {
-    return "The AI provider is temporarily unavailable. Your source text is still in the form; try again later.";
-  }
-  if (status === 429) {
-    return "The AI provider is rate-limiting requests. Your source text is still in the form; try again shortly.";
+  const message = getAIErrorMessage(
+    error,
+    "HERA could not prepare the job description. Your current entries are unchanged."
+  );
+  return `${message} Your source text is still in the form.`;
+}
+
+function getSaveErrorMessage(error, jobWasSaved = false) {
+  const status = error?.response?.status;
+  const detail = error?.response?.data?.detail;
+  const fieldLabels = {
+    title: "Job title",
+    department: "Department",
+    location: "Location",
+    job_type: "Employment type",
+    work_mode: "Work mode",
+    experience: "Experience",
+    requirements: "Requirements",
+    required_skills: "Required skills",
+    source_name: "Source name",
+  };
+
+  if (Array.isArray(detail)) {
+    const messages = detail.slice(0, 3).map((issue) => {
+      const field = [...(issue?.loc || [])].reverse().find((part) => part !== "body");
+      const label = fieldLabels[field] || (field ? String(field).replaceAll("_", " ") : "a field");
+      if (issue?.type === "missing") return `Add ${label.toLowerCase()}.`;
+      if (issue?.type === "string_pattern_mismatch") return `Choose a valid ${label.toLowerCase()}.`;
+      return `${label}: ${issue?.msg || "check this value"}.`;
+    });
+    const suffix = detail.length > messages.length ? " Review the remaining fields too." : "";
+    return `${jobWasSaved ? "The job was saved, but its profile was not updated. " : "Could not save the job. "}${messages.join(" ")}${suffix}`;
   }
 
-  return error?.response?.data?.detail || error?.message ||
-    "HERA could not prepare the job description. Your current entries are unchanged.";
+  if (typeof detail === "string" && detail.trim()) {
+    return jobWasSaved
+      ? `The job was saved, but its profile was not updated: ${detail}`
+      : detail;
+  }
+  if (status === 401) return "Your session expired. Sign in again; your form changes are still here.";
+  if (status === 403) return "You do not have permission to edit this job.";
+  if (status === 404) return "This job could not be found. Return to Jobs and open it again.";
+  if (!error?.response) return "Could not reach HERA. Check your connection and try again; your form changes are still here.";
+  return jobWasSaved
+    ? "The job was saved, but its profile was not updated. Try the profile action again from the job page."
+    : "Could not save the job. Your form changes are still here; check the fields and try again.";
 }
 
 // Used for both /jobs/new (create) and /jobs/:id/edit (edit) — the only
@@ -169,6 +203,7 @@ export default function JobForm() {
     const nextJob = { ...jobRef.current, [name]: e.target.value };
     jobRef.current = nextJob;
     setJob(nextJob);
+    setSaveError("");
     userEditedFields.current.add(name);
     if (aiFields.has(name)) {
       const next = new Set(aiFields);
@@ -493,6 +528,7 @@ export default function JobForm() {
     e.preventDefault();
 
     setSaveError("");
+    setSavedMessage("");
     const hasSourceDetails = Boolean(
       job.sourceName || job.sourceUrl || job.applicationUrl || job.publishedAt
     );
@@ -530,11 +566,13 @@ export default function JobForm() {
     );
 
     let targetId = null;
+    let jobWasSaved = false;
     try {
 
       if (isEdit || savedId) {
         targetId = savedId || id;
         await updateJob(targetId, payload);
+        jobWasSaved = true;
         if (jobFile) {
           const uploaded = await uploadJobSourceFile(targetId, jobFile);
           setJob((current) => ({
@@ -557,6 +595,7 @@ export default function JobForm() {
           linkedInImportConfirmed ? linkedinImport.id : idempotencyKey.current
         );
         targetId = created?.id;
+        jobWasSaved = Boolean(targetId);
         setSavedId(created?.id);
         if (jobFile && created?.id) {
           const uploaded = await uploadJobSourceFile(created.id, jobFile);
@@ -617,14 +656,18 @@ export default function JobForm() {
               })),
           },
         });
-        navigate(`/jobs/${targetId}`);
+      }
+      if (targetId) {
+        navigate(`/jobs/${targetId}`, {
+          state: {
+            jobSaveNotice: isEdit
+              ? "Changes saved. You are back on the job page."
+              : "Job saved as a draft.",
+          },
+        });
       }
     } catch (error) {
-      setSaveError(
-        error?.response?.data?.detail ||
-          error?.message ||
-          "The vacancy could not be saved. Your form entries and selected file are still here; retry when ready."
-      );
+      setSaveError(getSaveErrorMessage(error, jobWasSaved));
 
     } finally {
       setSaving(false);
@@ -678,8 +721,8 @@ export default function JobForm() {
             aria-pressed={creationMethod === "linkedin_import"}
             onClick={() => selectCreationMethod("linkedin_import")}>
             <span className="job-method-icon" aria-hidden="true"><FileUp size={18} /></span>
-            <span className="job-method-title">Import from LinkedIn</span>
-            <span className="job-method-description">Start with a public job listing</span>
+            <span className="job-method-title">Import from LinkedIn <span className="job-method-badge">Fastest</span></span>
+            <span className="job-method-description">Skip writing: start from a public job listing</span>
           </button>}
           <button type="button" className={creationMethod === "ai_generated" ? "primary" : "secondary"}
             aria-label="Generate with AI"
@@ -710,7 +753,7 @@ export default function JobForm() {
         </div>}
 
         {creationMethod === "linkedin_import" && (
-          <div className="job-paste-source">
+          <div className={`job-paste-source linkedin-import${linkedinImportStatus === "running" ? " is-running" : ""}${linkedinImportStatus === "succeeded" ? " is-done" : ""}`}>
             <label htmlFor="linkedin-job-url">Public LinkedIn job URL</label>
             <input id="linkedin-job-url" type="url" value={linkedinUrl}
               onChange={(event) => setLinkedinUrl(event.target.value)}
@@ -940,8 +983,6 @@ export default function JobForm() {
             {analyzError}
           </p>
         )}
-        {saveError && <p className="hera-note hera-error" role="alert">{saveError}</p>}
-
         <form className="job-form-fields" onSubmit={onSubmit}>
           <label>
             Job Title
@@ -1093,9 +1134,10 @@ export default function JobForm() {
               I reviewed these source details. This records my review; HERA has not verified the link or listing status.
             </label>
           </fieldset>
-          <button className="primary wide" type="submit" disabled={saving}>
+          {saveError && <p className="hera-note hera-error job-save-feedback" role="alert">{saveError}</p>}
+          <button className="primary wide" type="submit" disabled={saving} aria-busy={saving}>
             {saving
-              ? "Saving..."
+              ? isEdit ? "Saving changes…" : "Saving draft…"
               : isEdit
                 ? "Save Changes"
                 : "Save Draft"}

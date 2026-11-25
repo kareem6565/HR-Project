@@ -23,12 +23,14 @@ from app.models.job_application import JobApplication
 from app.models.job_distribution import JobDistribution, JobDistributionView
 from app.models.job_profile import JobProfile
 from app.models.linkedin_job_import import LinkedInJobImport
+from app.models.sourcing import SourcingCandidate, SourcingSearch
 from app.models.match_evidence import MatchEvidence
 from app.models.organization import Organization
 from app.models.public_application_rate_limit import PublicApplicationRateLimit
 from app.models.resume import Resume
 from app.models.screening_batch import ScreeningBatch
 from app.models.screening_batch_item import ScreeningBatchItem
+from app.models.subscription import OrganizationSubscription, Plan
 from app.models.talent_pool_consent import TalentPoolConsent
 from app.models.transactional_email_outbox import TransactionalEmailOutbox
 from app.models.user import User
@@ -63,9 +65,13 @@ __all__ = [
     "JobDistribution",
     "JobDistributionView",
     "LinkedInJobImport",
+    "SourcingCandidate",
+    "SourcingSearch",
     "JobProfile",
     "MatchEvidence",
     "Organization",
+    "OrganizationSubscription",
+    "Plan",
     "PublicApplicationRateLimit",
     "Resume",
     "ScreeningBatch",

@@ -298,7 +298,7 @@ class HERAAssistantWorkflow:
                 db,
                 workflow_step_trace_id=step.id,
                 error_type=type(error).__name__,
-                error_message=str(error),
+                error_message=error.safe_message,
             )
             self._trace_service.mark_run_failed(db, workflow_run_id=run.id)
             raise

@@ -28,7 +28,9 @@ export async function getScreeningBatch(batchId) {
   if (!batchId) {
     throw new Error("A batchId must be provided to fetch screening batch status.");
   }
-  const { data } = await apiClient.get(`/screening-batches/${batchId}`);
+  const { data } = await apiClient.get(`/screening-batches/${batchId}`, {
+    timeout: 8000,
+  });
   return data;
 }
 

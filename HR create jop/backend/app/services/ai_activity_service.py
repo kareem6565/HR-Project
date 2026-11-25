@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.models import (
     AITrace,
+    AIUsageEvent,
     Candidate,
     Job,
     JobApplication,
@@ -85,6 +86,45 @@ class AIActivityService:
         )
         runs = list(db.scalars(statement))
         return [self._run_view(db, run) for run in runs]
+
+    def list_provider_requests(
+        self,
+        db: Session,
+        *,
+        organization_id: uuid.UUID,
+        limit: int = DEFAULT_RUN_LIMIT,
+    ) -> list[dict[str, Any]]:
+        """List recent payload-free model attempts for this organization."""
+        statement = (
+            select(AIUsageEvent)
+            .where(AIUsageEvent.organization_id == organization_id)
+            .order_by(AIUsageEvent.created_at.desc())
+            .limit(limit)
+        )
+        events = list(db.scalars(statement))
+        return [
+            {
+                "id": event.id,
+                "request_id": event.request_id,
+                "provider_request_id": event.provider_request_id,
+                "provider": event.provider,
+                "model": event.model,
+                "feature": event.feature,
+                "status": event.status,
+                "error_code": event.error_category,
+                "provider_status": event.http_status,
+                "input_tokens": event.input_tokens,
+                "output_tokens": event.output_tokens,
+                "reported_cost_usd": (
+                    float(event.reported_cost_usd)
+                    if event.reported_cost_usd is not None
+                    else None
+                ),
+                "duration_ms": _duration_ms(event.created_at, event.completed_at),
+                "created_at": event.created_at,
+            }
+            for event in events
+        ]
 
     def get_stats(self, db: Session, *, organization_id: uuid.UUID) -> dict[str, Any]:
         since = datetime.now(UTC) - timedelta(hours=24)

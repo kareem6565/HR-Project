@@ -128,6 +128,45 @@ describe("UI-08: Async Batch Progress & Partial Success", () => {
     vi.useRealTimers();
   });
 
+  it("shows a friendly loading state without exposing the internal batch ID", () => {
+    screeningBatchService.getScreeningBatch.mockReturnValue(new Promise(() => {}));
+
+    const { unmount } = render(
+      <MemoryRouter>
+        <ScreeningBatchProgress batchId="batch-internal-123" job={mockJob} />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByRole("status")).toHaveTextContent("Loading your CV’s screening progress");
+    expect(screen.queryByText(/batch-internal-123/i)).not.toBeInTheDocument();
+    unmount();
+  });
+
+  it("shows the current CV screening stage as a five-step progress bar", () => {
+    const runningBatch = {
+      ...mockBatchMixed,
+      status: "running",
+      counts: { total: 1, queued: 0, running: 1, completed: 0, failed: 0, duplicate: 0 },
+      total_files: 1,
+      items: [{
+        id: "item-running",
+        original_filename: "synthetic_cv.pdf",
+        status: "running",
+        stage: "candidate_evaluation",
+      }],
+    };
+    screeningBatchService.getScreeningBatch.mockResolvedValue(runningBatch);
+
+    render(
+      <MemoryRouter>
+        <ScreeningBatchProgress batchId="batch-running" initialData={runningBatch} job={mockJob} />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText("Checking the CV against the job")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: /step 4 of 5/i })).toHaveAttribute("value", "4");
+  });
+
   it("renders truthful counts and partial success where successful results remain reviewable when another file fails", async () => {
     screeningBatchService.getScreeningBatch.mockResolvedValue(mockBatchMixed);
 

@@ -1,0 +1,61 @@
+/* HeraAssistantMark: idle loop is 4s, matching the animated HERA mark. */
+
+/* Eyes blink twice per loop */
+.hera-assistant-animated .ha-eye {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: ha-blink 4s linear infinite;
+}
+@keyframes ha-blink {
+  0%, 23%, 27%, 100% { transform: scaleY(1); }
+  24.5%, 25.5% { transform: scaleY(0.12); }
+  78%, 82% { transform: scaleY(1); }
+  79.5%, 80.5% { transform: scaleY(0.12); }
+}
+
+/* Antenna tip breathes; a soft ring pings once per loop */
+.hera-assistant-animated .ha-antenna {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: ha-antenna-pulse 4s ease-in-out infinite;
+}
+@keyframes ha-antenna-pulse {
+  0%, 55%, 100% { transform: scale(1); }
+  62% { transform: scale(1.25); }
+  70% { transform: scale(1); }
+}
+.hera-assistant-animated .ha-ping {
+  transform-box: fill-box;
+  transform-origin: center;
+  opacity: 0;
+  animation: ha-ping 4s ease-out infinite;
+}
+@keyframes ha-ping {
+  0%, 56% { opacity: 0; transform: scale(1); }
+  60% { opacity: 0.9; transform: scale(1); }
+  78% { opacity: 0; transform: scale(2.6); }
+  100% { opacity: 0; transform: scale(2.6); }
+}
+
+/* Head tilts a touch, as if listening */
+.hera-assistant-animated .ha-head {
+  transform-box: fill-box;
+  transform-origin: 50% 90%;
+  animation: ha-tilt 4s ease-in-out infinite;
+}
+@keyframes ha-tilt {
+  0%, 100% { transform: rotate(0deg); }
+  30% { transform: rotate(-2deg); }
+  60% { transform: rotate(1.2deg); }
+  80% { transform: rotate(0deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hera-assistant-animated .ha-eye,
+  .hera-assistant-animated .ha-antenna,
+  .hera-assistant-animated .ha-ping,
+  .hera-assistant-animated .ha-head {
+    animation: none !important;
+  }
+  .hera-assistant-animated .ha-ping { opacity: 0; }
+}

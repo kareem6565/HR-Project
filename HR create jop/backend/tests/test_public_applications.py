@@ -22,6 +22,7 @@ from app.models import (
     JobDistribution,
     JobProfile,
     Organization,
+    PublicApplicationRateLimit,
     ScreeningBatchItem,
     User,
 )
@@ -406,6 +407,10 @@ def test_public_rate_limit_is_persisted_and_enforced(
 ) -> None:
     job = make_published_job(db_session)
     monkeypatch.setattr(settings, "public_application_rate_limit", 1)
+    # The limiter is persisted per client IP; clear rows left by earlier tests
+    # in this file so the window starts empty.
+    db_session.query(PublicApplicationRateLimit).delete()
+    db_session.commit()
     first = submit(public_client, job.public_id)
     second = submit(public_client, job.public_id, key="second-application-key-123456")
     assert first.status_code == 201

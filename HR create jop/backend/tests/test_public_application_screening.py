@@ -23,7 +23,12 @@ def test_public_application_worker_reuses_records_and_pinned_profile(monkeypatch
     item_id = uuid.uuid4()
     claim_token = "public-claim-token"
     file_bytes = b"private public-application resume"
-    profile = SimpleNamespace(id=profile_id, job_id=job_id, status="superseded", profile_data={"requirements": []})
+    profile = SimpleNamespace(
+        id=profile_id,
+        job_id=job_id,
+        status="superseded",
+        profile_data={"requirements": [{"text": "Python", "category": "must_have", "dimension": "technical_skill"}]},
+    )
     job = SimpleNamespace(id=job_id, organization_id=organization_id, title="Engineer")
     candidate = SimpleNamespace(
         id=candidate_id, organization_id=organization_id, full_name="Alex Candidate"
