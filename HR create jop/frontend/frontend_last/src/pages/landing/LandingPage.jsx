@@ -46,8 +46,8 @@ const JOURNEY = [
     step: "05",
     title: "Interviews that schedule themselves",
     text: "Publish availability once; candidates pick a time from a private link. Feedback and stages tracked end to end.",
-    video: null,
-    alt: null,
+    video: "/landing/clip-interviews.mp4",
+    alt: "Candidate picking an interview slot from a private scheduling link with a booking confirmation"
   },
   {
     icon: MessagesSquare,
