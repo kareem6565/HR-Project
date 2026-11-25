@@ -1,42 +1,64 @@
 import React from "react";
 import "./AnimatedHeraMark.css";
 
-// The HERA R-with-smile mark, alive: it blinks, its smile grows when it
-// "notices" you, and the little lens pulses a scan every loop. All motion is
-// CSS/SMIL inside the SVG - no JS timers, honors reduced motion.
+// The HERA brand mark (the R-with-smile mascot icon) brought to life: it
+// blinks, its smile grows when it "notices" you, and the clasp pulses a scan
+// every loop. Artwork is identical to /brand/hera-icon-{dark,light}.svg; all
+// motion is CSS/SMIL inside the SVG - no JS timers, honors reduced motion.
 
-export default function AnimatedHeraMark({ size = 40, title = "HERA" }) {
+const COLORS = {
+  dark: { bg: "#103B3D", figure: "#F6F1E3", clasp: "#F6F1E3", cape: "#F6D57E", ring: "#5EA6BC" },
+  light: { bg: "#F6F1E3", figure: "#103B3D", clasp: "#5EA6BC", cape: "#F6D57E", ring: "#5EA6BC" },
+};
+
+export default function AnimatedHeraMark({ size = 40, variant = "dark", title = "HERA" }) {
+  const c = COLORS[variant] || COLORS.dark;
   return (
     <svg
       className="hera-mark-animated"
-      viewBox="0 0 210 190"
+      viewBox="0 0 512 512"
       width={size}
-      height={(size * 190) / 210}
+      height={size}
       role="img"
       aria-label={title}
     >
-      {/* R body */}
-      <path className="hm-rise" fill="#1B3A3A" d="M50 109V43c0-19 13-32 32-32h47c31 0 51 18 54 43-10-11-22-16-39-16H87v39c13 2 24 8 33 18l-20 20c-7-8-15-12-26-12-17 0-29 12-29 29v19H26v-16c0-13 8-24 24-27z" />
-      <path className="hm-rise" fill="#1B3A3A" d="M40 86c-22 8-34 26-34 48 0 21 12 37 32 45l17-22c-9-4-14-12-14-23s5-19 15-23z" />
-      {/* gold accent strokes */}
-      <path className="hm-rise" fill="#E9D98A" d="M156 60c17 16 27 36 27 57 0 26-15 47-42 61l22 1-15-31c18-12 29-30 29-51 0-13-4-25-13-37z" />
-      <path className="hm-rise" fill="#E9D98A" d="M132 90c-15 14-22 25-22 42 0 14 6 27 17 38l-4 11h46l-15-33c15-10 23-25 23-41 0-13-5-24-14-33z" />
-      {/* eyes: blink */}
-      <circle className="hm-eye" cx="91" cy="53" r="7" fill="#1B3A3A" />
-      <circle className="hm-eye" cx="127" cy="53" r="7" fill="#1B3A3A" />
+      {/* rounded-square badge */}
+      <rect width="512" height="512" rx="116" fill={c.bg} />
+      {/* R figure: hood, left arm and left leg */}
+      <path
+        fill={c.figure}
+        d="M 230 96 H 322 C 374 96, 408 134, 408 184 C 386 154, 348 140, 296 140 H 234 C 218 140, 208 150, 208 166 V 242 C 226 232, 250 232, 266 244 C 254 256, 252 274, 262 288 C 228 310, 206 346, 200 398 H 148 V 344 C 104 334, 82 292, 92 246 C 100 208, 128 186, 166 184 V 160 C 166 122, 192 96, 230 96 Z"
+      />
+      {/* negative-space cutout inside the left arm */}
+      <path fill={c.bg} d="M 148 232 C 128 236, 122 264, 134 282 C 138 288, 144 290, 148 288 Z" />
+      {/* eyes: blink twice per loop */}
+      <circle className="hm-eye" cx="274" cy="186" r="13.5" fill={c.figure} />
+      <circle className="hm-eye" cx="336" cy="186" r="13.5" fill={c.figure} />
       {/* smile: grows and relaxes once per loop */}
-      <path className="hm-smile" d="M95 70c9 8 20 8 29 0" fill="none" stroke="#1B3A3A" strokeWidth="5" strokeLinecap="round">
+      <path
+        className="hm-smile"
+        d="M 290 212 Q 305 227 320 212"
+        fill="none"
+        stroke={c.figure}
+        strokeWidth="11"
+        strokeLinecap="round"
+      >
         <animate
           attributeName="d"
           dur="4s"
           repeatCount="indefinite"
-          values="M95 70c9 8 20 8 29 0; M95 70c9 8 20 8 29 0; M92 70c12 11 24 11 35 0; M92 70c12 11 24 11 35 0; M95 70c9 8 20 8 29 0; M95 70c9 8 20 8 29 0"
+          values="M 290 212 Q 305 227 320 212; M 290 212 Q 305 227 320 212; M 284 212 Q 305 232 326 212; M 284 212 Q 305 232 326 212; M 290 212 Q 305 227 320 212; M 290 212 Q 305 227 320 212"
           keyTimes="0; 0.4; 0.52; 0.62; 0.74; 1"
         />
       </path>
-      {/* lens: pulse + scan ring */}
-      <circle className="hm-lens" cx="116" cy="119" r="16" fill="#6FA8B8" stroke="#fff" strokeWidth="6" />
-      <circle className="hm-scan" cx="116" cy="119" r="16" fill="none" stroke="#6FA8B8" strokeWidth="3" />
+      {/* clasp: breathes, with a scan ring pinging once per loop */}
+      <circle className="hm-lens" cx="288" cy="264" r="17" fill={c.clasp} />
+      <circle className="hm-scan" cx="288" cy="264" r="17" fill="none" stroke={c.ring} strokeWidth="6" />
+      {/* warm yellow right cape and leg */}
+      <path
+        fill={c.cape}
+        d="M 316 248 L 422 162 C 452 216, 444 286, 394 328 C 412 348, 424 372, 430 398 H 376 C 366 352, 344 316, 310 292 C 322 278, 324 260, 316 248 Z"
+      />
     </svg>
   );
 }

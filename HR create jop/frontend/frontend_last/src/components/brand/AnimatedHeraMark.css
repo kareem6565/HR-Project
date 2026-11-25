@@ -1,10 +1,10 @@
-/* AnimatedHeraMark: idle loop is 4s. Entrance plays once. */
-.hera-mark-animated .hm-rise {
+/* AnimatedHeraMark: idle loop is 4s. Entrance plays once, as one block so
+   the letterform never appears mid-assembly. */
+.hera-mark-animated {
   animation: hm-rise-in 0.7s var(--hm-ease, ease-out) both;
+  transform-box: fill-box;
+  transform-origin: center;
 }
-.hera-mark-animated .hm-rise:nth-of-type(2) { animation-delay: 0.08s; }
-.hera-mark-animated .hm-rise:nth-of-type(3) { animation-delay: 0.16s; }
-.hera-mark-animated .hm-rise:nth-of-type(4) { animation-delay: 0.24s; }
 
 @keyframes hm-rise-in {
   from { opacity: 0; transform: translateY(10px); }
@@ -24,7 +24,7 @@
   79.5%, 80.5% { transform: scaleY(0.12); }
 }
 
-/* Lens breathes; scan ring pings once per loop */
+/* Clasp breathes; scan ring pings once per loop */
 .hera-mark-animated .hm-lens {
   transform-box: fill-box;
   transform-origin: center;
@@ -49,7 +49,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hera-mark-animated .hm-rise,
+  .hera-mark-animated,
   .hera-mark-animated .hm-eye,
   .hera-mark-animated .hm-lens,
   .hera-mark-animated .hm-scan {
