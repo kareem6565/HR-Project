@@ -39,9 +39,13 @@ _URL_PATTERN = re.compile(r"https?://\S+", re.IGNORECASE)
 # The one-time owner-approved DeepSeek route is bounded by OpenRouter's
 # per-million-token max_price fields. The cap is also reserved in our monthly
 # ledger before the provider request is sent.
+# Caps verified against the live OpenRouter catalog (GET /api/v1/models) on
+# 2026-11-25 for deepseek/deepseek-v4.1-flash-1017: $0.15/M prompt, $0.60/M
+# completion. The previous values (0.03/0.20) were below the real rates, so
+# every paid request failed closed at preflight.
 _PAID_DEEPSEEK_MODEL = "deepseek/deepseek-v4.1-flash-1017"
-_PAID_PROMPT_MAX_PRICE_PER_MILLION = Decimal("0.03")
-_PAID_COMPLETION_MAX_PRICE_PER_MILLION = Decimal("0.20")
+_PAID_PROMPT_MAX_PRICE_PER_MILLION = Decimal("0.15")
+_PAID_COMPLETION_MAX_PRICE_PER_MILLION = Decimal("0.60")
 _PAID_RESERVATION_BUFFER = Decimal("1.2")
 _catalog_lock = threading.Lock()
 _catalog_cache: tuple[datetime, dict[str, dict[str, Any]]] | None = None

@@ -222,7 +222,7 @@ def test_owner_approved_paid_deepseek_is_metered_with_a_reserved_budget(policy_d
         lambda: {
             model: {
                 "architecture": {"input_modalities": ["text"], "output_modalities": ["text"]},
-                "pricing": {"prompt": "0.00000003", "completion": "0.0000002"},
+                "pricing": {"prompt": "0.00000015", "completion": "0.0000006"},
                 "supported_parameters": ["response_format"],
             }
         },
@@ -278,7 +278,7 @@ def test_paid_routing_is_exact_model_and_price_capped():
         "require_parameters": True,
         "sort": "price",
         "allow_fallbacks": False,
-        "max_price": {"prompt": 0.03, "completion": 0.2},
+        "max_price": {"prompt": 0.15, "completion": 0.6},
     }
     with pytest.raises(ProviderUnavailableError):
         cost_policy.add_paid_routing_constraints(

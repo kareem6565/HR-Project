@@ -37,7 +37,36 @@ ORG_ID = "09df6372-c821-4c6f-b633-9f9fe8438f85"
 USER_ID = "76598a7a-f0bc-4531-ad74-e232a3e30a53"
 HEADERS = {"X-Organization-Id": ORG_ID, "X-User-Id": USER_ID}
 
+# Abort the live run below this remaining balance (USD): the key's credit is
+# reserved for real app users; the whole check costs well under $0.02.
+MIN_REMAINING_BALANCE_USD = 0.05
+
 FAILURES: list[str] = []
+
+
+def fetch_key_balance() -> dict:
+    """Read the OpenRouter key's usage and remaining limit (no inference call)."""
+    import httpx
+
+    resp = httpx.get(
+        "https://openrouter.ai/api/v1/auth/key",
+        headers={"Authorization": f"Bearer {os.environ['OPENROUTER_API_KEY']}"},
+        timeout=15,
+    )
+    resp.raise_for_status()
+    return resp.json().get("data") or {}
+
+
+def print_balance(label: str, data: dict) -> float | None:
+    usage = data.get("usage")
+    limit = data.get("limit")
+    remaining = data.get("limit_remaining")
+    free_tier = data.get("is_free_tier")
+    print(
+        f"[BALANCE {label}] usage={usage} limit={limit} "
+        f"limit_remaining={remaining} is_free_tier={free_tier}"
+    )
+    return float(remaining) if remaining is not None else None
 
 
 def check(name: str, ok: bool, detail: str = "") -> None:
@@ -134,6 +163,19 @@ def main() -> None:
     from app.core.config import settings
 
     print(f"[INFO] provider={settings.ai_provider} model={settings.openrouter_model} max_tokens={settings.openrouter_max_tokens}")
+
+    # Credit guard: report the key's balance BEFORE any screening call.
+    if os.environ.get("AI_PROVIDER", "openrouter") == "openrouter":
+        before = print_balance("BEFORE", fetch_key_balance())
+        if "--balance-only" in sys.argv:
+            sys.exit(0)
+        if before is not None and before < MIN_REMAINING_BALANCE_USD:
+            print(
+                f"ABORT: remaining balance ${before} is below the "
+                f"${MIN_REMAINING_BALANCE_USD} safety floor; no screening calls made."
+            )
+            sys.exit(3)
+
     client, TestingSession = build_client()
 
     # Stage A: job draft
@@ -235,6 +277,9 @@ def main() -> None:
             f"in={ev.input_tokens} out={ev.output_tokens} cost_usd={ev.reported_cost_usd}"
         )
     print(f"--- TOTAL reported cost this run: ${total} ({len(events)} model calls) ---")
+
+    if os.environ.get("AI_PROVIDER", "openrouter") == "openrouter":
+        print_balance("AFTER", fetch_key_balance())
 
     print("\nRESULT:", "ALL CHECKS PASSED" if not FAILURES else f"FAILURES: {FAILURES}")
     sys.exit(0 if not FAILURES else 1)
