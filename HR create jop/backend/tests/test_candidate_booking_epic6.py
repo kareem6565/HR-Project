@@ -84,8 +84,12 @@ def google_mode_settings(monkeypatch):
     monkeypatch.setattr(settings, "google_calendar_mode", "google")
     monkeypatch.setattr(settings, "google_oauth_client_id", "test-client-id")
     monkeypatch.setattr(settings, "google_oauth_client_secret", "test-client-secret")
-    monkeypatch.setattr(settings, "google_oauth_redirect_uri", "http://localhost:8000/api/v1/hr/google/callback")
-    monkeypatch.setattr(settings, "google_token_encryption_key", "test-google-token-encryption-key-32chars")
+    monkeypatch.setattr(
+        settings, "google_oauth_redirect_uri", "http://localhost:8000/api/v1/hr/google/callback"
+    )
+    monkeypatch.setattr(
+        settings, "google_token_encryption_key", "test-google-token-encryption-key-32chars"
+    )
     monkeypatch.setattr(settings, "app_env", "test")
     return settings
 
@@ -129,7 +133,11 @@ def _seed(db, *, with_google_connection=False, calendar_id="primary"):
     )
     db.add(app)
     db.flush()
-    db.add(HRDecision(id=uuid.uuid4(), job_application_id=app.id, user_id=interviewer.id, decision="advance"))
+    db.add(
+        HRDecision(
+            id=uuid.uuid4(), job_application_id=app.id, user_id=interviewer.id, decision="advance"
+        )
+    )
     avail = InterviewAvailability(
         id=uuid.uuid4(),
         organization_id=org.id,
@@ -175,7 +183,9 @@ def test_candidate_booking_creates_interview_and_outbox_atomically(db_session, m
 
     db_session.expire_all()
     stored = db_session.get(Interview, interview.id)
-    inv = db_session.scalar(select(CandidateInvitation).where(CandidateInvitation.id == issue.invitation.id))
+    inv = db_session.scalar(
+        select(CandidateInvitation).where(CandidateInvitation.id == issue.invitation.id)
+    )
     assert stored is not None and stored.status == "scheduled"
     assert stored.calendar_sync_status == "pending"
     assert inv is not None and inv.status == "booked" and inv.booked_interview_id == interview.id
@@ -186,12 +196,15 @@ def test_candidate_booking_creates_interview_and_outbox_atomically(db_session, m
     )
     assert len(calendar_rows) == 1
     assert calendar_rows[0].operation == "upsert_interview"
-    assert db_session.scalar(
-        select(InterviewSlotReservation).where(
-            InterviewSlotReservation.interview_id == interview.id,
-            InterviewSlotReservation.status == "active",
+    assert (
+        db_session.scalar(
+            select(InterviewSlotReservation).where(
+                InterviewSlotReservation.interview_id == interview.id,
+                InterviewSlotReservation.status == "active",
+            )
         )
-    ) is not None
+        is not None
+    )
     assert any(
         r.template == "candidate_interview_booked"
         for r in db_session.scalars(select(TransactionalEmailOutbox)).all()
@@ -208,7 +221,10 @@ def test_invalid_or_expired_invitation_token_rejected(db_session, monkeypatch):
     )
     with pytest.raises(NotFoundError):
         SchedulingWorkflowService().candidate_book_slot(
-            db_session, token="not-a-real-token-" + "x" * 40, availability_id=avail.id, scheduled_time="11:00"
+            db_session,
+            token="not-a-real-token-" + "x" * 40,
+            availability_id=avail.id,
+            scheduled_time="11:00",
         )
 
     inv = db_session.get(CandidateInvitation, issue.invitation.id)
@@ -267,7 +283,10 @@ def test_google_sync_failure_after_successful_booking_is_retried_without_losing_
 
     with mock_google_http(monkeypatch, responder):
         issue = SchedulingWorkflowService().create_invitation(
-            db_session, organization_id=org.id, job_application_id=app.id, actor_user_id=interviewer.id
+            db_session,
+            organization_id=org.id,
+            job_application_id=app.id,
+            actor_user_id=interviewer.id,
         )
         interview = SchedulingWorkflowService().candidate_book_slot(
             db_session, token=issue.token, availability_id=avail.id, scheduled_time="11:00"
@@ -278,7 +297,9 @@ def test_google_sync_failure_after_successful_booking_is_retried_without_losing_
         assert db_session.get(Interview, interview.id) is not None
         assert CalendarOutboxService().process_one(db_session) is True
         db_session.flush()
-        row = db_session.scalar(select(CalendarSyncOutbox).where(CalendarSyncOutbox.interview_id == interview.id))
+        row = db_session.scalar(
+            select(CalendarSyncOutbox).where(CalendarSyncOutbox.interview_id == interview.id)
+        )
         assert row is not None and row.status == "pending"
         assert row.last_error == "google_api_temporary_failure"
         interview = db_session.get(Interview, interview.id)

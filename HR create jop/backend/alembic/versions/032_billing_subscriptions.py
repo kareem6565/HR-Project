@@ -23,7 +23,9 @@ def upgrade() -> None:
         sa.Column("features", sa.JSON(), nullable=False),
         sa.Column("sort_order", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("status", sa.String(length=20), nullable=False, server_default="active"),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.CheckConstraint("status IN ('active', 'retired')", name="ck_plans_status"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("code"),

@@ -627,9 +627,7 @@ def rank_worker_cohort(db, *, job, batch, approved_profile, storage) -> None:
         if settings.a5_prerank_engine == "lexical":
             from app.services.lexical_preranking_service import rank_lexically
 
-            ranked = rank_lexically(
-                requirements, candidates, timeout_seconds=timeout_seconds
-            )
+            ranked = rank_lexically(requirements, candidates, timeout_seconds=timeout_seconds)
         else:
             model = configured_embedder()
             ranked = rank_candidates(

@@ -460,9 +460,7 @@ class ScreeningWorker:
                 # 3. Profile extraction
                 processing_stage = "candidate_profile_extraction"
                 self._publish_item_stage(db, item_id, claim_token, processing_stage)
-                screening_requirements, _ = get_effective_job_requirements(
-                    job, approved_profile
-                )
+                screening_requirements, _ = get_effective_job_requirements(job, approved_profile)
                 profile_payload, evidence_payload, explanation_payload = derive_screening_payloads(
                     full_name=candidate.full_name,
                     job_title=job.title,
@@ -595,7 +593,6 @@ class ScreeningWorker:
                 "Failed to clean up a resume file after screening failure.",
                 extra={"item_id": str(item_id), "exception_class": type(exc).__name__},
             )
-
 
     def _publish_item_stage(
         self,

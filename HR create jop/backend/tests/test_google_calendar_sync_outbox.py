@@ -84,8 +84,12 @@ def google_mode_settings(monkeypatch):
     monkeypatch.setattr(settings, "google_calendar_mode", "google")
     monkeypatch.setattr(settings, "google_oauth_client_id", "test-client-id")
     monkeypatch.setattr(settings, "google_oauth_client_secret", "test-client-secret")
-    monkeypatch.setattr(settings, "google_oauth_redirect_uri", "http://localhost:8000/api/v1/hr/google/callback")
-    monkeypatch.setattr(settings, "google_token_encryption_key", "test-google-token-encryption-key-32chars")
+    monkeypatch.setattr(
+        settings, "google_oauth_redirect_uri", "http://localhost:8000/api/v1/hr/google/callback"
+    )
+    monkeypatch.setattr(
+        settings, "google_token_encryption_key", "test-google-token-encryption-key-32chars"
+    )
     monkeypatch.setattr(settings, "app_env", "test")
     return settings
 
@@ -129,7 +133,11 @@ def _seed_hr_scheduling(db, *, calendar_id="primary"):
     )
     db.add(app)
     db.flush()
-    db.add(HRDecision(id=uuid.uuid4(), job_application_id=app.id, user_id=interviewer.id, decision="advance"))
+    db.add(
+        HRDecision(
+            id=uuid.uuid4(), job_application_id=app.id, user_id=interviewer.id, decision="advance"
+        )
+    )
     conn = HRGoogleConnection(
         id=uuid.uuid4(),
         organization_id=org.id,
@@ -172,7 +180,9 @@ class TestGoogleCalendarSyncOutbox:
                     200,
                     {"calendars": {"primary": {"busy": [{"start": "x", "end": "y"}]}}},
                 )
-            return FakeResponse(200, {"calendars": {"primary": {"errors": [{"reason": "forbidden"}]}}})
+            return FakeResponse(
+                200, {"calendars": {"primary": {"errors": [{"reason": "forbidden"}]}}}
+            )
 
         with mock_google_http(monkeypatch, responder):
             assert not service.check_freebusy(
@@ -191,8 +201,12 @@ class TestGoogleCalendarSyncOutbox:
                     calendar_id="missing-calendar",
                 )
 
-    def test_hr_schedule_creates_outbox_atomically_and_syncs_event(self, db_session, google_mode_settings, monkeypatch):
-        org, interviewer, candidate, job, _app, avail, conn = _seed_hr_scheduling(db_session, calendar_id="primary")
+    def test_hr_schedule_creates_outbox_atomically_and_syncs_event(
+        self, db_session, google_mode_settings, monkeypatch
+    ):
+        org, interviewer, candidate, job, _app, avail, conn = _seed_hr_scheduling(
+            db_session, calendar_id="primary"
+        )
         event_id = "evt-created-123"
 
         def responder(method, url, headers, body):
@@ -206,8 +220,12 @@ class TestGoogleCalendarSyncOutbox:
                 assert "Backend Engineer" in body["summary"]
                 assert "technical" in body.get("description", "").lower()
                 # 12:00 UTC for 30 min
-                assert body["start"]["dateTime"].startswith(f"{avail.scheduled_date.isoformat()}T12:00:00")
-                assert body["end"]["dateTime"].startswith(f"{avail.scheduled_date.isoformat()}T12:30:00")
+                assert body["start"]["dateTime"].startswith(
+                    f"{avail.scheduled_date.isoformat()}T12:00:00"
+                )
+                assert body["end"]["dateTime"].startswith(
+                    f"{avail.scheduled_date.isoformat()}T12:30:00"
+                )
                 return FakeResponse(200, {"id": event_id})
             raise AssertionError(f"unexpected call {method} {url}")
 
@@ -242,11 +260,15 @@ class TestGoogleCalendarSyncOutbox:
         assert interview.google_calendar_id == "primary"
         assert interview.calendar_sync_status == "synced"
         assert interview.calendar_sync_error is None
-        row = db_session.scalar(select(CalendarSyncOutbox).where(CalendarSyncOutbox.interview_id == interview.id))
+        row = db_session.scalar(
+            select(CalendarSyncOutbox).where(CalendarSyncOutbox.interview_id == interview.id)
+        )
         assert row is not None and row.status == "succeeded"
         assert [call[0] for call in calls] == ["POST", "POST"]
 
-    def test_api_failure_retries_safely_without_duplicate_events(self, db_session, google_mode_settings, monkeypatch):
+    def test_api_failure_retries_safely_without_duplicate_events(
+        self, db_session, google_mode_settings, monkeypatch
+    ):
         org, interviewer, candidate, job, _app, avail, _conn = _seed_hr_scheduling(db_session)
         state = {"n": 0}
         event_id = "evt-retry-1"
@@ -277,7 +299,9 @@ class TestGoogleCalendarSyncOutbox:
 
             assert CalendarOutboxService().process_one(db_session) is True
             db_session.flush()
-            row = db_session.scalar(select(CalendarSyncOutbox).where(CalendarSyncOutbox.interview_id == interview.id))
+            row = db_session.scalar(
+                select(CalendarSyncOutbox).where(CalendarSyncOutbox.interview_id == interview.id)
+            )
             assert row is not None
             assert row.status == "pending"  # retry scheduled
             assert row.attempts == 1
@@ -298,12 +322,16 @@ class TestGoogleCalendarSyncOutbox:
         interview = db_session.get(Interview, interview.id)
         assert interview.google_event_id == event_id
         assert interview.calendar_sync_status == "synced"
-        row = db_session.scalar(select(CalendarSyncOutbox).where(CalendarSyncOutbox.interview_id == interview.id))
+        row = db_session.scalar(
+            select(CalendarSyncOutbox).where(CalendarSyncOutbox.interview_id == interview.id)
+        )
         assert row.status == "succeeded"
         # One failed create attempt + one successful create attempt; no duplicate event IDs created.
         assert [c[0] for c in calls if "/events" in c[1]] == ["POST", "POST"]
 
-    def test_reschedule_updates_existing_event_using_stored_event_id(self, db_session, google_mode_settings, monkeypatch):
+    def test_reschedule_updates_existing_event_using_stored_event_id(
+        self, db_session, google_mode_settings, monkeypatch
+    ):
         org, interviewer, _candidate, _job, app, avail, conn = _seed_hr_scheduling(db_session)
         event_id = "evt-existing-999"
 
@@ -312,8 +340,12 @@ class TestGoogleCalendarSyncOutbox:
                 return FakeResponse(200, {"id": event_id})
             if method == "PATCH" and url.endswith(f"/calendars/primary/events/{event_id}"):
                 assert body["start"]["timeZone"] == "UTC"
-                assert body["start"]["dateTime"].startswith(f"{avail.scheduled_date.isoformat()}T12:30:00")
-                assert body["end"]["dateTime"].startswith(f"{avail.scheduled_date.isoformat()}T13:00:00")
+                assert body["start"]["dateTime"].startswith(
+                    f"{avail.scheduled_date.isoformat()}T12:30:00"
+                )
+                assert body["end"]["dateTime"].startswith(
+                    f"{avail.scheduled_date.isoformat()}T13:00:00"
+                )
                 return FakeResponse(200, {"id": event_id})
             if method == "POST" and url.endswith("/freeBusy"):
                 return FakeResponse(200, {"calendars": {"primary": {"busy": []}}})
@@ -353,8 +385,12 @@ class TestGoogleCalendarSyncOutbox:
         sync_calls = [c for c in calls if "/events" in c[1]]
         assert [c[0] for c in sync_calls] == ["POST", "PATCH"]
 
-    def test_uses_correct_hr_users_primary_calendar(self, db_session, google_mode_settings, monkeypatch):
-        org, interviewer, candidate, job, _app, avail, _conn = _seed_hr_scheduling(db_session, calendar_id="primary")
+    def test_uses_correct_hr_users_primary_calendar(
+        self, db_session, google_mode_settings, monkeypatch
+    ):
+        org, interviewer, candidate, job, _app, avail, _conn = _seed_hr_scheduling(
+            db_session, calendar_id="primary"
+        )
         seen_urls = []
 
         def responder(method, url, headers, body):
@@ -383,7 +419,9 @@ class TestGoogleCalendarSyncOutbox:
 
         assert any(url.endswith("/calendars/primary/events") for url in seen_urls)
 
-    def test_disconnected_account_distinguished_from_temporary_failure(self, db_session, google_mode_settings, monkeypatch):
+    def test_disconnected_account_distinguished_from_temporary_failure(
+        self, db_session, google_mode_settings, monkeypatch
+    ):
         org, interviewer, candidate, job, app, avail, conn = _seed_hr_scheduling(db_session)
         conn.status = "disconnected"
         db_session.flush()
@@ -400,10 +438,20 @@ class TestGoogleCalendarSyncOutbox:
                 interviewer_user_id=interviewer.id,
                 scheduled_duration_minutes=30,
             )
-        assert db_session.scalar(select(Interview).where(Interview.job_application_id == app.id)) is None
-        assert db_session.scalar(select(CalendarSyncOutbox).where(CalendarSyncOutbox.organization_id == org.id)) is None
+        assert (
+            db_session.scalar(select(Interview).where(Interview.job_application_id == app.id))
+            is None
+        )
+        assert (
+            db_session.scalar(
+                select(CalendarSyncOutbox).where(CalendarSyncOutbox.organization_id == org.id)
+            )
+            is None
+        )
 
-    def test_hr_busy_slot_rejects_before_creating_rows(self, db_session, google_mode_settings, monkeypatch):
+    def test_hr_busy_slot_rejects_before_creating_rows(
+        self, db_session, google_mode_settings, monkeypatch
+    ):
         org, interviewer, candidate, job, app, avail, _conn = _seed_hr_scheduling(db_session)
         monkeypatch.setattr(GoogleCalendarService, "check_freebusy", lambda *a, **k: False)
         with pytest.raises(ConflictError, match="Google Calendar"):
@@ -418,10 +466,20 @@ class TestGoogleCalendarSyncOutbox:
                 interviewer_user_id=interviewer.id,
                 scheduled_duration_minutes=30,
             )
-        assert db_session.scalar(select(Interview).where(Interview.job_application_id == app.id)) is None
-        assert db_session.scalar(select(CalendarSyncOutbox).where(CalendarSyncOutbox.organization_id == org.id)) is None
+        assert (
+            db_session.scalar(select(Interview).where(Interview.job_application_id == app.id))
+            is None
+        )
+        assert (
+            db_session.scalar(
+                select(CalendarSyncOutbox).where(CalendarSyncOutbox.organization_id == org.id)
+            )
+            is None
+        )
 
-    def test_hr_freebusy_outage_rejects_before_creating_rows(self, db_session, google_mode_settings, monkeypatch):
+    def test_hr_freebusy_outage_rejects_before_creating_rows(
+        self, db_session, google_mode_settings, monkeypatch
+    ):
         org, interviewer, candidate, job, app, avail, _conn = _seed_hr_scheduling(db_session)
         monkeypatch.setattr(
             GoogleCalendarService,
@@ -442,8 +500,16 @@ class TestGoogleCalendarSyncOutbox:
                 interviewer_user_id=interviewer.id,
                 scheduled_duration_minutes=30,
             )
-        assert db_session.scalar(select(Interview).where(Interview.job_application_id == app.id)) is None
-        assert db_session.scalar(select(CalendarSyncOutbox).where(CalendarSyncOutbox.organization_id == org.id)) is None
+        assert (
+            db_session.scalar(select(Interview).where(Interview.job_application_id == app.id))
+            is None
+        )
+        assert (
+            db_session.scalar(
+                select(CalendarSyncOutbox).where(CalendarSyncOutbox.organization_id == org.id)
+            )
+            is None
+        )
 
     def test_cancellation_syncs_safely(self, db_session, google_mode_settings, monkeypatch):
         org, interviewer, candidate, job, _app, avail, _conn = _seed_hr_scheduling(db_session)
@@ -558,9 +624,12 @@ class TestGoogleCalendarSyncOutbox:
             )
         )
         assert reservation is not None
-        assert db_session.scalar(
-            select(CalendarSyncOutbox).where(
-                CalendarSyncOutbox.interview_id == interview.id,
-                CalendarSyncOutbox.operation == "cancel_event",
+        assert (
+            db_session.scalar(
+                select(CalendarSyncOutbox).where(
+                    CalendarSyncOutbox.interview_id == interview.id,
+                    CalendarSyncOutbox.operation == "cancel_event",
+                )
             )
-        ) is None
+            is None
+        )

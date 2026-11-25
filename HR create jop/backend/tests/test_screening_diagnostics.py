@@ -109,6 +109,7 @@ def test_worker_pipeline_failure_logs_actual_stage_without_sensitive_values(
     monkeypatch, caplog
 ) -> None:
     from app.services.text_extraction_service import ExtractedDocumentText
+
     canary = "HERA_CV_CANARY_1e4ab9"
     mock_secret = "MOCK_API_SECRET_51cf02"
     error = _synthetic_validation_exception(canary, mock_secret)

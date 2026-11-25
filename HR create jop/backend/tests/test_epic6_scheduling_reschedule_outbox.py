@@ -133,7 +133,9 @@ def test_book_then_reschedule_same_token_and_interview(db_session, monkeypatch):
     assert interview.id == interview2.id
     assert interview2.scheduled_time == "10:00"
     assert interview2.scheduled_start_at < interview2.scheduled_end_at
-    inv = db_session.scalar(select(CandidateInvitation).where(CandidateInvitation.id == issue.invitation.id))
+    inv = db_session.scalar(
+        select(CandidateInvitation).where(CandidateInvitation.id == issue.invitation.id)
+    )
     assert inv is not None and inv.status == "booked"
     assert inv.reschedule_count >= 1
     outbox = list(db_session.scalars(select(TransactionalEmailOutbox)))
@@ -219,8 +221,11 @@ def test_failed_reschedule_rolls_back_old_booking_and_event(db_session, monkeypa
         )
     }
     assert outbox_ids == old_outbox_ids
-    assert db_session.scalars(
-        select(TransactionalEmailOutbox).where(
-            TransactionalEmailOutbox.template == "candidate_interview_rescheduled"
-        )
-    ).first() is None
+    assert (
+        db_session.scalars(
+            select(TransactionalEmailOutbox).where(
+                TransactionalEmailOutbox.template == "candidate_interview_rescheduled"
+            )
+        ).first()
+        is None
+    )

@@ -140,7 +140,11 @@ def _fetch_key_usage(api_key: str) -> Decimal:
 
 
 def _paid_request_estimate(
-    *, model: str, prompt_characters: int, max_output_tokens: int, catalog: dict[str, dict[str, Any]]
+    *,
+    model: str,
+    prompt_characters: int,
+    max_output_tokens: int,
+    catalog: dict[str, dict[str, Any]],
 ) -> Decimal:
     item = catalog.get(model)
     if not item:
@@ -163,9 +167,7 @@ def _paid_request_estimate(
     return estimate * Decimal("2")
 
 
-def _database_paid_spend(
-    *, catalog: dict[str, dict[str, Any]], budget: Decimal
-) -> Decimal:
+def _database_paid_spend(*, catalog: dict[str, dict[str, Any]], budget: Decimal) -> Decimal:
     """Use persisted usage rows to retain a conservative cap across process restarts."""
     with SessionLocal() as session:
         events = session.scalars(
@@ -452,7 +454,9 @@ def authorize_and_reserve(
                 "The configured paid model is not explicitly owner-approved."
             )
         if max_output_tokens is None:
-            raise ProviderConfigurationError("Paid AI requests require a finite output-token limit.")
+            raise ProviderConfigurationError(
+                "Paid AI requests require a finite output-token limit."
+            )
         item = (catalog or {}).get(model)
         if not item:
             raise ProviderConfigurationError("The approved paid model is missing from OpenRouter.")
@@ -475,7 +479,9 @@ def authorize_and_reserve(
             or input_rate > _PAID_PROMPT_MAX_PRICE_PER_MILLION
             or output_rate > _PAID_COMPLETION_MAX_PRICE_PER_MILLION
         ):
-            raise ProviderConfigurationError("Paid model pricing exceeds the approved per-call limit.")
+            raise ProviderConfigurationError(
+                "Paid model pricing exceeds the approved per-call limit."
+            )
         estimate = _paid_request_estimate(
             model=model,
             prompt_characters=max(prompt_characters, input_bytes),
@@ -565,9 +571,13 @@ def record_result(
 ) -> None:
     """Persist provider diagnostics and pause inference on unexpected spend."""
     global _paid_local_spend
-    usage = response.get("usage") if isinstance(response, dict) else getattr(response, "usage", None)
-    usage_data = usage if isinstance(usage, dict) else (
-        vars(usage) if usage is not None and hasattr(usage, "__dict__") else {}
+    usage = (
+        response.get("usage") if isinstance(response, dict) else getattr(response, "usage", None)
+    )
+    usage_data = (
+        usage
+        if isinstance(usage, dict)
+        else (vars(usage) if usage is not None and hasattr(usage, "__dict__") else {})
     )
     input_tokens = usage_data.get("prompt_tokens", usage_data.get("input_tokens"))
     output_tokens = usage_data.get("completion_tokens", usage_data.get("output_tokens"))
@@ -578,14 +588,17 @@ def record_result(
         cost = Decimal(str(cost_value)) if cost_value is not None else None
     except (InvalidOperation, ValueError):
         cost = None
-    provider_request_id = response.get("id") if isinstance(response, dict) else getattr(response, "id", None)
+    provider_request_id = (
+        response.get("id") if isinstance(response, dict) else getattr(response, "id", None)
+    )
     if not provider_request_id and error is not None:
         provider_request_id = getattr(error, "provider_request_id", None)
     http_status = (
         getattr(error, "provider_status", None) or getattr(error, "status_code", None)
-        if error else (200 if response is not None else None)
+        if error
+        else (200 if response is not None else None)
     )
-    error_category = (getattr(error, "error_code", type(error).__name__)[:64] if error else None)
+    error_category = getattr(error, "error_code", type(error).__name__)[:64] if error else None
     cost_alert = cost is not None and cost > 0
     paid_model = False
     reserved = Decimal("0")
@@ -614,7 +627,9 @@ def record_result(
         # its naive value as UTC before computing a duration.
         if started_at is not None and started_at.tzinfo is None:
             started_at = started_at.replace(tzinfo=UTC)
-        latency_ms = round((completed_at - started_at).total_seconds() * 1000) if started_at else None
+        latency_ms = (
+            round((completed_at - started_at).total_seconds() * 1000) if started_at else None
+        )
         log_fields = {
             "request_id": event.request_id,
             "provider": event.provider,
@@ -646,7 +661,11 @@ def record_result(
                 cost_alert = True
         if cost_alert:
             dialect = session.get_bind().dialect.name
-            insert_stmt = pg_insert(AIPolicyControl) if dialect == "postgresql" else sqlite_insert(AIPolicyControl)
+            insert_stmt = (
+                pg_insert(AIPolicyControl)
+                if dialect == "postgresql"
+                else sqlite_insert(AIPolicyControl)
+            )
             table = AIPolicyControl.__table__
             session.execute(
                 insert_stmt.values(control_key="cost_alert", enabled=True).on_conflict_do_update(
@@ -655,12 +674,18 @@ def record_result(
             )
     logger.log(
         logging.WARNING if status != "succeeded" or cost_alert else logging.INFO,
-        "AI provider call completed with an error" if status != "succeeded" or cost_alert else "AI provider call completed",
+        "AI provider call completed with an error"
+        if status != "succeeded" or cost_alert
+        else "AI provider call completed",
         extra=log_fields,
     )
     if cost_alert:
-        logger.critical("AI spend policy detected an unexpected charge; global AI circuit breaker enabled.")
-        raise ProviderUnavailableError("AI requests are paused after an unexpected non-zero model cost.")
+        logger.critical(
+            "AI spend policy detected an unexpected charge; global AI circuit breaker enabled."
+        )
+        raise ProviderUnavailableError(
+            "AI requests are paused after an unexpected non-zero model cost."
+        )
 
 
 def record_ai_output_validation_failure(*, error_code: str) -> None:
@@ -669,9 +694,7 @@ def record_ai_output_validation_failure(*, error_code: str) -> None:
     if not request_id:
         return
     with SessionLocal.begin() as session:
-        event = session.scalar(
-            select(AIUsageEvent).where(AIUsageEvent.request_id == request_id)
-        )
+        event = session.scalar(select(AIUsageEvent).where(AIUsageEvent.request_id == request_id))
         if event is not None and event.status == "succeeded":
             event.status = "failed"
             event.error_category = error_code[:64]

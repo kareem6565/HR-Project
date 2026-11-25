@@ -215,7 +215,9 @@ def create_app() -> FastAPI:
             content["code"] = exc.code
             if exc.code == "invalid_ai_output":
                 content["error_code"] = "invalid_ai_output"
-                content["request_id"] = getattr(request.state, "request_id", None) or get_request_id()
+                content["request_id"] = (
+                    getattr(request.state, "request_id", None) or get_request_id()
+                )
         return JSONResponse(status_code=422, content=content)
 
     @app.exception_handler(InvalidStateError)

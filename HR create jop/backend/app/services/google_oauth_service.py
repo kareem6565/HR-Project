@@ -55,9 +55,7 @@ class GoogleOAuthService:
         }
         return f"{GOOGLE_AUTH_URL}?{urlencode(params)}"
 
-    def create_state(
-        self, db: Session, *, organization_id: uuid.UUID, user_id: uuid.UUID
-    ) -> str:
+    def create_state(self, db: Session, *, organization_id: uuid.UUID, user_id: uuid.UUID) -> str:
         """Create a short-lived, one-time OAuth state bound to the initiating HR user.
 
         Returns the unhashed token for use in the authorize URL; only its SHA-256 hash is stored.
@@ -101,9 +99,7 @@ class GoogleOAuthService:
         return record.organization_id, record.user_id
 
     # Backward-compatible aliases for any existing callers; new code should use create_state/consume_state.
-    def make_state(
-        self, db: Session, *, organization_id: uuid.UUID, user_id: uuid.UUID
-    ) -> str:
+    def make_state(self, db: Session, *, organization_id: uuid.UUID, user_id: uuid.UUID) -> str:
         return self.create_state(db, organization_id=organization_id, user_id=user_id)
 
     def parse_state(self, db: Session, state: str) -> tuple[uuid.UUID, uuid.UUID]:
@@ -127,7 +123,9 @@ class GoogleOAuthService:
 
     def fetch_userinfo(self, access_token: str) -> dict[str, Any]:
         with httpx.Client(timeout=20.0) as client:
-            resp = client.get(GOOGLE_USERINFO_URL, headers={"Authorization": f"Bearer {access_token}"})
+            resp = client.get(
+                GOOGLE_USERINFO_URL, headers={"Authorization": f"Bearer {access_token}"}
+            )
         if resp.status_code >= 400:
             return {}
         return resp.json()
@@ -215,9 +213,7 @@ class GoogleOAuthService:
             raise ValidationError("A valid Google Calendar connection is required.")
         return conn
 
-    def disconnect(
-        self, db: Session, *, organization_id: uuid.UUID, user_id: uuid.UUID
-    ) -> None:
+    def disconnect(self, db: Session, *, organization_id: uuid.UUID, user_id: uuid.UUID) -> None:
         conn = self.get_connection(db, organization_id=organization_id, user_id=user_id)
         if conn is None:
             return

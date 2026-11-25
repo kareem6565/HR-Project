@@ -127,7 +127,9 @@ class Settings(BaseSettings):
         default="tesseract", validation_alias="OCR_PROVIDER"
     )
     ocr_languages: str = Field(default="eng", validation_alias="OCR_LANGUAGES")
-    ocr_timeout_seconds: int = Field(default=30, gt=0, le=300, validation_alias="OCR_TIMEOUT_SECONDS")
+    ocr_timeout_seconds: int = Field(
+        default=30, gt=0, le=300, validation_alias="OCR_TIMEOUT_SECONDS"
+    )
     ocr_max_image_bytes: int = Field(
         default=10 * 1024 * 1024, gt=0, validation_alias="OCR_MAX_IMAGE_BYTES"
     )
@@ -213,14 +215,20 @@ class Settings(BaseSettings):
     enable_outbox_worker: bool = Field(default=True, validation_alias="ENABLE_OUTBOX_WORKER")
 
     # Google Calendar / OAuth (EPIC 6)
-    google_token_encryption_key: str = Field(default="", validation_alias="GOOGLE_TOKEN_ENCRYPTION_KEY")
+    google_token_encryption_key: str = Field(
+        default="", validation_alias="GOOGLE_TOKEN_ENCRYPTION_KEY"
+    )
     google_oauth_client_id: str = Field(default="", validation_alias="GOOGLE_OAUTH_CLIENT_ID")
-    google_oauth_client_secret: str = Field(default="", validation_alias="GOOGLE_OAUTH_CLIENT_SECRET")
+    google_oauth_client_secret: str = Field(
+        default="", validation_alias="GOOGLE_OAUTH_CLIENT_SECRET"
+    )
     google_oauth_redirect_uri: str = Field(default="", validation_alias="GOOGLE_OAUTH_REDIRECT_URI")
     google_oauth_post_login_redirect_uri: str = Field(
         default="", validation_alias="GOOGLE_OAUTH_POST_LOGIN_REDIRECT_URI"
     )
-    frontend_base_url: str = Field(default="http://localhost:8080", validation_alias="FRONTEND_BASE_URL")
+    frontend_base_url: str = Field(
+        default="http://localhost:8080", validation_alias="FRONTEND_BASE_URL"
+    )
     google_calendar_mode: str = Field(default="hera", validation_alias="GOOGLE_CALENDAR_MODE")
     google_calendar_id: str = Field(default="primary", validation_alias="GOOGLE_CALENDAR_ID")
 

@@ -50,9 +50,7 @@ def build_job_description(
     source = body.source_text if body.operation == "parse" else body.selected_section
     trusted_inputs = {
         key: value
-        for key, value in body.model_dump(
-            exclude={"source_text", "selected_section"}
-        ).items()
+        for key, value in body.model_dump(exclude={"source_text", "selected_section"}).items()
         if value is not None and (not isinstance(value, str) or value.strip())
     }
     request_input = {

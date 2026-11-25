@@ -68,6 +68,8 @@ EVIDENCE_AI_COMPONENT = "match_evidence_generator"
 EXPLANATION_AI_COMPONENT = "evaluation_explainer"
 PROMPT_VERSION = "4"
 PROFILE_CONTEXT_FIELDS = ("skills", "experience", "education", "certifications", "languages")
+
+
 def _sha256(value: str) -> str:
     """Return the hex SHA-256 digest of a string value."""
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
@@ -825,7 +827,9 @@ class CandidateEvaluationWorkflow:
                     token_usage=evidence_result.token_usage,
                 )
 
-            status = "failed" if isinstance(error.original_error, ProviderError) else "validation_failed"
+            status = (
+                "failed" if isinstance(error.original_error, ProviderError) else "validation_failed"
+            )
             original_error = error.original_error
             val_err = {"message": str(original_error)} if status == "validation_failed" else None
             self._trace_service.record_ai_trace(

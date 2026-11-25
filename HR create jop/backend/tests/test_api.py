@@ -101,12 +101,11 @@ def bootstrap(client: httpx.Client) -> tuple[dict, dict]:
 
 def _pipeline_application(client: httpx.Client, db_session: Session, org: dict, user: dict):
     job = client.post(
-        "/api/v1/jobs", json={"title": "Pipeline test"},
+        "/api/v1/jobs",
+        json={"title": "Pipeline test"},
         headers=auth_headers(org["id"], user["id"]),
     ).json()
-    candidate = models.Candidate(
-        organization_id=uuid.UUID(org["id"]), full_name="Test Candidate"
-    )
+    candidate = models.Candidate(organization_id=uuid.UUID(org["id"]), full_name="Test Candidate")
     db_session.add(candidate)
     db_session.flush()
     resume = models.Resume(candidate_id=candidate.id, file_uri="local://pipeline-test.pdf")
@@ -138,15 +137,23 @@ def test_pipeline_routes_are_org_scoped_and_transition_retries_are_idempotent(
     assert hidden.status_code == 404
     cross_tenant_transition = client.post(
         f"/api/v1/job-applications/{application.id}/pipeline-transitions",
-        json={"idempotency_key": str(uuid.uuid4()), "expected_stage": "screening",
-              "to_stage": "review"},
+        json={
+            "idempotency_key": str(uuid.uuid4()),
+            "expected_stage": "screening",
+            "to_stage": "review",
+        },
         headers=other_headers,
     )
     assert cross_tenant_transition.status_code == 404
     cross_tenant_correction = client.post(
         f"/api/v1/job-applications/{application.id}/pipeline-corrections",
-        json={"idempotency_key": str(uuid.uuid4()), "expected_stage": "hired",
-              "to_stage": "review", "reason_code": "data_correction", "reason": "Test"},
+        json={
+            "idempotency_key": str(uuid.uuid4()),
+            "expected_stage": "hired",
+            "to_stage": "review",
+            "reason_code": "data_correction",
+            "reason": "Test",
+        },
         headers=other_headers,
     )
     assert cross_tenant_correction.status_code == 404
@@ -164,7 +171,10 @@ def test_pipeline_routes_are_org_scoped_and_transition_retries_are_idempotent(
     assert first.status_code == 200, first.text
     assert first.json()["pipeline_stage"] == "review"
     assert first.json()["allowed_next_stages"] == [
-        "screening", "interview", "withdrawn", "archived"
+        "screening",
+        "interview",
+        "withdrawn",
+        "archived",
     ]
     assert first.json()["reason_required_stages"] == ["screening", "withdrawn"]
 
@@ -196,8 +206,12 @@ def test_pipeline_routes_are_org_scoped_and_transition_retries_are_idempotent(
     assert missing_reason.status_code == 422
     backward = client.post(
         backward_url,
-        json={"idempotency_key": str(uuid.uuid4()), "expected_stage": "review",
-              "to_stage": "screening", "reason_code": "process_reopened"},
+        json={
+            "idempotency_key": str(uuid.uuid4()),
+            "expected_stage": "review",
+            "to_stage": "screening",
+            "reason_code": "process_reopened",
+        },
         headers=owner_headers,
     )
     assert backward.status_code == 200, backward.text
@@ -205,8 +219,11 @@ def test_pipeline_routes_are_org_scoped_and_transition_retries_are_idempotent(
 
     archived = client.post(
         backward_url,
-        json={"idempotency_key": str(uuid.uuid4()), "expected_stage": "screening",
-              "to_stage": "archived"},
+        json={
+            "idempotency_key": str(uuid.uuid4()),
+            "expected_stage": "screening",
+            "to_stage": "archived",
+        },
         headers=owner_headers,
     )
     assert archived.status_code == 200, archived.text
@@ -233,7 +250,8 @@ def test_hired_is_final_except_admin_correction_with_both_stages_logged(
     url = f"/api/v1/job-applications/{application.id}/pipeline-transitions"
     headers = auth_headers(org["id"], recruiter["id"])
     for expected, target in [
-        ("screening", "review"), ("review", "interview"),
+        ("screening", "review"),
+        ("review", "interview"),
         ("interview", "offer"),
         ("offer", "hired"),
     ]:
@@ -254,18 +272,26 @@ def test_hired_is_final_except_admin_correction_with_both_stages_logged(
 
     denied_correction = client.post(
         f"/api/v1/job-applications/{application.id}/pipeline-corrections",
-        json={"idempotency_key": str(uuid.uuid4()), "expected_stage": "hired",
-              "to_stage": "review", "reason_code": "data_correction",
-              "reason": "Correction requires admin."},
+        json={
+            "idempotency_key": str(uuid.uuid4()),
+            "expected_stage": "hired",
+            "to_stage": "review",
+            "reason_code": "data_correction",
+            "reason": "Correction requires admin.",
+        },
         headers=headers,
     )
     assert denied_correction.status_code == 403
 
     correction = client.post(
         f"/api/v1/job-applications/{application.id}/pipeline-corrections",
-        json={"idempotency_key": str(uuid.uuid4()), "expected_stage": "hired",
-              "to_stage": "review", "reason_code": "data_correction",
-              "reason": "Corrected after HR record review."},
+        json={
+            "idempotency_key": str(uuid.uuid4()),
+            "expected_stage": "hired",
+            "to_stage": "review",
+            "reason_code": "data_correction",
+            "reason": "Corrected after HR record review.",
+        },
         headers=auth_headers(org["id"], admin["id"]),
     )
     assert correction.status_code == 200, correction.text
@@ -277,7 +303,9 @@ def test_hired_is_final_except_admin_correction_with_both_stages_logged(
         )
     )
     assert (transition.from_stage, transition.to_stage, transition.reason_code) == (
-        "hired", "review", "data_correction"
+        "hired",
+        "review",
+        "data_correction",
     )
 
 

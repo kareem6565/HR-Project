@@ -32,6 +32,7 @@ from app.services.interview_service import (
     _to_hhmm,
     _to_minutes,
 )
+
 logger = logging.getLogger(__name__)
 
 
@@ -272,8 +273,7 @@ class SchedulingWorkflowService:
         invitation = db.scalar(
             select(CandidateInvitation)
             .where(
-                CandidateInvitation.token_hash
-                == hashlib.sha256(token.encode("utf-8")).hexdigest()
+                CandidateInvitation.token_hash == hashlib.sha256(token.encode("utf-8")).hexdigest()
             )
             .with_for_update()
         )
@@ -439,7 +439,9 @@ class SchedulingWorkflowService:
 
         return open_slots
 
-    def _enqueue_calendar_upsert(self, db: Session, interview: Interview, *, timezone_name: str, hr_user_id: uuid.UUID | None) -> None:
+    def _enqueue_calendar_upsert(
+        self, db: Session, interview: Interview, *, timezone_name: str, hr_user_id: uuid.UUID | None
+    ) -> None:
         from app.services.calendar_outbox_service import CalendarOutboxService
 
         CalendarOutboxService().enqueue(
@@ -456,7 +458,9 @@ class SchedulingWorkflowService:
             },
         )
 
-    def _enqueue_calendar_cancel(self, db: Session, interview: Interview, *, hr_user_id: uuid.UUID | None) -> None:
+    def _enqueue_calendar_cancel(
+        self, db: Session, interview: Interview, *, hr_user_id: uuid.UUID | None
+    ) -> None:
         if not interview.google_event_id:
             return
         from app.services.calendar_outbox_service import CalendarOutboxService
@@ -476,7 +480,9 @@ class SchedulingWorkflowService:
             },
         )
 
-    def _validate_slot_request(self, availability: InterviewAvailability, scheduled_time: str) -> tuple[int, datetime, datetime]:
+    def _validate_slot_request(
+        self, availability: InterviewAvailability, scheduled_time: str
+    ) -> tuple[int, datetime, datetime]:
         start = _to_minutes(availability.start_time)
         end = _to_minutes(availability.end_time)
         requested = _to_minutes(scheduled_time)
@@ -544,7 +550,9 @@ class SchedulingWorkflowService:
 
         # Ensure interviewer is ready in selected mode (prod requires valid connection)
         conn = GoogleCalendarService().ensure_hr_ready(
-            db, organization_id=invitation.organization_id, interviewer_user_id=availability.interviewer_user_id
+            db,
+            organization_id=invitation.organization_id,
+            interviewer_user_id=availability.interviewer_user_id,
         )
         if not GoogleCalendarService().check_freebusy(
             db,
@@ -553,7 +561,9 @@ class SchedulingWorkflowService:
             end=slot_end_dt,
             calendar_id=(conn.calendar_id if conn else "primary"),
         ):
-            raise ConflictError("Selected time is not available on the interviewer's Google Calendar.")
+            raise ConflictError(
+                "Selected time is not available on the interviewer's Google Calendar."
+            )
 
         # Acquire DB locks on relevant scheduled interviews for safety (reservation constraint is the source of truth)
         _ = list(
@@ -647,7 +657,10 @@ class SchedulingWorkflowService:
 
             # Durable, idempotent calendar update for same interview/event; if it fails later, outbox retries.
             self._enqueue_calendar_upsert(
-                db, interview, timezone_name=availability.timezone, hr_user_id=availability.interviewer_user_id
+                db,
+                interview,
+                timezone_name=availability.timezone,
+                hr_user_id=availability.interviewer_user_id,
             )
 
             if application.candidate.email:
@@ -705,7 +718,10 @@ class SchedulingWorkflowService:
         invitation.booked_availability_id = availability.id
 
         self._enqueue_calendar_upsert(
-            db, interview, timezone_name=availability.timezone, hr_user_id=availability.interviewer_user_id
+            db,
+            interview,
+            timezone_name=availability.timezone,
+            hr_user_id=availability.interviewer_user_id,
         )
 
         if application.candidate.email:

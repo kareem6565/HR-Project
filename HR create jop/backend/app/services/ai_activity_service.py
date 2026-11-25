@@ -116,9 +116,7 @@ class AIActivityService:
                 "input_tokens": event.input_tokens,
                 "output_tokens": event.output_tokens,
                 "reported_cost_usd": (
-                    float(event.reported_cost_usd)
-                    if event.reported_cost_usd is not None
-                    else None
+                    float(event.reported_cost_usd) if event.reported_cost_usd is not None else None
                 ),
                 "duration_ms": _duration_ms(event.created_at, event.completed_at),
                 "created_at": event.created_at,

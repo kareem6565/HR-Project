@@ -28,7 +28,11 @@ def test_public_application_worker_reuses_records_and_pinned_profile(monkeypatch
         id=profile_id,
         job_id=job_id,
         status="superseded",
-        profile_data={"requirements": [{"text": "Python", "category": "must_have", "dimension": "technical_skill"}]},
+        profile_data={
+            "requirements": [
+                {"text": "Python", "category": "must_have", "dimension": "technical_skill"}
+            ]
+        },
     )
     job = SimpleNamespace(id=job_id, organization_id=organization_id, title="Engineer")
     candidate = SimpleNamespace(

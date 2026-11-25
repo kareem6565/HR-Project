@@ -294,7 +294,9 @@ class InterviewService:
                 idempotency_key=f"interview:{interview.id}:cancel:{interview.google_event_id}",
                 payload={
                     "interview_id": str(interview.id),
-                    "hr_user_id": str(interview.interviewer_user_id) if interview.interviewer_user_id else None,
+                    "hr_user_id": str(interview.interviewer_user_id)
+                    if interview.interviewer_user_id
+                    else None,
                     "calendar_id": interview.google_calendar_id or "primary",
                     "event_id": interview.google_event_id,
                 },

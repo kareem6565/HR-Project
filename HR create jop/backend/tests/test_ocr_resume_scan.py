@@ -161,6 +161,7 @@ def test_scan_endpoint_creates_screening_ready_resume(
     from app.models import Resume
 
     import uuid as _uuid
+
     resume = db_session.get(Resume, _uuid.UUID(body["id"]))
     assert resume is not None
     assert "Ada Lovelace" in (resume.extracted_text or "")
@@ -239,9 +240,7 @@ def _job_with_profile(db: Session, org: Organization, user: User) -> Job:
         status="approved",
         source="hr_created",
         profile_data={
-            "requirements": [
-                {"text": "Python", "category": "must_have", "dimension": "skill"}
-            ]
+            "requirements": [{"text": "Python", "category": "must_have", "dimension": "skill"}]
         },
         approved_by_user_id=user.id,
         approved_at=datetime.now(UTC),
@@ -285,11 +284,10 @@ def test_worker_dispatch_extracts_text_from_image(monkeypatch) -> None:
     import app.services.text_extraction_service as tes
 
     fake = FakeOCRProvider(text="Scanned CV body text for worker dispatch")
-    monkeypatch.setattr(
-        "app.services.ocr_service.get_ocr_provider", lambda *a, **k: fake
-    )
+    monkeypatch.setattr("app.services.ocr_service.get_ocr_provider", lambda *a, **k: fake)
     # rebind the lazy import target
     import app.services.ocr_service as ocr_mod
+
     monkeypatch.setattr(ocr_mod, "get_ocr_provider", lambda *a, **k: fake)
 
     from app.services.ocr_service import get_ocr_provider  # noqa: F401

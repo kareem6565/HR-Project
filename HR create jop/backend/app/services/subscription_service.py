@@ -92,9 +92,7 @@ class SubscriptionService:
     def list_plans(self, db: Session) -> list[Plan]:
         self.ensure_default_plans(db)
         return list(
-            db.scalars(
-                select(Plan).where(Plan.status == "active").order_by(Plan.sort_order)
-            ).all()
+            db.scalars(select(Plan).where(Plan.status == "active").order_by(Plan.sort_order)).all()
         )
 
     def get_or_create_subscription(
@@ -141,9 +139,7 @@ class SubscriptionService:
         where checkout-session creation and webhook-driven activation attach.
         """
         self.ensure_default_plans(db)
-        plan = db.scalar(
-            select(Plan).where(Plan.code == plan_code, Plan.status == "active")
-        )
+        plan = db.scalar(select(Plan).where(Plan.code == plan_code, Plan.status == "active"))
         if plan is None:
             raise ValidationError("Unknown or unavailable plan.")
 
@@ -177,9 +173,7 @@ class SubscriptionService:
         )
         return subscription
 
-    def get_usage(
-        self, db: Session, *, organization_id: uuid.UUID
-    ) -> dict[str, int | None]:
+    def get_usage(self, db: Session, *, organization_id: uuid.UUID) -> dict[str, int | None]:
         """Current usage against metered limits for this organization."""
         now = datetime.now(UTC)
         month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)

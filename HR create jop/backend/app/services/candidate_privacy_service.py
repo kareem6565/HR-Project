@@ -164,7 +164,9 @@ class CandidatePrivacyService:
             "hr_decisions_kept": 0,
             "audit_records_kept": 0,
             "pipeline_notes_scrubbed": db.scalar(
-                select(func.count()).select_from(PipelineStageTransition).where(
+                select(func.count())
+                .select_from(PipelineStageTransition)
+                .where(
                     PipelineStageTransition.organization_id == organization_id,
                     PipelineStageTransition.job_application_id.in_(application_ids)
                     if application_ids

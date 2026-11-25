@@ -167,9 +167,10 @@ def test_output_validation_failure_updates_provider_attempt_and_keeps_safe_field
         [{"location": ["title"], "type": "missing"}],
     )
     assert safe_errors == [{"location": ["title"], "type": "missing"}]
-    assert app_logging._safe_diagnostic_context(
-        "provider_request_id", "gen-1234567890123-abc"
-    ) == "gen-1234567890123-abc"
+    assert (
+        app_logging._safe_diagnostic_context("provider_request_id", "gen-1234567890123-abc")
+        == "gen-1234567890123-abc"
+    )
 
 
 def _catalog_model(*, prompt="0", completion="0", supported=None):

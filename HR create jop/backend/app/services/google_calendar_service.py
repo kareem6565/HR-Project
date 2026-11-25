@@ -30,18 +30,28 @@ class GoogleCalendarService:
 
     def _hera_warn(self, action: str) -> None:
         if self._mode() == "hera" and settings.app_env != "production":
-            logger.warning("HERA-only calendar mode active (%s): no real Google Calendar call made.", action)
+            logger.warning(
+                "HERA-only calendar mode active (%s): no real Google Calendar call made.", action
+            )
 
-    def ensure_hr_ready(self, db: Session, *, organization_id: uuid.UUID, interviewer_user_id: uuid.UUID | None) -> HRGoogleConnection | None:
+    def ensure_hr_ready(
+        self, db: Session, *, organization_id: uuid.UUID, interviewer_user_id: uuid.UUID | None
+    ) -> HRGoogleConnection | None:
         if interviewer_user_id is None:
             if self.is_google_mode():
-                raise ValidationError("An interviewer with a valid Google Calendar connection is required.")
+                raise ValidationError(
+                    "An interviewer with a valid Google Calendar connection is required."
+                )
             self._hera_warn("no-interviewer")
             return None
-        conn = GoogleOAuthService().get_connection(db, organization_id=organization_id, user_id=interviewer_user_id)
+        conn = GoogleOAuthService().get_connection(
+            db, organization_id=organization_id, user_id=interviewer_user_id
+        )
         if self.is_google_mode():
             if conn is None or conn.status != "connected":
-                raise ValidationError("A valid Google Calendar connection is required for the interviewer.")
+                raise ValidationError(
+                    "A valid Google Calendar connection is required for the interviewer."
+                )
             return conn
         if conn is None or conn.status != "connected":
             self._hera_warn("missing-connection")
@@ -68,7 +78,9 @@ class GoogleCalendarService:
         except ValidationError:
             raise
         except Exception as exc:
-            raise ValidationError("Could not verify Google Calendar availability. Try again.") from exc
+            raise ValidationError(
+                "Could not verify Google Calendar availability. Try again."
+            ) from exc
         requested_calendar_id = calendar_id or conn.calendar_id or "primary"
         body = {
             "timeMin": start.astimezone(timezone.utc).isoformat(),
@@ -126,7 +138,12 @@ class GoogleCalendarService:
         """Returns (calendar_id, event_id, sync_status, error). Never raises secrets."""
         if conn is None or getattr(conn, "status", None) != "connected":
             if self.is_google_mode():
-                return None, interview.google_event_id, "disconnected", "google_account_disconnected"
+                return (
+                    None,
+                    interview.google_event_id,
+                    "disconnected",
+                    "google_account_disconnected",
+                )
             self._hera_warn("create_or_update_event")
             return None, interview.google_event_id, "hera_only", None
         try:
@@ -143,7 +160,12 @@ class GoogleCalendarService:
             return conn.calendar_id or "primary", interview.google_event_id, "hera_only", None
         except Exception:
             if self.is_google_mode():
-                return conn.calendar_id or "primary", interview.google_event_id, "retryable_error", "google_api_temporary_failure"
+                return (
+                    conn.calendar_id or "primary",
+                    interview.google_event_id,
+                    "retryable_error",
+                    "google_api_temporary_failure",
+                )
             return conn.calendar_id or "primary", interview.google_event_id, "hera_only", None
         calendar_id = conn.calendar_id or "primary"
         body = self._event_body(interview, timezone_name=timezone_name)
@@ -172,15 +194,30 @@ class GoogleCalendarService:
             if resp.status_code >= 400:
                 if self.is_google_mode():
                     if resp.status_code in (401, 403):
-                        return calendar_id, interview.google_event_id, "disconnected", "google_account_disconnected"
-                    return calendar_id, interview.google_event_id, "retryable_error", "google_api_temporary_failure"
+                        return (
+                            calendar_id,
+                            interview.google_event_id,
+                            "disconnected",
+                            "google_account_disconnected",
+                        )
+                    return (
+                        calendar_id,
+                        interview.google_event_id,
+                        "retryable_error",
+                        "google_api_temporary_failure",
+                    )
                 return calendar_id, interview.google_event_id, "hera_only", None
             data = resp.json() or {}
             event_id = data.get("id") or interview.google_event_id
             return calendar_id, event_id, "synced", None
         except Exception:
             if self.is_google_mode():
-                return calendar_id, interview.google_event_id, "retryable_error", "google_api_temporary_failure"
+                return (
+                    calendar_id,
+                    interview.google_event_id,
+                    "retryable_error",
+                    "google_api_temporary_failure",
+                )
             return calendar_id, interview.google_event_id, "hera_only", None
 
     def delete_event(

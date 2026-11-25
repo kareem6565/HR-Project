@@ -48,7 +48,9 @@ def decrypt_secret(encoded: str) -> str:
     if len(data) < NONCE_BYTES + TAG_BYTES:
         raise StorageEncryptionError("The stored Google token is invalid.")
     try:
-        plaintext = AESGCM(_google_token_key()).decrypt(data[:NONCE_BYTES], data[NONCE_BYTES:], None)
+        plaintext = AESGCM(_google_token_key()).decrypt(
+            data[:NONCE_BYTES], data[NONCE_BYTES:], None
+        )
     except InvalidTag:
         raise StorageEncryptionError("The stored Google token failed authentication.") from None
     return plaintext.decode("utf-8")

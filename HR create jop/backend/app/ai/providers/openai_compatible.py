@@ -192,9 +192,7 @@ class OpenAICompatibleProvider(AIProvider):
                 }
             )
         messages.append({"role": "user", "content": minimized_input})
-        prompt_characters = sum(
-            len(str(message.get("content", ""))) for message in messages
-        )
+        prompt_characters = sum(len(str(message.get("content", ""))) for message in messages)
         kwargs: dict[str, Any] = {"model": self.model_name, "messages": messages}
         if self.max_tokens is not None:
             kwargs["max_tokens"] = self.max_tokens
@@ -242,7 +240,9 @@ class OpenAICompatibleProvider(AIProvider):
         if output_schema is not None and _extract_dict(_extract_content(response)) is None:
             finish_reason = _finish_reason(response)
             truncated = finish_reason in {"length", "max_tokens"}
-            error_class = ProviderTruncatedResponseError if truncated else ProviderInvalidResponseError
+            error_class = (
+                ProviderTruncatedResponseError if truncated else ProviderInvalidResponseError
+            )
             error = error_class(
                 "OpenRouter returned a truncated structured response."
                 if truncated
@@ -304,11 +304,17 @@ def _extract_content(payload: Any) -> Any:
 
 def _finish_reason(payload: Any) -> str | None:
     """Return the provider's bounded completion stop reason for diagnostics."""
-    choices = payload.get("choices") if isinstance(payload, dict) else getattr(payload, "choices", None)
+    choices = (
+        payload.get("choices") if isinstance(payload, dict) else getattr(payload, "choices", None)
+    )
     if not choices:
         return None
     choice = choices[0]
-    reason = choice.get("finish_reason") if isinstance(choice, dict) else getattr(choice, "finish_reason", None)
+    reason = (
+        choice.get("finish_reason")
+        if isinstance(choice, dict)
+        else getattr(choice, "finish_reason", None)
+    )
     return reason if isinstance(reason, str) and len(reason) <= 40 else None
 
 
@@ -406,17 +412,17 @@ def _map_exception(error: Exception) -> ProviderError | None:
         if code == 402:
             return ProviderInsufficientCreditsError(str(error), **common)
         if code == 401:
-            return ProviderConfigurationError(
-                str(error), error_code="invalid_api_key", **common
-            )
+            return ProviderConfigurationError(str(error), error_code="invalid_api_key", **common)
         if code == 403:
-            return ProviderConfigurationError(str(error), error_code="provider_access_denied", **common)
+            return ProviderConfigurationError(
+                str(error), error_code="provider_access_denied", **common
+            )
         if code in (400, 404, 422):
             return ProviderInvalidRequestError(str(error), **common)
         return ProviderUnavailableError(str(error), **common)
     message, error_type = str(error).lower(), type(error).__name__.lower()
     if any(term in message or term in error_type for term in ("timeout", "deadline exceeded")):
-            return ProviderTimeoutError(str(error))
+        return ProviderTimeoutError(str(error))
     if any(
         term in message or term in error_type
         for term in (

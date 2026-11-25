@@ -70,7 +70,11 @@ def _seed_advanced_application(
     )
     db.add(app)
     db.flush()
-    db.add(HRDecision(id=uuid.uuid4(), job_application_id=app.id, user_id=interviewer.id, decision="advance"))
+    db.add(
+        HRDecision(
+            id=uuid.uuid4(), job_application_id=app.id, user_id=interviewer.id, decision="advance"
+        )
+    )
     avail = InterviewAvailability(
         id=uuid.uuid4(),
         organization_id=org.id,
@@ -147,7 +151,9 @@ class TestHRInterviewSchedulingAvailabilityWindow:
 
     def test_rejects_interview_at_14_00_outside_window(self, db_session):
         org, interviewer, candidate, job, app, avail = _seed_advanced_application(db_session)
-        with pytest.raises(ValidationError, match="outside the interviewer's published availability"):
+        with pytest.raises(
+            ValidationError, match="outside the interviewer's published availability"
+        ):
             InterviewService().schedule(
                 db_session,
                 organization_id=org.id,
@@ -162,7 +168,9 @@ class TestHRInterviewSchedulingAvailabilityWindow:
 
     def test_rejects_interview_ending_after_window(self, db_session):
         org, interviewer, candidate, job, app, avail = _seed_advanced_application(db_session)
-        with pytest.raises(ValidationError, match="outside the interviewer's published availability"):
+        with pytest.raises(
+            ValidationError, match="outside the interviewer's published availability"
+        ):
             InterviewService().schedule(
                 db_session,
                 organization_id=org.id,
@@ -197,7 +205,11 @@ class TestCandidateBookingReschedulingAvailabilityWindow:
     def test_candidate_booking_rejects_time_outside_window(self, db_session):
         org, interviewer, _candidate, _job, app, avail = _seed_advanced_application(db_session)
         issue = SchedulingWorkflowService().create_invitation(
-            db_session, organization_id=org.id, job_application_id=app.id, actor_user_id=interviewer.id, expires_in_days=7
+            db_session,
+            organization_id=org.id,
+            job_application_id=app.id,
+            actor_user_id=interviewer.id,
+            expires_in_days=7,
         )
         db_session.flush()
         with pytest.raises(ValidationError, match="Choose an interview time shown as available"):
@@ -211,7 +223,11 @@ class TestCandidateBookingReschedulingAvailabilityWindow:
         monkeypatch.setattr(settings, "google_calendar_mode", "hera")
         org, interviewer, _candidate, _job, app, avail = _seed_advanced_application(db_session)
         issue = SchedulingWorkflowService().create_invitation(
-            db_session, organization_id=org.id, job_application_id=app.id, actor_user_id=interviewer.id, expires_in_days=7
+            db_session,
+            organization_id=org.id,
+            job_application_id=app.id,
+            actor_user_id=interviewer.id,
+            expires_in_days=7,
         )
         db_session.flush()
         interview = SchedulingWorkflowService().candidate_book_slot(
@@ -242,7 +258,11 @@ class TestCandidateBookingReschedulingAvailabilityWindow:
         db_session.flush()
 
         issue = SchedulingWorkflowService().create_invitation(
-            db_session, organization_id=org.id, job_application_id=app.id, actor_user_id=interviewer.id, expires_in_days=7
+            db_session,
+            organization_id=org.id,
+            job_application_id=app.id,
+            actor_user_id=interviewer.id,
+            expires_in_days=7,
         )
         interview = SchedulingWorkflowService().candidate_book_slot(
             db_session, token=issue.token, availability_id=avail.id, scheduled_time="11:00"

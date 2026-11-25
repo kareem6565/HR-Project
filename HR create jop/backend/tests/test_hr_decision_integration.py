@@ -169,9 +169,9 @@ def test_create_reject_decision(db_session: Session) -> None:
     assert decision.reason == "Candidate did not meet core requirements."
     db_session.refresh(application)
     assert application.pipeline_stage == "rejected"
-    transition = db_session.query(PipelineStageTransition).filter_by(
-        job_application_id=application.id
-    ).one()
+    transition = (
+        db_session.query(PipelineStageTransition).filter_by(job_application_id=application.id).one()
+    )
     assert transition.to_stage == "rejected"
     assert transition.source == "hr_decision"
 

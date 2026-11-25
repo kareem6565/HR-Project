@@ -214,9 +214,7 @@ def screen_candidates(
                 )
                 created_file_uris.append(resume.file_uri)
 
-                screening_requirements, _ = get_effective_job_requirements(
-                    job, approved_profile
-                )
+                screening_requirements, _ = get_effective_job_requirements(job, approved_profile)
                 profile_payload, evidence_payload, explanation_payload = derive_screening_payloads(
                     full_name=candidate.full_name,
                     job_title=job.title,
