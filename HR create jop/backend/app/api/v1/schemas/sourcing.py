@@ -26,6 +26,8 @@ class SourcingCandidateOut(BaseModel):
     current_title: str | None = None
     current_company: str | None = None
     profile_url: str | None = None
+    email: str | None = None
+    phone: str | None = None
     fit_score: int | None = None
     status: Literal["suggested", "added_to_pipeline", "dismissed"]
 

@@ -75,6 +75,8 @@ class SourcingCandidate(Base):
     current_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
     current_company: Mapped[str | None] = mapped_column(String(255), nullable=True)
     profile_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(64), nullable=True)
     provider_payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     fit_score: Mapped[int | None] = mapped_column(nullable=True)
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="suggested")

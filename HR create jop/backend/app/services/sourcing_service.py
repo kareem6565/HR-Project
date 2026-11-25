@@ -46,11 +46,7 @@ def candidate_from_provider_item(item: dict[str, Any]) -> SourcingCandidate | No
         return None
     full_name = _first_str(item, "fullName", "full_name", "name", max_length=255)
     if not full_name:
-        parts = [
-            p
-            for p in (_first_str(item, "firstName"), _first_str(item, "lastName"))
-            if p
-        ]
+        parts = [p for p in (_first_str(item, "firstName"), _first_str(item, "lastName")) if p]
         full_name = " ".join(parts)[:255] if parts else None
     headline = _first_str(item, "headline", "occupation", "title", max_length=512)
     if not full_name and not headline:
@@ -76,6 +72,18 @@ def candidate_from_provider_item(item: dict[str, Any]) -> SourcingCandidate | No
             current_company = current_company or _first_str(
                 first, "companyName", "company", max_length=255
             )
+    email = _first_str(item, "email", "emailAddress", "workEmail", max_length=255)
+    if not email:
+        emails = item.get("emails")
+        if isinstance(emails, list):
+            for entry in emails:
+                if isinstance(entry, str) and entry.strip():
+                    email = entry.strip()[:255]
+                    break
+                if isinstance(entry, dict):
+                    email = _first_str(entry, "email", "address", "value", max_length=255)
+                    if email:
+                        break
     return SourcingCandidate(
         full_name=full_name,
         headline=headline,
@@ -85,6 +93,8 @@ def candidate_from_provider_item(item: dict[str, Any]) -> SourcingCandidate | No
         profile_url=_first_str(
             item, "linkedinUrl", "profileUrl", "profile_url", "url", max_length=512
         ),
+        email=email,
+        phone=_first_str(item, "phone", "phoneNumber", "mobileNumber", max_length=64),
         provider_payload=item,
         status="suggested",
     )
@@ -259,6 +269,8 @@ class SourcingSearchService:
                     "current_title": c.current_title,
                     "current_company": c.current_company,
                     "profile_url": c.profile_url,
+                    "email": c.email,
+                    "phone": c.phone,
                     "fit_score": c.fit_score,
                     "status": c.status,
                 }

@@ -84,9 +84,7 @@ def test_actor_run_starts_and_imports_candidates_on_refresh(db_session, monkeypa
     monkeypatch.setattr(settings, "apify_api_token", "unit-test-token")
     monkeypatch.setattr(settings, "apify_sourcing_actor_id", "harvestapi/linkedin-profile-search")
     calls = []
-    monkeypatch.setattr(
-        "app.services.sourcing_service.httpx.AsyncClient", _mock_client(calls)
-    )
+    monkeypatch.setattr("app.services.sourcing_service.httpx.AsyncClient", _mock_client(calls))
 
     provider = ApifySourcingProvider()
     asyncio.run(provider.start(record))
@@ -166,3 +164,17 @@ def test_candidate_mapper_handles_real_harvestapi_search_shape():
     assert candidate.current_title == "Backend Engineer"
     assert candidate.current_company == "Bosta"
     assert candidate.profile_url == "https://www.linkedin.com/in/ahmed-taha1"
+
+
+def test_candidate_mapper_extracts_email_from_provider_list():
+    candidate = candidate_from_provider_item(
+        {
+            "firstName": "Sara",
+            "lastName": "Test",
+            "emails": [{"email": "sara@example.com"}, "ignored"],
+            "linkedinUrl": "https://www.linkedin.com/in/sara-test/",
+        }
+    )
+    assert candidate is not None
+    assert candidate.email == "sara@example.com"
+    assert candidate.phone is None
