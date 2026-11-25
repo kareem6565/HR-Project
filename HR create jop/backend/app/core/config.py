@@ -93,6 +93,7 @@ class Settings(BaseSettings):
     ai_free_model_allowlist: str = Field(default="", validation_alias="AI_FREE_MODEL_ALLOWLIST")
     ai_paid_mode_enabled: bool = Field(default=False, validation_alias="AI_PAID_MODE_ENABLED")
     ai_paid_budget_usd: float = Field(default=0.0, ge=0, validation_alias="AI_PAID_BUDGET_USD")
+    ai_paid_model_allowlist: str = Field(default="", validation_alias="AI_PAID_MODEL_ALLOWLIST")
     ai_global_rpm_limit: int = Field(default=15, gt=0, validation_alias="AI_GLOBAL_RPM_LIMIT")
     ai_global_daily_limit: int = Field(default=40, gt=0, validation_alias="AI_GLOBAL_DAILY_LIMIT")
     ai_user_rpm_limit: int = Field(default=5, gt=0, validation_alias="AI_USER_RPM_LIMIT")

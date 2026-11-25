@@ -193,8 +193,10 @@ export default function ApplicationReview() {
     try {
       const data = await getReviewWorkspace(applicationId);
       setBundle(data);
+      return data;
     } catch (err) {
       setLoadError(extractError(err));
+      return null;
     } finally {
       setLoading(false);
     }
@@ -300,8 +302,20 @@ export default function ApplicationReview() {
     setSuccessMsg("");
     try {
       const result = await runEvaluation(applicationId);
-      setSuccessMsg(`Evaluation v${result.version_number} completed.`);
-      await load();
+      const refreshed = await load();
+      const persistedEvaluation = refreshed?.evaluation;
+      const hasPersistedEvidence = (refreshed?.evidence || []).length > 0;
+      if (
+        persistedEvaluation?.id === result.evaluation_id &&
+        persistedEvaluation.status === "completed" &&
+        hasPersistedEvidence
+      ) {
+        setSuccessMsg(`Evaluation v${persistedEvaluation.version_number} completed with requirement evidence.`);
+      } else {
+        setEvalError(
+          "The evaluation request returned, but a completed evaluation with requirement evidence was not saved. No new score was confirmed; review the job requirements and try again."
+        );
+      }
     } catch (err) {
       setEvalError(extractError(err));
     } finally {

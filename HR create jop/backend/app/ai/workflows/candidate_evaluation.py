@@ -553,7 +553,10 @@ class CandidateEvaluationWorkflow:
             status="running",
         )
         input_reference = payload.input_reference or self._input_reference(
-            application, job_profile, candidate_profile
+            application,
+            job_profile,
+            candidate_profile,
+            requirements=payload.requirements,
         )
         evaluation_cache_key = payload.cache_key
 
@@ -701,7 +704,18 @@ class CandidateEvaluationWorkflow:
             db, application, organization_id=resolved_org_id
         )
         self._enforce_context_consistency(application, job_profile, candidate_profile)
-        input_reference = self._input_reference(application, job_profile, candidate_profile)
+        from app.services.job_profile_requirements import get_effective_job_requirements
+
+        requirements_data, requirements_source = get_effective_job_requirements(
+            application.job, job_profile
+        )
+        input_reference = self._input_reference(
+            application,
+            job_profile,
+            candidate_profile,
+            requirements=requirements_data,
+            requirements_source=requirements_source,
+        )
         resume_text = application.resume.extracted_text
         lookup_key = self._cache_identity_key(
             resume_text=resume_text or "",
@@ -741,7 +755,7 @@ class CandidateEvaluationWorkflow:
         try:
             payload = self.generate(
                 job_title=job_profile.profile_data.get("title"),
-                requirements_data=job_profile.profile_data.get("requirements"),
+                requirements_data=requirements_data,
                 candidate_skills=candidate_profile.profile_data.get("skills", []),
                 resume_text=resume_text,
                 candidate_profile_fields=candidate_profile.profile_data,
@@ -940,8 +954,11 @@ class CandidateEvaluationWorkflow:
         application: JobApplication,
         job_profile: JobProfile,
         candidate_profile: CandidateProfile,
+        *,
+        requirements: list | None = None,
+        requirements_source: str | None = None,
     ) -> dict[str, str]:
-        return {
+        reference = {
             "entity": "job_application",
             "entity_id": str(application.id),
             "organization_id": str(application.organization_id),
@@ -954,6 +971,11 @@ class CandidateEvaluationWorkflow:
             "job_profile_sha256": _profile_hash(job_profile.profile_data),
             "candidate_profile_sha256": _profile_hash(candidate_profile.profile_data),
         }
+        if requirements is not None:
+            reference["effective_requirements_sha256"] = _sha256(_serialize(requirements))
+        if requirements_source is not None:
+            reference["requirements_source"] = requirements_source
+        return reference
 
     @staticmethod
     def _evidence_input(

@@ -15,6 +15,7 @@ from app.ai.providers.errors import (
     ProviderInvalidRequestError,
     ProviderRateLimitError,
     ProviderTimeoutError,
+    ProviderTruncatedResponseError,
     ProviderUnavailableError,
 )
 from app.ai.results import StructuredAIResult, TextAIResult
@@ -109,6 +110,11 @@ class OpenAICompatibleProvider(AIProvider):
 
             if request.output_schema is None:
                 break
+            if _finish_reason(payload) == "length":
+                raise ProviderTruncatedResponseError(
+                    "The provider reached its output-token limit; partial structured output "
+                    "was discarded."
+                )
             data = _extract_dict(_extract_content(payload))
             if data is not None or attempts >= _STRUCTURED_MAX_ATTEMPTS:
                 break
@@ -116,6 +122,10 @@ class OpenAICompatibleProvider(AIProvider):
 
         if data is None and transient_error is not None:
             raise transient_error
+        if request.output_schema is not None and data is None:
+            raise ProviderInvalidRequestError(
+                "The provider did not return a complete JSON object for structured output."
+            )
 
         return StructuredAIResult(
             provider=self.provider_name,
@@ -160,7 +170,11 @@ class OpenAICompatibleProvider(AIProvider):
         if self.self_hosted:
             from app.ai.cost_policy import authorize_self_hosted_and_reserve
         else:
-            from app.ai.cost_policy import add_free_routing_constraints, authorize_and_reserve
+            from app.ai.cost_policy import (
+                add_free_routing_constraints,
+                add_paid_routing_constraints,
+                authorize_and_reserve,
+            )
 
         minimized_input = minimize_hr_identifiers(input_text)
         messages: list[dict[str, Any]] = []
@@ -179,9 +193,24 @@ class OpenAICompatibleProvider(AIProvider):
         if use_response_format:
             kwargs["response_format"] = {"type": "json_object"}
         if self.cost_policy_enabled and not self.self_hosted:
-            add_free_routing_constraints(
-                kwargs, model=self.model_name, structured=output_schema is not None
-            )
+            from app.core.config import get_settings
+
+            active_settings = get_settings()
+            if active_settings.ai_paid_mode_enabled:
+                # OpenRouter's current catalog marks the explicitly approved
+                # DeepSeek route as reasoning-enabled by default. Its reasoning
+                # tokens share max_tokens with the JSON response, so disable
+                # reasoning for this extraction-only paid route.
+                if (
+                    self.provider_name == "openrouter"
+                    and self.model_name == "deepseek/deepseek-v4.1-flash-1017"
+                ):
+                    kwargs.setdefault("extra_body", {})["reasoning"] = {"enabled": False}
+                add_paid_routing_constraints(kwargs, model=self.model_name)
+            else:
+                add_free_routing_constraints(
+                    kwargs, model=self.model_name, structured=output_schema is not None
+                )
         event_id = None
         if self.cost_policy_enabled:
             if self.self_hosted:
@@ -196,6 +225,17 @@ class OpenAICompatibleProvider(AIProvider):
                     structured=output_schema is not None,
                     metadata=metadata,
                     has_api_key=bool(self.api_key),
+                    input_bytes=len(
+                        (
+                            minimized_input
+                            + (
+                                json.dumps(output_schema.model_json_schema())
+                                if output_schema
+                                else ""
+                            )
+                        ).encode("utf-8")
+                    ),
+                    max_output_tokens=self.max_tokens or 4096,
                 )
         try:
             response = self._client.chat.completions.create(**kwargs)
@@ -226,6 +266,15 @@ def _extract_content(payload: Any) -> Any:
         if content is not None:
             return content
     return getattr(payload, "content", None)
+
+
+def _finish_reason(payload: Any) -> str | None:
+    """Return the provider's completion stop reason without reading response text."""
+    if isinstance(payload, dict):
+        choices = payload.get("choices") or []
+        return choices[0].get("finish_reason") if choices else None
+    choices = getattr(payload, "choices", None)
+    return getattr(choices[0], "finish_reason", None) if choices else None
 
 
 def _extract_dict(content: Any) -> dict[str, Any] | None:

@@ -3,7 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import ApplicationReview, { filterCertificationHeadings } from "./ApplicationReview";
-import { getReviewWorkspace, recordDecision } from "../../services/reviewService";
+import { getReviewWorkspace, recordDecision, runEvaluation } from "../../services/reviewService";
 import { createCandidateInterviewInvitation } from "../../services/interviewService";
 
 // Verify the review screen keeps submitting the exact same payload through
@@ -93,6 +93,24 @@ describe("ApplicationReview pipeline decision", () => {
     expect(screen.getByRole("status")).toHaveTextContent(
       "Rules-only mode is active. New evaluations use deterministic CV evidence without calling an AI model."
     );
+  });
+
+  it("does not report evaluation success when the refreshed result has no requirement evidence", async () => {
+    const user = userEvent.setup();
+    getReviewWorkspace
+      .mockResolvedValueOnce(workspace)
+      .mockResolvedValueOnce({
+        ...workspace,
+        evaluation: { id: "eval-1", version_number: 3, status: "completed", score: "0" },
+        evidence: [],
+      });
+    runEvaluation.mockResolvedValue({ evaluation_id: "eval-1", version_number: 3 });
+
+    renderPage();
+    await user.click(await screen.findByRole("button", { name: "Evaluate Candidate" }));
+
+    expect(await screen.findByText(/completed evaluation with requirement evidence was not saved/i)).toBeInTheDocument();
+    expect(screen.queryByText("Evaluation v3 completed with requirement evidence.")).not.toBeInTheDocument();
   });
 
   it("shows OCR provenance and a manual-review warning for low-confidence extraction", async () => {

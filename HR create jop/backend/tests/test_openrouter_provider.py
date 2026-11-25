@@ -16,6 +16,7 @@ from app.ai.providers import (
     ProviderInvalidRequestError,
     ProviderRateLimitError,
     ProviderTimeoutError,
+    ProviderTruncatedResponseError,
     StructuredGenerationRequest,
     TextGenerationRequest,
 )
@@ -25,7 +26,7 @@ class _Answer(BaseModel):
     answer: str
 
 
-def _response(content: str) -> httpx.Response:
+def _response(content: str, *, finish_reason: str = "stop") -> httpx.Response:
     return httpx.Response(
         200,
         json={
@@ -37,7 +38,7 @@ def _response(content: str) -> httpx.Response:
                 {
                     "index": 0,
                     "message": {"role": "assistant", "content": content},
-                    "finish_reason": "stop",
+                    "finish_reason": finish_reason,
                 }
             ],
             "usage": {"prompt_tokens": 3, "completion_tokens": 2, "total_tokens": 5},
@@ -140,14 +141,60 @@ def test_free_router_constraint_is_sent_in_supported_request_body(monkeypatch) -
     assert body["provider"] == {"require_parameters": True}
 
 
-def test_invalid_json_returns_empty_structured_result_without_network_retries(monkeypatch) -> None:
+def test_paid_deepseek_disables_reasoning_to_reserve_tokens_for_json(monkeypatch) -> None:
+    captured: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append(request)
+        return _response('{"answer":"ok"}')
+
+    from types import SimpleNamespace
+
+    settings = SimpleNamespace(ai_paid_mode_enabled=True)
+    monkeypatch.setattr("app.core.config.get_settings", lambda: settings)
+    monkeypatch.setattr(
+        "app.ai.cost_policy.authorize_and_reserve", lambda **_kwargs: "offline-event"
+    )
+    monkeypatch.setattr("app.ai.cost_policy.record_result", lambda *_args, **_kwargs: None)
+    provider = _provider(handler)
+    provider.model_name = "deepseek/deepseek-v4.1-flash-1017"
+    provider.cost_policy_enabled = True
+
+    result = provider.generate_structured(
+        StructuredGenerationRequest(input="synthetic only", output_schema=_Answer)
+    )
+
+    assert result.data == {"answer": "ok"}
+    body = json.loads(captured[0].content)
+    assert body["reasoning"] == {"enabled": False}
+    assert body["provider"]["allow_fallbacks"] is False
+
+
+def test_invalid_json_raises_typed_error_after_bounded_retries(monkeypatch) -> None:
     monkeypatch.setattr("app.ai.providers.openai_compatible.time.sleep", lambda _delay: None)
     provider = _provider(lambda _request: _response("not json"))
     request = StructuredGenerationRequest(
         input="extract", output_schema=CandidateProfileExtractionOutput
     )
 
-    assert provider.generate_structured(request).data is None
+    with pytest.raises(ProviderInvalidRequestError, match="complete JSON object"):
+        provider.generate_structured(request)
+
+
+def test_truncated_structured_response_raises_without_retries(monkeypatch) -> None:
+    monkeypatch.setattr("app.ai.providers.openai_compatible.time.sleep", lambda _delay: None)
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return _response('{"answer":', finish_reason="length")
+
+    with pytest.raises(ProviderTruncatedResponseError, match="output-token limit"):
+        _provider(handler).generate_structured(
+            StructuredGenerationRequest(input="extract", output_schema=_Answer)
+        )
+
+    assert len(requests) == 1
 
 
 def test_unsupported_response_format_retries_without_parameter(monkeypatch) -> None:

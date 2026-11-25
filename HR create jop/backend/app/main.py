@@ -187,7 +187,10 @@ def create_app() -> FastAPI:
             )
             error_type = "context_limit"
         elif isinstance(exc, ProviderTruncatedResponseError):
-            message = "The local model did not finish its response; partial output was discarded."
+            message = (
+                "The AI provider stopped before finishing its response; partial output was "
+                "discarded."
+            )
             error_type = "truncated_response"
         elif isinstance(exc, ProviderInvalidRequestError):
             message = "AI provider returned an invalid response. Try again."

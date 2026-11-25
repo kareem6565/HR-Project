@@ -301,6 +301,64 @@ def test_success_creates_evaluation_and_traces(db_session: Session) -> None:
     assert step.step_name == "evaluate_candidate"
 
 
+def test_run_uses_job_requirements_when_approved_profile_is_empty(db_session: Session) -> None:
+    organization, _user, application, job_profile, _candidate_profile = create_parent_records(
+        db_session
+    )
+    application.job.required_skills = ["Python", "Machine Learning"]
+    job_profile.profile_data = {"title": "ML Engineer", "requirements": []}
+    fallback_evidence = {
+        "evidence_items": [
+            {
+                "evidence_type": "matched",
+                "requirement_ref": {"requirement_key": requirement_key("Python", "must_have")},
+                "candidate_evidence": {
+                    "source": "resume",
+                    "skill": "Python",
+                    "quote": "I use Python daily.",
+                },
+                "strength": "strong",
+            },
+            {
+                "evidence_type": "matched",
+                "requirement_ref": {
+                    "requirement_key": requirement_key("Machine Learning", "must_have")
+                },
+                "candidate_evidence": {
+                    "source": "resume",
+                    "skill": "Machine Learning",
+                    "quote": "Applied machine learning to candidate screening.",
+                },
+                "strength": "strong",
+            },
+        ]
+    }
+    workflow, _, _ = make_workflow(evidence_payload=fallback_evidence)
+
+    result = workflow.run(
+        db_session,
+        job_application_id=application.id,
+        organization_id=organization.id,
+    )
+    db_session.commit()
+
+    evaluation = db_session.get(CandidateEvaluation, result.evaluation_id)
+    evidence_trace = db_session.get(AITrace, result.evidence_ai_trace_id)
+    evidence_rows = list(
+        db_session.scalars(
+            select(MatchEvidence).where(
+                MatchEvidence.candidate_evaluation_id == result.evaluation_id
+            )
+        )
+    )
+
+    assert evaluation is not None
+    assert evidence_trace is not None
+    assert evaluation.score == Decimal("100")
+    assert len(evidence_rows) == 2
+    assert evidence_trace.input_reference["requirements_source"] == "job_fields_compatibility"
+
+
 def test_match_evidence_persisted(db_session: Session) -> None:
     organization, _user, application, _job_profile, _candidate_profile = create_parent_records(
         db_session

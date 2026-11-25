@@ -167,6 +167,73 @@ def test_approved_free_model_is_catalog_verified_and_metered(policy_db, monkeypa
         assert session.scalar(select(func.sum(AIUsageCounter.request_count))) == 2
 
 
+def test_owner_approved_paid_deepseek_is_metered_with_a_reserved_budget(policy_db, monkeypatch):
+    model = "deepseek/deepseek-v4.1-flash-1017"
+    monkeypatch.setattr(
+        cost_policy,
+        "_fetch_catalog",
+        lambda: {
+            model: {
+                "pricing": {"prompt": "0.00000003", "completion": "0.0000002"},
+                "supported_parameters": ["response_format"],
+            }
+        },
+    )
+    settings = _settings(
+        ai_paid_mode_enabled=True,
+        ai_paid_budget_usd=0.05,
+        ai_paid_model_allowlist=model,
+    )
+    event_id = cost_policy.authorize_and_reserve(
+        provider="openrouter",
+        model=model,
+        base_url=settings.openrouter_base_url,
+        structured=True,
+        metadata={"workflow": "application_review"},
+        has_api_key=True,
+        input_bytes=7000,
+        max_output_tokens=8192,
+        settings=settings,
+    )
+    with policy_db() as session:
+        event = session.get(AIUsageEvent, event_id)
+        assert event.model == model
+        assert event.status == "started"
+        assert event.reported_cost_usd > 0
+        assert event.reported_cost_usd < 0.05
+
+    with pytest.raises(ProviderUnavailableError, match="budget is exhausted"):
+        cost_policy.authorize_and_reserve(
+            provider="openrouter",
+            model=model,
+            base_url=settings.openrouter_base_url,
+            structured=True,
+            metadata={"workflow": "application_review"},
+            has_api_key=True,
+            input_bytes=2_000_000,
+            max_output_tokens=8192,
+            settings=settings,
+        )
+
+
+def test_paid_routing_is_exact_model_and_price_capped():
+    model = "deepseek/deepseek-v4.1-flash-1017"
+    kwargs = {"model": model}
+
+    cost_policy.add_paid_routing_constraints(kwargs, model=model)
+
+    assert kwargs["extra_body"]["provider"] == {
+        "require_parameters": True,
+        "sort": "price",
+        "allow_fallbacks": False,
+        "max_price": {"prompt": 0.03, "completion": 0.2},
+    }
+    with pytest.raises(ProviderUnavailableError):
+        cost_policy.add_paid_routing_constraints(
+            {"model": "deepseek/deepseek-other"}, model="deepseek/deepseek-other"
+        )
+
+
 @pytest.mark.parametrize(
     ("model", "catalog", "allowlist"),
     [

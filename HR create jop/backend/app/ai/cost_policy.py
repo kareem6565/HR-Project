@@ -11,7 +11,7 @@ from typing import Any
 from uuid import UUID
 
 import httpx
-from sqlalchemy import case, or_
+from sqlalchemy import case, func, or_, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
@@ -30,6 +30,13 @@ _EMAIL_PATTERN = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGN
 _PHONE_PATTERN = re.compile(r"(?<!\w)\+?\d[\d ().-]{7,}\d(?!\w)")
 _SSN_PATTERN = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
 _URL_PATTERN = re.compile(r"https?://\S+", re.IGNORECASE)
+# The one-time owner-approved DeepSeek route is bounded by OpenRouter's
+# per-million-token max_price fields. The cap is also reserved in our monthly
+# ledger before the provider request is sent.
+_PAID_DEEPSEEK_MODEL = "deepseek/deepseek-v4.1-flash-1017"
+_PAID_PROMPT_MAX_PRICE_PER_MILLION = Decimal("0.03")
+_PAID_COMPLETION_MAX_PRICE_PER_MILLION = Decimal("0.20")
+_PAID_RESERVATION_BUFFER = Decimal("1.2")
 _catalog_lock = threading.Lock()
 _catalog_cache: tuple[datetime, dict[str, dict[str, Any]]] | None = None
 
@@ -167,6 +174,7 @@ def _new_event(
     metadata: dict[str, Any] | None,
     settings: Settings,
     quota_kind: str = "external",
+    reserved_cost_usd: Decimal | None = None,
 ) -> UUID:
     actor = ai_actor_context.get()
     user_id, organization_id = actor if actor else (None, None)
@@ -181,6 +189,22 @@ def _new_event(
     feature = ":".join(part for part in feature_parts if part) or "unspecified"
     minute, day = _utc_windows(datetime.now(UTC))
     with SessionLocal.begin() as session:
+        if reserved_cost_usd is not None:
+            dialect = session.get_bind().dialect.name
+            if dialect == "postgresql":
+                # Serialize reservations so concurrent paid calls cannot both
+                # observe the same remaining monthly budget.
+                session.execute(text("SELECT pg_advisory_xact_lock(4815162342)"))
+            month_start = datetime.now(UTC).replace(
+                day=1, hour=0, minute=0, second=0, microsecond=0
+            )
+            reserved_total = session.scalar(
+                select(func.coalesce(func.sum(AIUsageEvent.reported_cost_usd), 0)).where(
+                    AIUsageEvent.created_at >= month_start
+                )
+            ) or Decimal("0")
+            if reserved_total + reserved_cost_usd > Decimal(str(settings.ai_paid_budget_usd)):
+                raise ProviderUnavailableError("The approved paid AI budget is exhausted.")
         state = session.get(AIPolicyControl, "cost_alert")
         if state and state.enabled:
             raise ProviderUnavailableError(
@@ -244,6 +268,7 @@ def _new_event(
             model=model,
             status="started",
             request_id=get_request_id(),
+            reported_cost_usd=reserved_cost_usd,
         )
         session.add(event)
         session.flush()
@@ -272,14 +297,15 @@ def authorize_and_reserve(
     structured: bool,
     metadata: dict[str, Any] | None,
     has_api_key: bool,
+    input_bytes: int = 0,
+    max_output_tokens: int = 0,
     settings: Settings | None = None,
 ) -> UUID:
     """Fail closed before network access, then reserve shared quota atomically."""
     active = settings or get_settings()
-    if active.ai_paid_mode_enabled or active.ai_paid_budget_usd != 0:
-        raise ProviderUnavailableError(
-            "Paid AI mode has no owner-approved authorization and is disabled."
-        )
+    paid_mode = active.ai_paid_mode_enabled
+    if paid_mode and active.ai_paid_budget_usd <= 0:
+        raise ProviderUnavailableError("Paid AI mode requires a positive approved USD budget.")
     normalized_url = base_url.rstrip("/").lower()
     if provider != "openrouter" or normalized_url != "https://openrouter.ai/api/v1":
         raise ProviderUnavailableError(
@@ -288,7 +314,49 @@ def authorize_and_reserve(
     if not has_api_key:
         raise ProviderUnavailableError("OpenRouter is not configured for free AI inference.")
     catalog = None
-    if model != "openrouter/free":
+    reservation = None
+    if paid_mode:
+        paid_allowlist = {
+            entry.strip() for entry in active.ai_paid_model_allowlist.split(",") if entry.strip()
+        }
+        if model != _PAID_DEEPSEEK_MODEL or model not in paid_allowlist:
+            raise ProviderUnavailableError("The configured paid model is not owner-approved.")
+        catalog = _fetch_catalog()
+        item = catalog.get(model)
+        if not item:
+            raise ProviderUnavailableError(
+                "The approved paid model is missing from the current catalog."
+            )
+        pricing = item.get("pricing") or {}
+        try:
+            input_rate = Decimal(str(pricing["prompt"])) * Decimal(1_000_000)
+            output_rate = Decimal(str(pricing["completion"])) * Decimal(1_000_000)
+        except (KeyError, InvalidOperation, ValueError):
+            raise ProviderUnavailableError("Paid model pricing could not be verified.") from None
+        if (
+            input_rate <= 0
+            or output_rate <= 0
+            or input_rate > _PAID_PROMPT_MAX_PRICE_PER_MILLION
+            or output_rate > _PAID_COMPLETION_MAX_PRICE_PER_MILLION
+        ):
+            raise ProviderUnavailableError(
+                "Paid model pricing exceeds the approved per-call limit."
+            )
+        if structured and "response_format" not in (item.get("supported_parameters") or []):
+            raise ProviderUnavailableError("The approved paid model lacks structured JSON support.")
+        reservation = (
+            (
+                Decimal(input_bytes) * _PAID_PROMPT_MAX_PRICE_PER_MILLION
+                + Decimal(max_output_tokens) * _PAID_COMPLETION_MAX_PRICE_PER_MILLION
+            )
+            / Decimal(1_000_000)
+            * _PAID_RESERVATION_BUFFER
+        )
+    elif active.ai_paid_budget_usd != 0:
+        raise ProviderUnavailableError(
+            "A paid budget cannot be configured while paid mode is disabled."
+        )
+    elif model != "openrouter/free":
         allowlist = {
             entry.strip() for entry in active.ai_free_model_allowlist.split(",") if entry.strip()
         }
@@ -297,8 +365,15 @@ def authorize_and_reserve(
                 "The configured AI model is not approved for free inference."
             )
         catalog = _fetch_catalog()
-    _approved_model(model=model, structured=structured, settings=active, catalog=catalog)
-    return _new_event(provider=provider, model=model, metadata=metadata, settings=active)
+    if not paid_mode:
+        _approved_model(model=model, structured=structured, settings=active, catalog=catalog)
+    return _new_event(
+        provider=provider,
+        model=model,
+        metadata=metadata,
+        settings=active,
+        reserved_cost_usd=reservation,
+    )
 
 
 def authorize_self_hosted_and_reserve(
@@ -351,18 +426,26 @@ def record_result(
     )
     http_status = getattr(error, "status_code", None) if error else None
     error_category = type(error).__name__[:64] if error else None
-    cost_alert = cost is not None and cost > 0
     with SessionLocal.begin() as session:
         event = session.get(AIUsageEvent, event_id)
         if event is None:
             raise ProviderUnavailableError("AI usage event could not be finalized.")
+        paid_call = event.model == _PAID_DEEPSEEK_MODEL
+        over_reservation = (
+            paid_call
+            and cost is not None
+            and event.reported_cost_usd is not None
+            and cost > event.reported_cost_usd
+        )
+        cost_alert = (cost is not None and cost > 0 and not paid_call) or over_reservation
         event.status = "cost_alert" if cost_alert else status
         event.http_status = http_status if isinstance(http_status, int) else None
         event.error_category = "unexpected_nonzero_cost" if cost_alert else error_category
         event.provider_request_id = str(provider_request_id)[:160] if provider_request_id else None
         event.input_tokens = input_tokens if isinstance(input_tokens, int) else None
         event.output_tokens = output_tokens if isinstance(output_tokens, int) else None
-        event.reported_cost_usd = cost
+        if cost is not None:
+            event.reported_cost_usd = cost
         event.completed_at = datetime.now(UTC)
         if cost_alert:
             dialect = session.get_bind().dialect.name
@@ -393,3 +476,19 @@ def add_free_routing_constraints(kwargs: dict[str, Any], *, model: str, structur
         # `extra_body` serializes provider routing into the request JSON body.
         extra_body = kwargs.setdefault("extra_body", {})
         extra_body["provider"] = {"require_parameters": True}
+
+
+def add_paid_routing_constraints(kwargs: dict[str, Any], *, model: str) -> None:
+    """Keep the approved DeepSeek request on parameter-compatible, price-capped routes."""
+    if model != _PAID_DEEPSEEK_MODEL:
+        raise ProviderUnavailableError("Paid routing is not approved for this model.")
+    extra_body = kwargs.setdefault("extra_body", {})
+    extra_body["provider"] = {
+        "require_parameters": True,
+        "sort": "price",
+        "allow_fallbacks": False,
+        "max_price": {
+            "prompt": float(_PAID_PROMPT_MAX_PRICE_PER_MILLION),
+            "completion": float(_PAID_COMPLETION_MAX_PRICE_PER_MILLION),
+        },
+    }
