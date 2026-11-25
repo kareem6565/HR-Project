@@ -20,6 +20,8 @@ function normalizeCandidate(candidate) {
     currentTitle: candidate.current_title || "",
     currentCompany: candidate.current_company || "",
     profileUrl: candidate.profile_url || "",
+    email: candidate.email || "",
+    phone: candidate.phone || "",
     fitScore: candidate.fit_score ?? null,
     status: candidate.status || "suggested",
   };

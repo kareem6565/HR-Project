@@ -198,16 +198,23 @@ export default function LinkedInSourcing() {
                     )}
                   </span>
                 </div>
-                {c.profileUrl && (
-                  <a
-                    className="sourcing-candidate-link"
-                    href={c.profileUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Profile <ExternalLink size={12} aria-hidden="true" />
-                  </a>
-                )}
+                <span className="sourcing-candidate-actions">
+                  {c.email && (
+                    <a className="sourcing-candidate-link" href={`mailto:${c.email}`}>
+                      {c.email}
+                    </a>
+                  )}
+                  {c.profileUrl && (
+                    <a
+                      className="sourcing-candidate-link"
+                      href={c.profileUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Profile <ExternalLink size={12} aria-hidden="true" />
+                    </a>
+                  )}
+                </span>
               </li>
             ))}
             </ul>

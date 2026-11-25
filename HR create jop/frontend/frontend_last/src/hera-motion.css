@@ -447,3 +447,4 @@
 .sourcing-results-live { display: grid; gap: 12px; }
 .sourcing-results-head h3 { margin: 0 0 4px; }
 .sourcing-results-head .sourcing-criteria { margin: 0; }
+.sourcing-candidate-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
