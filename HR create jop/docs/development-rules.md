@@ -4,7 +4,7 @@
 
 Follow this process for project work:
 
-```text
+```
 PLAN -> APPROVAL -> IMPLEMENT -> TEST -> REVIEW -> COMMIT
 ```
 
@@ -46,6 +46,65 @@ Do not redesign the architecture without approval.
 Prefer simple, maintainable code over unnecessary abstractions.
 
 Do not over-engineer the MVP.
+
+## Codebase Optimization \& Minimal Changes
+
+Before writing new code, inspect the existing codebase and reuse existing implementations whenever possible.
+
+Prefer the smallest change that fully satisfies the task requirements.
+
+Do not duplicate existing functionality or create unnecessary files, classes, services, or abstractions.
+
+Do not add features, enhancements, or behavior that were not explicitly requested.
+
+Avoid unnecessary code expansion. Keep implementations simple, focused, and maintainable.
+
+When modifying existing code, preserve its current behavior unless the task explicitly requires changing it.
+
+For existing codebases, identify opportunities to simplify complex code, remove duplicate code, and eliminate unused code when it is safe to do so.
+
+Do not remove code without verifying that it is not used by other components, integrations, or workflows.
+
+Do not perform broad refactoring, restructuring, or optimization outside the task scope without approval.
+
+When optimization is requested, work incrementally and run appropriate tests after each change.
+
+Do not optimize for fewer lines of code at the expense of readability, maintainability, or correctness.
+
+## Development Environment \& Runtime Verification
+
+Before implementing changes, identify the exact project directory, running frontend/backend processes, ports, and execution environment.
+
+Ensure code changes are applied to the same project instance served by the local development environment.
+
+After implementation:
+
+- Verify that the running application reflects the changes.
+- Check whether hot reload is working.
+- Verify the correct frontend and backend ports.
+- If Docker is used, verify volume mappings and container synchronization.
+- Restart or rebuild services only when necessary.
+- Do not claim that changes are visible or working without runtime verification.
+- Report when manual intervention or a service restart is required.
+
+## Time \& Execution Efficiency
+
+Work efficiently without sacrificing code quality, correctness, or reliability.
+
+1. Avoid reading or scanning unrelated files.
+2. Inspect only files relevant to the current task.
+3. Avoid unnecessary full-project scans.
+4. Do not repeat successful commands without a valid reason.
+5. Avoid running the same tests repeatedly unless investigating a failure.
+6. Prefer targeted tests when full test suites are not necessary.
+7. Avoid unnecessary rebuilds, restarts, and dependency installations.
+8. Do not introduce new dependencies unless required.
+9. If a command or operation fails repeatedly, stop and analyze the root cause instead of retrying blindly.
+10. If execution takes unusually long, identify the bottleneck and report it.
+11. Do not skip necessary tests or verification just to finish faster.
+12. Keep the implementation and execution process focused on the requested task.
+
+**Priority:** Minimize unnecessary work, not necessary engineering work.
 
 ## AI And Agent Rules
 

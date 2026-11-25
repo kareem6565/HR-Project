@@ -14,10 +14,27 @@
 **/.coverage
 **/htmlcov/
 
-# JavaScript dependencies and generated builds
+# JavaScript dependencies, frontend build caches, and generated builds
 **/node_modules/
 **/dist/
 **/build/
+**/.vite/
+
+# Playwright & automated testing artifacts
+**/.playwright-cli/
+**/playwright-report/
+**/test-results/
+
+# Local AI models and heavy weights (prevent IDE/Codex indexing bloat)
+**/*.safetensors
+**/*.bin
+**/*.gguf
+**/*.pt
+**/*.pth
+**/*.onnx
+**/models/
+**/weights/
+**/checkpoints/
 
 # Local data, private employee uploads, and logs
 **/uploads/
@@ -32,6 +49,8 @@
 
 # Local backups of legacy databases and removed toolchains (never commit)
 /backups/
+**/HERA-Recovery/
+**/*-backup*/
 **/*.dump
 **/*.sql.gz
 
