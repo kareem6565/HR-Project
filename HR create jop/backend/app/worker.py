@@ -336,7 +336,16 @@ class ScreeningWorker:
                     resume = Resume(
                         id=resume_id, candidate_id=candidate.id, file_uri=created_resume_uri,
                         original_filename=item.filename,
-                        content_type="application/pdf" if extension == "pdf" else "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        content_type={
+                            "pdf": "application/pdf",
+                            "png": "image/png",
+                            "jpg": "image/jpeg",
+                            "jpeg": "image/jpeg",
+                            "webp": "image/webp",
+                        }.get(
+                            extension,
+                            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        ),
                         file_size_bytes=len(raw_bytes), checksum=item.sha256,
                         extracted_text=text, status="text_extracted",
                     )

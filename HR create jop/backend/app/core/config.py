@@ -53,6 +53,14 @@ class Settings(BaseSettings):
         default=60, gt=0, validation_alias="AI_TESTER_USER_DAILY_LIMIT"
     )
     max_upload_bytes: int = Field(default=5 * 1024 * 1024, validation_alias="MAX_UPLOAD_BYTES")
+    ocr_provider: Literal["none", "tesseract"] = Field(
+        default="tesseract", validation_alias="OCR_PROVIDER"
+    )
+    ocr_languages: str = Field(default="eng", validation_alias="OCR_LANGUAGES")
+    ocr_timeout_seconds: int = Field(default=30, gt=0, le=300, validation_alias="OCR_TIMEOUT_SECONDS")
+    ocr_max_image_bytes: int = Field(
+        default=10 * 1024 * 1024, gt=0, validation_alias="OCR_MAX_IMAGE_BYTES"
+    )
     max_batch_files: int = Field(default=20, validation_alias="MAX_BATCH_FILES")
     max_batch_bytes: int = Field(default=50 * 1024 * 1024, validation_alias="MAX_BATCH_BYTES")
     max_pdf_pages: int = Field(default=50, validation_alias="MAX_PDF_PAGES")

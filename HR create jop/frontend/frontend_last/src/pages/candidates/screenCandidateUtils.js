@@ -2,10 +2,15 @@
 // Note on drift risk: If the backend MAX_UPLOAD_BYTES configuration changes,
 // this frontend limit must be updated to maintain parity.
 export const MAX_SINGLE_FILE_BYTES = 5 * 1024 * 1024; // 5 MB
-export const ACCEPTED_EXTENSIONS = [".pdf", ".docx"];
+// Image scans (PNG/JPEG/WEBP) are OCR'd server-side into screening text.
+export const ACCEPTED_EXTENSIONS = [".pdf", ".docx", ".png", ".jpg", ".jpeg", ".webp"];
+export const SCAN_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp"];
 export const ACCEPTED_MIME_TYPES = [
   "application/pdf",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "image/png",
+  "image/jpeg",
+  "image/webp",
 ];
 
 export function formatFileSize(bytes) {
@@ -29,7 +34,7 @@ export function validateFile(file, existingFingerprints = new Set()) {
   if (!hasValidExt) {
     return {
       valid: false,
-      reason: "Unsupported file format (only PDF and DOCX files are supported).",
+      reason: "Unsupported file format (PDF, DOCX, or a CV photo/scan as PNG, JPG, or WEBP).",
       code: "unsupported_type",
     };
   }

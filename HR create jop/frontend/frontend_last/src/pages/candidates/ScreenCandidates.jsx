@@ -445,7 +445,7 @@ export default function ScreenCandidates() {
           >
             <input
               type="file"
-              accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              accept=".pdf,.docx,.png,.jpg,.jpeg,.webp,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/png,image/jpeg,image/webp"
               multiple
               onChange={onFileInputChange}
               disabled={submitting}
@@ -454,8 +454,8 @@ export default function ScreenCandidates() {
             <div className="upload-icon">
               <UploadCloud size={25} aria-hidden="true" />
             </div>
-            <strong>Drop PDF or DOCX CVs here</strong>
-            <span>or click to browse · Max 5 MB per file · PDF and DOCX only</span>
+            <strong>Drop CVs here - PDF, DOCX, or a photo/scan</strong>
+            <span>or click to browse · Max 5 MB per file · PDF, DOCX, PNG, JPG, WEBP · scans are read with OCR</span>
           </label>
 
           {files.length > 0 && (
