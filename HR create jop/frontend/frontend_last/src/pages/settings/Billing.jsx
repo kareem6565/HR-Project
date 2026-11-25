@@ -87,7 +87,7 @@ export default function Billing() {
   return (
     <section>
       <div className="content-grid settings-grid">
-        <div className="panel">
+        <div className="panel billing-summary-panel">
           <div className="panel-title">
             <div>
               <p className="eyebrow">SUBSCRIPTION</p>
