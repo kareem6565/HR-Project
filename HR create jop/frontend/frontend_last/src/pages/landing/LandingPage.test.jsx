@@ -26,13 +26,13 @@ describe("LandingPage", () => {
     expect(screen.getAllByRole("link", { name: /Sign in/i }).length).toBeGreaterThan(0);
   });
 
-  it("keeps all seven journey steps visible", () => {
+  it("keeps all eight journey steps visible", () => {
     render(
       <MemoryRouter>
         <LandingPage />
       </MemoryRouter>
     );
     const steps = screen.getAllByText(/^0\d$/);
-    expect(steps).toHaveLength(7);
+    expect(steps).toHaveLength(8);
   });
 });

@@ -65,6 +65,14 @@ const JOURNEY = [
     video: null,
     alt: null,
   },
+  {
+    icon: MessagesSquare,
+    step: "08",
+    title: "Ask HERA anything",
+    text: "A built-in assistant that knows your pipeline. Ask in plain words which candidates are ready, what changed, or where to look next.",
+    video: "/landing/clip-chatbot.mp4",
+    alt: "HERA assistant chat answering a pipeline question with a tool chip and link",
+  },
 ];
 
 const FEATURES = [
@@ -77,6 +85,7 @@ const FEATURES = [
   ["Talent pool", "Re-engage past candidates with consent tracking built in."],
   ["Sourcing", "Plain-language search for external candidates, scored like internal ones."],
   ["Analytics", "Pipeline, time-to-hire and AI activity your team can audit."],
+  ["Assistant", "A chatbot that answers plain-language questions about your live pipeline and points you to the right screen."],
 ];
 
 export default function LandingPage() {
