@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from contextlib import contextmanager
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from sqlalchemy import select
@@ -146,7 +146,7 @@ def _seed_hr_scheduling(db, *, calendar_id="primary"):
         calendar_id=calendar_id,
         access_token_encrypted=encrypt_secret("access-token"),
         refresh_token_encrypted=encrypt_secret("refresh-token"),
-        token_expiry=datetime.now(timezone.utc) + timedelta(hours=2),
+        token_expiry=datetime.now(UTC) + timedelta(hours=2),
         status="connected",
     )
     db.add(conn)
@@ -188,16 +188,16 @@ class TestGoogleCalendarSyncOutbox:
             assert not service.check_freebusy(
                 db_session,
                 conn,
-                start=datetime.now(timezone.utc),
-                end=datetime.now(timezone.utc) + timedelta(minutes=30),
+                start=datetime.now(UTC),
+                end=datetime.now(UTC) + timedelta(minutes=30),
                 calendar_id="primary",
             )
             with pytest.raises(ValidationError, match="Could not verify"):
                 service.check_freebusy(
                     db_session,
                     conn,
-                    start=datetime.now(timezone.utc),
-                    end=datetime.now(timezone.utc) + timedelta(minutes=30),
+                    start=datetime.now(UTC),
+                    end=datetime.now(UTC) + timedelta(minutes=30),
                     calendar_id="missing-calendar",
                 )
 
@@ -313,7 +313,7 @@ class TestGoogleCalendarSyncOutbox:
             assert interview.google_event_id is None
 
             # make due and retry successfully
-            row.next_attempt_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+            row.next_attempt_at = datetime.now(UTC) - timedelta(seconds=1)
             db_session.flush()
             assert CalendarOutboxService().process_one(db_session) is True
             db_session.flush()
@@ -402,7 +402,7 @@ class TestGoogleCalendarSyncOutbox:
             raise AssertionError(f"unexpected call {method} {url}")
 
         with mock_google_http(monkeypatch, responder):
-            interview = InterviewService().schedule(
+            InterviewService().schedule(
                 db_session,
                 organization_id=org.id,
                 candidate_id=candidate.id,
@@ -572,7 +572,7 @@ class TestGoogleCalendarSyncOutbox:
             status="failed",
             attempts=1,
             max_attempts=8,
-            next_attempt_at=datetime.now(timezone.utc) - timedelta(seconds=1),
+            next_attempt_at=datetime.now(UTC) - timedelta(seconds=1),
             last_error="google_account_disconnected",
         )
         db_session.add(row)

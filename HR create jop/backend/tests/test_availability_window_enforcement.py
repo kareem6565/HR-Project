@@ -1,16 +1,13 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
-from sqlalchemy import select
 
 from app.models import (
     Candidate,
-    CandidateInvitation,
     HRDecision,
-    Interview,
     InterviewAvailability,
     Job,
     JobApplication,
@@ -92,8 +89,11 @@ def _seed_advanced_application(
 
 
 def test_cairo_boundary_uses_injected_absolute_clock_for_hr_and_candidate(db_session):
-    fixed_utc = datetime(2026, 11, 12, 15, 54, tzinfo=timezone.utc)
-    now_fn = lambda tz: fixed_utc.astimezone(tz)
+    fixed_utc = datetime(2026, 11, 12, 15, 54, tzinfo=UTC)
+
+    def now_fn(tz):
+        return fixed_utc.astimezone(tz)
+
     org, interviewer, candidate, job, app, avail = _seed_advanced_application(
         db_session,
         window_start="17:24",
@@ -242,7 +242,7 @@ class TestCandidateBookingReschedulingAvailabilityWindow:
 
         monkeypatch.setattr(settings, "google_calendar_mode", "hera")
         org, interviewer, _candidate, _job, app, avail = _seed_advanced_application(db_session)
-        # add second valid slot block later for valid initial booking? use 11:00 then try reschedule to 14:00
+        # Add a second valid slot for initial booking, then reschedule to 14:00.
         avail2 = InterviewAvailability(
             id=uuid.uuid4(),
             organization_id=org.id,

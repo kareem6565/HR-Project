@@ -6,7 +6,7 @@ import secrets
 import uuid
 from calendar import monthrange
 from dataclasses import dataclass
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -83,7 +83,8 @@ class SchedulingWorkflowService:
             raise ValidationError("end_time must be after start_time.")
         if duration_minutes < 15 or duration_minutes > (end_min - start_min):
             raise ValidationError(
-                f"duration_minutes ({duration_minutes}) must be between 15 and the window size ({end_min - start_min})."
+                f"duration_minutes ({duration_minutes}) must be between 15 and "
+                f"the window size ({end_min - start_min})."
             )
 
         availability = InterviewAvailability(
@@ -207,7 +208,7 @@ class SchedulingWorkflowService:
 
         token = secrets.token_urlsafe(32)
         token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
-        expires_at = self._now_fn(timezone.utc) + timedelta(days=expires_in_days)
+        expires_at = self._now_fn(UTC) + timedelta(days=expires_in_days)
 
         # Keep only one live invitation per application. Reissuing invalidates
         # older unused links, while booked interviews remain untouched.
@@ -284,10 +285,10 @@ class SchedulingWorkflowService:
             raise ValidationError("This interview invitation is no longer active.")
 
         # Ensure timezone-aware comparison
-        now = self._now_fn(timezone.utc)
+        now = self._now_fn(UTC)
         expires_at = invitation.expires_at
         if expires_at.tzinfo is None:
-            expires_at = expires_at.replace(tzinfo=timezone.utc)
+            expires_at = expires_at.replace(tzinfo=UTC)
 
         # Initial invitation expiry remains 7 days. After booking, the same token may be
         # used for eligible future rescheduling of that booked interview.
@@ -354,12 +355,12 @@ class SchedulingWorkflowService:
         if interview.status != "scheduled":
             return False
         # eligible only for future interviews
-        now = self._now_fn(timezone.utc)
+        now = self._now_fn(UTC)
         start_at = interview.scheduled_start_at
         if start_at is None:
             return False
         if start_at.tzinfo is None:
-            start_at = start_at.replace(tzinfo=timezone.utc)
+            start_at = start_at.replace(tzinfo=UTC)
         return start_at > now
 
     def list_available_slots_for_invitation(
@@ -432,7 +433,7 @@ class SchedulingWorkflowService:
                             "end_time": _to_hhmm(current + slot_duration),
                             "duration_minutes": slot_duration,
                             "timezone": avail.timezone,
-                            "start_at": slot_datetime.astimezone(timezone.utc),
+                            "start_at": slot_datetime.astimezone(UTC),
                         }
                     )
                 current += slot_duration
@@ -517,7 +518,6 @@ class SchedulingWorkflowService:
         side effects are durably outboxed for async processing/reconciliation.
         """
         from sqlalchemy.exc import IntegrityError
-        from app.models import InterviewSlotReservation
 
         invitation = self.get_invitation_by_token(db, token)
         rescheduling = self._eligible_for_reschedule(invitation)
@@ -565,7 +565,7 @@ class SchedulingWorkflowService:
                 "Selected time is not available on the interviewer's Google Calendar."
             )
 
-        # Acquire DB locks on relevant scheduled interviews for safety (reservation constraint is the source of truth)
+            # Lock scheduled interviews; the reservation constraint is the source of truth.
         _ = list(
             db.scalars(
                 select(Interview)
@@ -653,9 +653,9 @@ class SchedulingWorkflowService:
 
             invitation.booked_availability_id = availability.id
             invitation.reschedule_count = (invitation.reschedule_count or 0) + 1
-            invitation.last_rescheduled_at = self._now_fn(timezone.utc)
+            invitation.last_rescheduled_at = self._now_fn(UTC)
 
-            # Durable, idempotent calendar update for same interview/event; if it fails later, outbox retries.
+            # Queue an idempotent update; the outbox retries later if it fails.
             self._enqueue_calendar_upsert(
                 db,
                 interview,

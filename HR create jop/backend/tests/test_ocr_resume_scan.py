@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 from collections.abc import Generator
+from datetime import UTC, datetime
 
 import httpx
 import pytest
@@ -11,7 +12,7 @@ from sqlalchemy.orm import Session
 import app.api.v1.routes.resumes as resumes_routes
 from app.core.database import get_db
 from app.main import app
-from app.models import Candidate, Organization, User
+from app.models import Candidate, Job, JobProfile, Organization, User
 from app.services.errors import (
     UPLOAD_ERROR_NO_TEXT,
     UPLOAD_ERROR_TOO_LARGE,
@@ -25,6 +26,9 @@ from app.services.ocr_service import (
     detect_image_extension,
     validate_image_upload,
 )
+from app.services.screening_batch_service import ScreeningBatchService
+from app.services.storage_service import LocalFileSystemStorage
+from app.services.upload_stream_service import BoundedFilePayload
 
 PNG_BYTES = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
 JPEG_BYTES = b"\xff\xd8\xff\xe0" + b"\x00" * 64
@@ -158,9 +162,9 @@ def test_scan_endpoint_creates_screening_ready_resume(
     assert fake.calls == ["png"]
 
     # OCR text is persisted on the resume, ready for the existing screening pipeline
-    from app.models import Resume
-
     import uuid as _uuid
+
+    from app.models import Resume
 
     resume = db_session.get(Resume, _uuid.UUID(body["id"]))
     assert resume is not None
@@ -199,13 +203,6 @@ def test_scan_endpoint_org_isolation(
 # ---------------------------------------------------------------------------
 # Screening-batch intake of scanned CVs (worker OCRs them via extract_text)
 # ---------------------------------------------------------------------------
-
-from datetime import UTC, datetime
-
-from app.models import Job, JobProfile
-from app.services.screening_batch_service import ScreeningBatchService
-from app.services.storage_service import LocalFileSystemStorage
-from app.services.upload_stream_service import BoundedFilePayload
 
 
 def _payload(filename: str, data: bytes) -> BoundedFilePayload:
@@ -281,7 +278,6 @@ def test_batch_rejects_fake_image_signature(db_session: Session, tmp_path) -> No
 
 def test_worker_dispatch_extracts_text_from_image(monkeypatch) -> None:
     """The shared extract_text dispatcher routes images through the OCR provider."""
-    import app.services.text_extraction_service as tes
 
     fake = FakeOCRProvider(text="Scanned CV body text for worker dispatch")
     monkeypatch.setattr("app.services.ocr_service.get_ocr_provider", lambda *a, **k: fake)
@@ -290,8 +286,8 @@ def test_worker_dispatch_extracts_text_from_image(monkeypatch) -> None:
 
     monkeypatch.setattr(ocr_mod, "get_ocr_provider", lambda *a, **k: fake)
 
-    from app.services.ocr_service import get_ocr_provider  # noqa: F401
     import app.services.text_extraction_service as text_extraction
+    from app.services.ocr_service import get_ocr_provider  # noqa: F401
 
     text = text_extraction.extract_text(PNG_BYTES, filename="scan.png")
     assert "Scanned CV body text" in text

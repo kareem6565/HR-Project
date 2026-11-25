@@ -43,11 +43,12 @@ from app.models import (
     ScreeningBatchItem,
 )
 from app.services.candidate_service import CandidateService
-from app.services.errors import UploadValidationError, ValidationError as ServiceValidationError
+from app.services.errors import UploadValidationError
+from app.services.errors import ValidationError as ServiceValidationError
 from app.services.job_application_service import JobApplicationService
+from app.services.job_profile_requirements import get_effective_job_requirements
 from app.services.resume_details_service import derive_screening_payloads
 from app.services.screening_batch_service import ScreeningBatchService
-from app.services.job_profile_requirements import get_effective_job_requirements
 from app.services.storage_service import LocalFileSystemStorage, StorageProvider
 from app.services.text_extraction_service import extract_document_text
 
@@ -60,7 +61,8 @@ def _screening_error_details(error: Exception) -> tuple[str, str, bool]:
     if isinstance(error, ProviderBudgetExceededError):
         return (
             "AI_BUDGET_EXCEEDED",
-            "Screening paused because the approved OpenRouter test budget would be exceeded. No request was sent for this step; raise the cap and retry.",
+            "Screening paused because the approved OpenRouter test budget would be exceeded. "
+            "No request was sent for this step; raise the cap and retry.",
             False,
         )
     if isinstance(error, ProviderRateLimitError):
@@ -75,17 +77,20 @@ def _screening_error_details(error: Exception) -> tuple[str, str, bool]:
         if getattr(error, "code", None) == "invalid_ai_output":
             return (
                 "AI_OUTPUT_INVALID",
-                "OpenRouter replied, but its screening result did not match the required format. No score was saved. Review the setup and retry.",
+                "OpenRouter replied, but its screening result did not match the required format. "
+                "No score was saved. Review the setup and retry.",
                 False,
             )
         return (
             "SCREENING_VALIDATION_FAILED",
-            "Screening stopped because a required check failed. Review the job criteria or CV, then retry.",
+            "Screening stopped because a required check failed. "
+            "Review the job criteria or CV, then retry.",
             False,
         )
     return (
         "SCREENING_INTERNAL_ERROR",
-        "Screening stopped because of an unexpected system error. The technical trace is available in the screening logs.",
+        "Screening stopped because of an unexpected system error. "
+        "The technical trace is available in the screening logs.",
         False,
     )
 

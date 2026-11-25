@@ -54,7 +54,9 @@ class InterviewService:
         calendar_prechecked: bool = False,
     ) -> Interview:
         from zoneinfo import ZoneInfo
+
         from sqlalchemy.exc import IntegrityError
+
         from app.models import InterviewSlotReservation
 
         organization = db.get(Organization, organization_id)
@@ -266,6 +268,7 @@ class InterviewService:
         organization_id: uuid.UUID,
     ) -> Interview:
         from sqlalchemy import update
+
         from app.models import InterviewSlotReservation
 
         interview = self.get(db, interview_id=interview_id, organization_id=organization_id)

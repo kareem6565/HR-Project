@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -83,8 +83,8 @@ class GoogleCalendarService:
             ) from exc
         requested_calendar_id = calendar_id or conn.calendar_id or "primary"
         body = {
-            "timeMin": start.astimezone(timezone.utc).isoformat(),
-            "timeMax": end.astimezone(timezone.utc).isoformat(),
+            "timeMin": start.astimezone(UTC).isoformat(),
+            "timeMax": end.astimezone(UTC).isoformat(),
             "items": [{"id": requested_calendar_id}],
         }
         with httpx.Client(timeout=20.0) as client:
@@ -150,7 +150,7 @@ class GoogleCalendarService:
             token = GoogleOAuthService().get_valid_access_token(db, conn)
         except ValidationError:
             if self.is_google_mode():
-                # Token/credential issues (e.g. revoked/invalid/reconnect required) are account/auth problems.
+                # Revoked or invalid credentials require account reconnection.
                 return (
                     conn.calendar_id or "primary",
                     interview.google_event_id,
@@ -245,7 +245,8 @@ class GoogleCalendarService:
         try:
             with httpx.Client(timeout=20.0) as client:
                 resp = client.delete(
-                    f"{GOOGLE_CAL_BASE}/calendars/{calendar_id or conn.calendar_id or 'primary'}/events/{event_id}",
+                    f"{GOOGLE_CAL_BASE}/calendars/"
+                    f"{calendar_id or conn.calendar_id or 'primary'}/events/{event_id}",
                     headers=headers,
                 )
             if resp.status_code in (200, 204, 404, 410):

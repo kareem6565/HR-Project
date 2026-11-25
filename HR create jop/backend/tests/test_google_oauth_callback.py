@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import threading
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -11,6 +11,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.database import get_db
 from app.models import HRGoogleConnection, HRGoogleOAuthState, Organization, User
+from app.services.errors import ValidationError
 from app.services.google_oauth_service import GoogleOAuthService
 
 
@@ -98,7 +99,7 @@ class TestGoogleOAuthRoutesAuthBoundary:
         assert connect_resp.status_code == 200
         assert "authorize_url" in connect_resp.json()
 
-        # Callback is reachable without HERA auth (redirects with safe error when params/state invalid)
+        # The callback is public and returns a safe error for invalid state.
         cb_resp = client.get("/api/v1/hr/google/callback", follow_redirects=False)
         assert cb_resp.status_code in (302, 307)
         assert "google=error" in cb_resp.headers.get("location", "")
@@ -185,7 +186,7 @@ class TestGoogleOAuthCallback:
             select(HRGoogleOAuthState).where(HRGoogleOAuthState.user_id == user_id)
         )
         assert row is not None
-        row.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+        row.expires_at = datetime.now(UTC) - timedelta(minutes=1)
         db_session.commit()
 
         resp = client.get(
@@ -244,7 +245,7 @@ class TestGoogleOAuthCallback:
         assert calls["exchange"] == 1
 
         # Consumed state must remain unusable (durable one-time consumption)
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             GoogleOAuthService().consume_state(db_session, state)
         db_session.rollback()
 
@@ -270,7 +271,7 @@ class TestGoogleOAuthCallback:
         assert "google=error" in resp.headers.get("location", "")
 
         # State consumed durably and never reusable, even though exchange failed
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             GoogleOAuthService().consume_state(db_session, state)
         db_session.rollback()
 
@@ -320,7 +321,7 @@ def test_consume_state_is_atomic_under_postgres_concurrency(test_engine):
                 organization_id=org_id,
                 user_id=user_id,
                 token_hash=token_hash,
-                expires_at=datetime.now(timezone.utc) + timedelta(minutes=10),
+                expires_at=datetime.now(UTC) + timedelta(minutes=10),
                 used_at=None,
             )
         )

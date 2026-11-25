@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from contextlib import contextmanager
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from sqlalchemy import select
@@ -25,7 +25,7 @@ from app.models import (
     User,
 )
 from app.services.calendar_outbox_service import CalendarOutboxService
-from app.services.errors import ConflictError, NotFoundError, ValidationError
+from app.services.errors import NotFoundError, ValidationError
 from app.services.scheduling_workflow_service import SchedulingWorkflowService
 
 
@@ -160,7 +160,7 @@ def _seed(db, *, with_google_connection=False, calendar_id="primary"):
                 calendar_id=calendar_id,
                 access_token_encrypted=encrypt_secret("access-token"),
                 refresh_token_encrypted=encrypt_secret("refresh-token"),
-                token_expiry=datetime.now(timezone.utc) + timedelta(hours=2),
+                token_expiry=datetime.now(UTC) + timedelta(hours=2),
                 status="connected",
             )
         )
@@ -228,7 +228,7 @@ def test_invalid_or_expired_invitation_token_rejected(db_session, monkeypatch):
         )
 
     inv = db_session.get(CandidateInvitation, issue.invitation.id)
-    inv.expires_at = datetime.now(timezone.utc) - timedelta(days=1)
+    inv.expires_at = datetime.now(UTC) - timedelta(days=1)
     inv.status = "pending"
     db_session.flush()
     with pytest.raises(ValidationError):
@@ -305,7 +305,7 @@ def test_google_sync_failure_after_successful_booking_is_retried_without_losing_
         interview = db_session.get(Interview, interview.id)
         assert interview.status == "scheduled"
 
-        row.next_attempt_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+        row.next_attempt_at = datetime.now(UTC) - timedelta(seconds=1)
         db_session.flush()
         assert CalendarOutboxService().process_one(db_session) is True
         db_session.flush()

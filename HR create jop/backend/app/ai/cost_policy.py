@@ -491,7 +491,8 @@ def authorize_and_reserve(
         current_key_usage = _fetch_key_usage(api_key or "")
         if current_key_usage < active.ai_paid_budget_baseline_usd:
             raise ProviderUsageCheckError(
-                "OpenRouter usage does not match the configured test baseline; no request was sent.",
+                "OpenRouter usage does not match the configured test baseline; "
+                "no request was sent.",
                 error_code="usage_baseline_mismatch",
             )
     elif model != "openrouter/free":

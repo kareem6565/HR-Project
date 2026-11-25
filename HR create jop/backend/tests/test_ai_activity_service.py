@@ -5,8 +5,8 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.models import (
-    AIUsageEvent,
     AITrace,
+    AIUsageEvent,
     Candidate,
     Job,
     Organization,

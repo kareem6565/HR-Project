@@ -1,5 +1,5 @@
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from sqlalchemy.orm import Session
@@ -82,13 +82,13 @@ def _fix_now(monkeypatch) -> None:
     """
     import app.services.interview_service as interview_service_module
 
-    fixed_utc = datetime(2026, 11, 12, 15, 54, 0, tzinfo=timezone.utc)
+    fixed_utc = datetime(2026, 11, 12, 15, 54, 0, tzinfo=UTC)
 
     class _FixedDateTime(datetime):
         @classmethod
         def now(cls, tz=None):
             if tz is None:
-                return fixed_utc.astimezone(timezone.utc).replace(tzinfo=None)
+                return fixed_utc.astimezone(UTC).replace(tzinfo=None)
             return fixed_utc.astimezone(tz)
 
     monkeypatch.setattr(interview_service_module, "datetime", _FixedDateTime)

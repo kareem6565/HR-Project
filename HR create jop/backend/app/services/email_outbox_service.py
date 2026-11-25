@@ -28,7 +28,7 @@ class EmailOutboxService:
         template: str,
         payload: dict[str, Any],
     ) -> TransactionalEmailOutbox:
-        # Never store raw tokens/booking URLs/email bodies beyond safe payload fields; caller must sanitize.
+        # Store only safe payload fields; callers must sanitize tokens, booking URLs, and bodies.
         now = datetime.now(UTC)
         row = TransactionalEmailOutbox(
             organization_id=organization_id,

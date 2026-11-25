@@ -8,8 +8,9 @@ Create Date: 2026-11-10
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 revision: str = "022_google_oauth_states"
 down_revision: str | None = "021_epic6_calendar"

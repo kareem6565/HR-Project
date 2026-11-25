@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import secrets
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import urlencode
 
@@ -30,7 +30,7 @@ OAUTH_STATE_TTL = timedelta(minutes=10)
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _hash_state_token(token: str) -> str:
@@ -76,7 +76,7 @@ class GoogleOAuthService:
         """Atomically validate and consume a one-time OAuth state.
 
         Uses a row lock in a transaction so concurrent callbacks cannot replay the same state.
-        Consumption is committed immediately and is never reusable, even if downstream processing fails.
+        Consumption is committed immediately and cannot be reused if later processing fails.
         """
         if not state or not state.strip():
             raise ValidationError("Invalid Google OAuth state.")
@@ -91,14 +91,14 @@ class GoogleOAuthService:
             raise ValidationError("Invalid Google OAuth state.")
         expires_at = record.expires_at
         if expires_at.tzinfo is None:
-            expires_at = expires_at.replace(tzinfo=timezone.utc)
+            expires_at = expires_at.replace(tzinfo=UTC)
         if record.used_at is not None or expires_at <= now:
             raise ValidationError("Invalid or expired Google OAuth state.")
         record.used_at = now
         db.commit()
         return record.organization_id, record.user_id
 
-    # Backward-compatible aliases for any existing callers; new code should use create_state/consume_state.
+    # Keep aliases for existing callers; new code should use create_state/consume_state.
     def make_state(self, db: Session, *, organization_id: uuid.UUID, user_id: uuid.UUID) -> str:
         return self.create_state(db, organization_id=organization_id, user_id=user_id)
 
@@ -148,7 +148,7 @@ class GoogleOAuthService:
         expires_in = token_payload.get("expires_in")
         expiry = None
         if isinstance(expires_in, (int, float)):
-            expiry = datetime.now(timezone.utc) + timedelta(seconds=int(expires_in))
+            expiry = datetime.now(UTC) + timedelta(seconds=int(expires_in))
         scope_str = token_payload.get("scope")
         info = self.fetch_userinfo(access_token)
         google_email = info.get("email") if isinstance(info, dict) else None
@@ -232,9 +232,9 @@ class GoogleOAuthService:
         )
 
     def get_valid_access_token(self, db: Session, conn: HRGoogleConnection) -> str:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if conn.token_expiry and conn.token_expiry.tzinfo is None:
-            expiry = conn.token_expiry.replace(tzinfo=timezone.utc)
+            expiry = conn.token_expiry.replace(tzinfo=UTC)
         else:
             expiry = conn.token_expiry
         if expiry is None or expiry - now > timedelta(seconds=60):
@@ -268,7 +268,7 @@ class GoogleOAuthService:
         conn.access_token_encrypted = encrypt_secret(access_token)
         expires_in = payload.get("expires_in")
         if isinstance(expires_in, (int, float)):
-            conn.token_expiry = datetime.now(timezone.utc) + timedelta(seconds=int(expires_in))
+            conn.token_expiry = datetime.now(UTC) + timedelta(seconds=int(expires_in))
         conn.status = "connected"
         conn.last_error = None
         db.flush()

@@ -8,7 +8,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import CalendarSyncOutbox, HRGoogleConnection, Interview
+from app.models import CalendarSyncOutbox, Interview
 from app.services.audit_service import AuditService
 from app.services.google_calendar_service import GoogleCalendarService
 from app.services.google_oauth_service import GoogleOAuthService
@@ -36,7 +36,7 @@ class CalendarOutboxService:
         if existing is not None:
             # Reconcile/retry: if failed or pending, keep it; if succeeded, idempotent no-op.
             if existing.status in {"failed", "succeeded"}:
-                # For reconciliation, allow requeue when caller explicitly wants same key reused? keep idempotent.
+                # Reconciliation can reuse the same key; keep this operation idempotent.
                 pass
             return existing
         now = datetime.now(UTC)
@@ -118,7 +118,7 @@ class CalendarOutboxService:
         now = now or datetime.now(UTC)
         row.last_error = (error or "calendar_sync_failed")[:500]
         row.updated_at = now
-        # Disconnected account requires user action; do not keep retrying as a transient API failure.
+        # A disconnected account requires user action; it is not a transient failure.
         if row.last_error == "google_account_disconnected":
             row.status = "failed"
             row.next_attempt_at = now

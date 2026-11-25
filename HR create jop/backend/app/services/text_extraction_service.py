@@ -451,11 +451,11 @@ class ImageOcrTextExtractor(TextExtractor):
     extension = "png"  # registry key for the family; aliases registered below
 
     def extract(self, data: bytes, *, extension: str | None = None) -> str:
+        from app.services.errors import UploadValidationError as _UploadValidationError
         from app.services.ocr_service import (
             detect_image_extension,
             get_ocr_provider,
         )
-        from app.services.errors import UploadValidationError as _UploadValidationError
 
         detected = detect_image_extension(data)
         if detected is None:

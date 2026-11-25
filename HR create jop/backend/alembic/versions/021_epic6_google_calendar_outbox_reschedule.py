@@ -8,8 +8,9 @@ Create Date: 2026-11-10
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 revision: str = "021_epic6_calendar"
 down_revision: str | None = "020_hr_ops_schema"
@@ -275,10 +276,12 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.execute(
-        "ALTER TABLE interview_slot_reservations DROP CONSTRAINT IF EXISTS ex_interview_reservations_candidate"
+        "ALTER TABLE interview_slot_reservations "
+        "DROP CONSTRAINT IF EXISTS ex_interview_reservations_candidate"
     )
     op.execute(
-        "ALTER TABLE interview_slot_reservations DROP CONSTRAINT IF EXISTS ex_interview_reservations_interviewer"
+        "ALTER TABLE interview_slot_reservations "
+        "DROP CONSTRAINT IF EXISTS ex_interview_reservations_interviewer"
     )
     op.drop_index("ix_interview_reservations_org", table_name="interview_slot_reservations")
     op.drop_index("ix_interview_reservations_interview", table_name="interview_slot_reservations")

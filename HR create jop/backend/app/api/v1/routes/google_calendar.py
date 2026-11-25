@@ -14,7 +14,7 @@ from app.services.google_oauth_service import GoogleOAuthService
 
 # Protected HR routes (registered under authenticated recruitment router).
 router = APIRouter()
-# Public Google redirect callback (registered without HERA bearer auth; validated via one-time state).
+# Public Google callback (no HERA bearer auth; validated via one-time state).
 public_router = APIRouter()
 
 

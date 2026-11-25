@@ -312,7 +312,8 @@ class Settings(BaseSettings):
                 )
             if not self.google_token_encryption_key or len(self.google_token_encryption_key) < 32:
                 raise ValueError(
-                    "GOOGLE_TOKEN_ENCRYPTION_KEY (at least 32 characters) is required in production."
+                    "GOOGLE_TOKEN_ENCRYPTION_KEY (at least 32 characters) "
+                    "is required in production."
                 )
             if self.google_calendar_mode.strip().lower() == "google" and not (
                 self.google_oauth_client_id

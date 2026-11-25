@@ -220,7 +220,10 @@ class ScreeningBatchService:
                     if detect_image_extension(payload.data) != detected_extension:
                         status = "failed"
                         error_code = UPLOAD_ERROR_UNSUPPORTED_TYPE
-                        error_message = "File content does not match a supported image signature (PNG/JPEG/WEBP)."
+                        error_message = (
+                            "File content does not match a supported image signature "
+                            "(PNG/JPEG/WEBP)."
+                        )
                     else:
                         seen_batch_checksums[checksum] = item_id
                 elif detected_extension not in ("pdf", "docx"):
