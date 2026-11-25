@@ -46,6 +46,11 @@ export async function startSourcingSearch({ jobId, needs }) {
   return normalizeSearch(data);
 }
 
+export async function enrichSourcingCandidate(candidateId) {
+  const { data } = await apiClient.post(`/sourcing/candidates/${candidateId}/enrich`);
+  return normalizeCandidate(data);
+}
+
 export async function getSourcingSearch(searchId) {
   const { data } = await apiClient.get(`/sourcing/searches/${searchId}`);
   return normalizeSearch(data);

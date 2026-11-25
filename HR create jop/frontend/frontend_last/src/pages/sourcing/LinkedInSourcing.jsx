@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Search, Users, Sparkles, Radar, MapPin, Building2, ExternalLink, TriangleAlert } from "lucide-react";
+import { Search, Users, Sparkles, Radar, MapPin, Building2, ExternalLink, TriangleAlert, MailSearch, LoaderCircle } from "lucide-react";
 import { getJobs } from "../../services/jobService";
-import { searchLinkedInCandidates } from "../../services/sourcingService";
+import { searchLinkedInCandidates, enrichSourcingCandidate } from "../../services/sourcingService";
 
 // LinkedIn candidate sourcing: HR describes who they need, HERA runs a real
 // sourcing search through the backend (services/sourcingService.js) and shows
@@ -23,6 +23,8 @@ export default function LinkedInSourcing() {
   const [phaseText, setPhaseText] = useState("");
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
+  const [enrichingId, setEnrichingId] = useState(null);
+  const [enrichNote, setEnrichNote] = useState("");
   const rotator = useRef(null);
 
   useEffect(() => {
@@ -76,6 +78,23 @@ export default function LinkedInSourcing() {
       setError(err?.message || "The search could not be completed.");
     } finally {
       stopTheater();
+    }
+  };
+
+  const findEmail = async (candidate) => {
+    setEnrichingId(candidate.id);
+    setEnrichNote("");
+    try {
+      const enriched = await enrichSourcingCandidate(candidate.id);
+      setResult((prev) => ({
+        ...prev,
+        candidates: prev.candidates.map((c) => (c.id === candidate.id ? { ...c, ...enriched } : c)),
+      }));
+      if (!enriched.email) setEnrichNote(`No email found for ${candidate.name}.`);
+    } catch {
+      setEnrichNote(`The email search for ${candidate.name} could not be completed.`);
+    } finally {
+      setEnrichingId(null);
     }
   };
 
@@ -199,10 +218,23 @@ export default function LinkedInSourcing() {
                   </span>
                 </div>
                 <span className="sourcing-candidate-actions">
-                  {c.email && (
+                  {c.email ? (
                     <a className="sourcing-candidate-link" href={`mailto:${c.email}`}>
                       {c.email}
                     </a>
+                  ) : (
+                    <button
+                      type="button"
+                      className="sourcing-candidate-link sourcing-find-email"
+                      onClick={() => findEmail(c)}
+                      disabled={enrichingId === c.id}
+                    >
+                      {enrichingId === c.id ? (
+                        <><LoaderCircle size={12} aria-hidden="true" className="sourcing-spin" /> Finding email…</>
+                      ) : (
+                        <><MailSearch size={12} aria-hidden="true" /> Find email</>
+                      )}
+                    </button>
                   )}
                   {c.profileUrl && (
                     <a
@@ -218,6 +250,7 @@ export default function LinkedInSourcing() {
               </li>
             ))}
             </ul>
+            {enrichNote && <p className="hera-note" role="status">{enrichNote}</p>}
           </div>
         )}
       </div>

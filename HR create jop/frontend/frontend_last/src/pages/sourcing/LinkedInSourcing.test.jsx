@@ -2,12 +2,14 @@ import React from "react";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import LinkedInSourcing from "./LinkedInSourcing";
+import { searchLinkedInCandidates, enrichSourcingCandidate } from "../../services/sourcingService";
 
 vi.mock("../../services/jobService", () => ({
   getJobs: vi.fn().mockResolvedValue([{ id: "j1", title: "Backend Engineer" }]),
 }));
 vi.mock("../../services/sourcingService", () => ({
   searchLinkedInCandidates: vi.fn().mockResolvedValue({ status: "unavailable", candidates: [] }),
+  enrichSourcingCandidate: vi.fn(),
 }));
 
 describe("LinkedInSourcing", () => {
@@ -53,5 +55,41 @@ describe("LinkedInSourcing", () => {
     });
     expect(screen.getByText(/LinkedIn sourcing is not enabled yet/i)).toBeInTheDocument();
     expect(screen.getByText(/Looking for: Senior backend engineer, Python/i)).toBeInTheDocument();
+  });
+
+
+  it("finds an email for a suggested candidate on demand", async () => {
+    searchLinkedInCandidates.mockResolvedValueOnce({
+      status: "ok",
+      searchId: "s1",
+      candidates: [
+        { id: "c1", name: "Ahmed Taha", headline: "Backend Engineer", profileUrl: "https://www.linkedin.com/in/ahmed-taha1", email: "" },
+      ],
+    });
+    enrichSourcingCandidate.mockResolvedValueOnce({
+      id: "c1",
+      name: "Ahmed Taha",
+      email: "ahmed.taha@bosta.co",
+    });
+    await act(async () => {
+      render(<LinkedInSourcing />);
+    });
+    fireEvent.change(screen.getByLabelText("Who do you need?"), {
+      target: { value: "backend engineer" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Find candidates/i }));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const findButton = screen.getByRole("button", { name: /Find email/i });
+    fireEvent.click(findButton);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(enrichSourcingCandidate).toHaveBeenCalledWith("c1");
+    expect(screen.getByRole("link", { name: "ahmed.taha@bosta.co" })).toHaveAttribute(
+      "href",
+      "mailto:ahmed.taha@bosta.co"
+    );
   });
 });
