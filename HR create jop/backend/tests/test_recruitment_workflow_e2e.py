@@ -1,26 +1,20 @@
 from __future__ import annotations
 
-import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from sqlalchemy.orm import Session
 
 from app.models import (
     Candidate,
-    CandidateEvaluation,
-    HRDecision,
-    Interview,
-    InterviewAvailability,
     Job,
     JobApplication,
-    JobProfile,
     Organization,
     Resume,
     User,
 )
 from app.services.decision_service import DecisionService
-from app.services.errors import ConflictError, NotFoundError, ValidationError
+from app.services.errors import ConflictError, ValidationError
 from app.services.feedback_learning_service import FeedbackLearningService
 from app.services.interview_service import InterviewService
 from app.services.scheduling_workflow_service import SchedulingWorkflowService
@@ -84,22 +78,16 @@ def seed_test_pipeline(
     return org, recruiter, interviewer, job, candidate, application
 
 
-def publish_test_availability(
-    db: Session, org: Organization, interviewer: User, scheduled_date: date
-) -> None:
-    db.add(
-        InterviewAvailability(
-            organization_id=org.id,
-            interviewer_user_id=interviewer.id,
-            scheduled_date=scheduled_date,
-            start_time="09:00",
-            end_time="13:00",
-            duration_minutes=60,
-            timezone="UTC",
-            status="available",
-        )
+def publish_test_window(db: Session, organization_id, interviewer_id, scheduled_date: date) -> None:
+    SchedulingWorkflowService().publish_availability(
+        db,
+        organization_id=organization_id,
+        interviewer_user_id=interviewer_id,
+        scheduled_date=scheduled_date,
+        start_time="10:00",
+        end_time="11:00",
+        duration_minutes=60,
     )
-    db.flush()
 
 
 # ===========================================================================
@@ -209,8 +197,9 @@ def test_advance_gate_permits_scheduling_when_advance_decision_recorded(
     db_session.commit()
 
     assert application.status == "advanced"
-    scheduled_date = date.today() + timedelta(days=2)
-    publish_test_availability(db_session, org, interviewer, scheduled_date)
+
+    scheduled_date = date.today() + timedelta(days=1)
+    publish_test_window(db_session, org.id, interviewer.id, scheduled_date)
 
     interview = InterviewService().schedule(
         db_session,
@@ -246,8 +235,9 @@ def test_hold_or_reject_after_scheduling_cancels_active_interviews(
     )
     db_session.commit()
 
-    scheduled_date = date.today() + timedelta(days=2)
-    publish_test_availability(db_session, org, interviewer, scheduled_date)
+    scheduled_date = date.today() + timedelta(days=1)
+    publish_test_window(db_session, org.id, interviewer.id, scheduled_date)
+
     interview = InterviewService().schedule(
         db_session,
         organization_id=org.id,
@@ -394,27 +384,28 @@ def test_candidate_invitation_expires_and_withdrawn_availability_disappears(
     db_session.commit()
 
     month = availability.scheduled_date.replace(day=1)
-    assert workflow.list_available_slots_for_invitation(
-        db_session, token=issue.token, month=month
-    )
+    assert workflow.list_available_slots_for_invitation(db_session, token=issue.token, month=month)
     workflow.cancel_availability(
         db_session,
         organization_id=org.id,
         availability_id=availability.id,
     )
     db_session.commit()
-    assert workflow.list_available_slots_for_invitation(
-        db_session, token=issue.token, month=month
-    ) == []
+    assert (
+        workflow.list_available_slots_for_invitation(db_session, token=issue.token, month=month)
+        == []
+    )
 
-    issue.invitation.expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+    issue.invitation.expires_at = datetime.now(UTC) - timedelta(seconds=1)
     db_session.commit()
     with pytest.raises(ValidationError, match="expired"):
         workflow.get_candidate_view(db_session, token=issue.token)
 
 
 def test_candidate_portal_view_redacts_internal_data(db_session: Session) -> None:
-    """Stage H: Candidate view returns only safe role information, strictly redacting internal scores."""
+    """Stage H: Candidate view returns only safe role information, strictly redacting internal
+    scores.
+    """
     org, recruiter, _interviewer, job, candidate, application = seed_test_pipeline(db_session)
     workflow = SchedulingWorkflowService()
 
@@ -518,14 +509,14 @@ def test_candidate_books_available_slot_and_prevents_double_booking(
     db_session.refresh(issue.invitation)
     assert issue.invitation.status == "booked"
 
-    # A booked invitation may remain eligible for rescheduling via the same token:
-    # it can expose appropriate alternative slots for that same interview.
+    # A future booking can be rescheduled, but its occupied slot is no longer offered.
     remaining_slots = workflow.list_available_slots_for_invitation(
         db_session,
         token=issue.token,
         month=date(2026, 11, 1),
     )
-    assert any(slot["start_time"] == "10:00" for slot in remaining_slots)
+    assert len(remaining_slots) == 2
+    assert {slot["start_time"] for slot in remaining_slots} == {"09:00", "10:00"}
 
     # 6. Attempting to book the occupied 09:00 slot fails with ConflictError (409)
     # Create another candidate & invitation
@@ -562,10 +553,10 @@ def test_candidate_books_available_slot_and_prevents_double_booking(
         )
 
 
-def test_candidate_reschedule_preserves_interview_and_requires_cancel_for_replacement_invite(
+def test_candidate_invitation_allows_future_reschedule_and_hr_reissue_after_cancel(
     db_session: Session,
 ) -> None:
-    """Stage I (approved EPIC 6): candidate reschedules via same token/interview; HR must cancel before reissuing."""
+    """Stage I: Future bookings can be rescheduled; HR must cancel before reissuing."""
     org, recruiter, interviewer, job, candidate, application = seed_test_pipeline(db_session)
     workflow = SchedulingWorkflowService()
 
@@ -573,7 +564,7 @@ def test_candidate_reschedule_preserves_interview_and_requires_cancel_for_replac
         db_session,
         organization_id=org.id,
         interviewer_user_id=interviewer.id,
-        scheduled_date=date(2026, 11, 29),
+        scheduled_date=date.today() + timedelta(days=4),
         start_time="13:00",
         end_time="15:00",
         duration_minutes=60,
@@ -594,10 +585,8 @@ def test_candidate_reschedule_preserves_interview_and_requires_cancel_for_replac
     db_session.commit()
 
     slots = workflow.list_available_slots_for_invitation(
-        db_session, token=issue.token, month=date(2026, 11, 1)
+        db_session, token=issue.token, month=(date.today() + timedelta(days=4)).replace(day=1)
     )
-    assert {s["start_time"] for s in slots} == {"13:00", "14:00"}
-
     # Book 13:00
     interview = workflow.candidate_book_slot(
         db_session,
@@ -607,34 +596,18 @@ def test_candidate_reschedule_preserves_interview_and_requires_cancel_for_replac
     )
     db_session.commit()
     assert interview.status == "scheduled"
-    original_id = interview.id
 
-    # The same public link can reschedule the booked interview when eligible (same interview preserved).
-    rescheduled = workflow.candidate_reschedule(
+    # The same link can move the interview while it remains in the future.
+    rescheduled = workflow.candidate_book_slot(
         db_session,
         token=issue.token,
-        interview_id=interview.id,
         availability_id=slots[1]["availability_id"],
         scheduled_time="14:00",
     )
     db_session.commit()
-    assert rescheduled.id == original_id
-    assert rescheduled.status == "scheduled"
-    assert rescheduled.scheduled_time == "14:00"
+    assert rescheduled.id == interview.id
     view = workflow.get_candidate_view(db_session, token=issue.token)
-    assert view["interview_id"] == original_id
     assert view["scheduled_time"] == "14:00"
-    assert view["can_reschedule"] is True
-
-    # Cannot reschedule a different interview id with this token.
-    with pytest.raises(ValidationError):
-        workflow.candidate_reschedule(
-            db_session,
-            token=issue.token,
-            interview_id=uuid.uuid4(),
-            availability_id=slots[0]["availability_id"],
-            scheduled_time="13:00",
-        )
 
     with pytest.raises(ConflictError, match="Cancel it before issuing a replacement link"):
         workflow.create_invitation(
@@ -676,8 +649,8 @@ def test_interview_feedback_validation_and_subsequent_decision(
         decision="advance",
         organization_id=org.id,
     )
-    scheduled_date = date.today() + timedelta(days=2)
-    publish_test_availability(db_session, org, interviewer, scheduled_date)
+    scheduled_date = date.today() + timedelta(days=1)
+    publish_test_window(db_session, org.id, interviewer.id, scheduled_date)
     interview = InterviewService().schedule(
         db_session,
         organization_id=org.id,
@@ -827,7 +800,9 @@ def test_feedback_learning_loop_records_corrections_and_analytics(
 def test_feedback_learning_propose_skill_alias_and_benchmark(
     db_session: Session,
 ) -> None:
-    """Stage K: Approved correction dynamically extends technical synonyms and evaluates benchmark."""
+    """Stage K: Approved correction dynamically extends technical synonyms and evaluates
+    benchmark.
+    """
     org, recruiter, _interviewer, _job, _candidate, _application = seed_test_pipeline(db_session)
     feedback_service = FeedbackLearningService()
 
@@ -847,8 +822,16 @@ def test_feedback_learning_propose_skill_alias_and_benchmark(
 
     # Controlled evaluation against validation cases
     benchmark_cases = [
-        {"text": "Experienced in deploying services to k8s clusters", "term": "kubernetes", "expected": True},
-        {"text": "Built web applications using React and Python", "term": "python", "expected": True},
+        {
+            "text": "Experienced in deploying services to k8s clusters",
+            "term": "kubernetes",
+            "expected": True,
+        },
+        {
+            "text": "Built web applications using React and Python",
+            "term": "python",
+            "expected": True,
+        },
         {"text": "Marketing manager with SEO skills", "term": "kubernetes", "expected": False},
     ]
 

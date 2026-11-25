@@ -1,6 +1,7 @@
 from app.models.ai_trace import AITrace
 from app.models.ai_usage import AIPolicyControl, AIUsageCounter, AIUsageEvent
 from app.models.audit_log import AuditLog
+from app.models.calendar_sync_outbox import CalendarSyncOutbox
 from app.models.candidate import Candidate
 from app.models.candidate_evaluation import CandidateEvaluation
 from app.models.candidate_invitation import CandidateInvitation
@@ -8,11 +9,11 @@ from app.models.candidate_profile import CandidateProfile
 from app.models.chat_message import ChatMessage
 from app.models.chat_thread import ChatThread
 from app.models.github_evidence_analysis import GitHubEvidenceAnalysis
-from app.models.calendar_sync_outbox import CalendarSyncOutbox
 from app.models.hr_decision import HRDecision
 from app.models.hr_feedback_correction import HRFeedbackCorrection
 from app.models.hr_google_connection import HRGoogleConnection
 from app.models.hr_google_oauth_state import HRGoogleOAuthState
+from app.models.hr_sso_assertion_use import HRSSOAssertionUse
 from app.models.interview import Interview
 from app.models.interview_availability import InterviewAvailability
 from app.models.interview_question import InterviewQuestion
@@ -26,6 +27,7 @@ from app.models.linkedin_job_import import LinkedInJobImport
 from app.models.sourcing import SourcingCandidate, SourcingSearch
 from app.models.match_evidence import MatchEvidence
 from app.models.organization import Organization
+from app.models.pipeline_stage_transition import PipelineStageTransition
 from app.models.public_application_rate_limit import PublicApplicationRateLimit
 from app.models.resume import Resume
 from app.models.screening_batch import ScreeningBatch
@@ -52,9 +54,10 @@ __all__ = [
     "ChatThread",
     "HRDecision",
     "HRFeedbackCorrection",
-    "GitHubEvidenceAnalysis",
+    "HRSSOAssertionUse",
     "HRGoogleConnection",
     "HRGoogleOAuthState",
+    "GitHubEvidenceAnalysis",
     "Interview",
     "InterviewAvailability",
     "InterviewQuestion",
@@ -71,6 +74,7 @@ __all__ = [
     "MatchEvidence",
     "Organization",
     "OrganizationSubscription",
+    "PipelineStageTransition",
     "Plan",
     "PublicApplicationRateLimit",
     "Resume",

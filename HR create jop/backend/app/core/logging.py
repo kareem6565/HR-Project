@@ -10,12 +10,12 @@ Provides:
 
 from __future__ import annotations
 
-from contextvars import ContextVar, Token
-from datetime import UTC, datetime
 import json
 import logging
 import re
 import sys
+from contextvars import ContextVar, Token
+from datetime import UTC, datetime
 from typing import Any
 
 # ContextVar storing the server-generated request ID for the current async task / thread.
@@ -69,7 +69,6 @@ _SAFE_VALIDATION_FIELDS = {
     "summary",
     "needs_confirmation",
     "full_name",
-    "summary",
     "skills",
     "experience",
     "email",
@@ -98,7 +97,6 @@ _SAFE_VALIDATION_FIELDS = {
     "dimension",
     "key",
     "source",
-    "source_quote",
 }
 
 

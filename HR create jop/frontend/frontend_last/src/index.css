@@ -10236,6 +10236,36 @@ html[dir="rtl"] .main { margin-left: 0; margin-right: 240px; width: calc(100% - 
 .hiring-insight-footer,
 .hiring-insight-footer a { font-size: 12px; }
 
+/* Preserve the A6 and OCR status surfaces while using the shared theme tokens. */
+.rules-only-notice,
+.ocr-review-notice {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-text);
+  background: var(--color-surface-alt);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.rules-only-notice { margin: 0 0 14px; padding: 10px 12px; }
+.ocr-review-notice { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 10px; padding: 10px 12px; }
+.ocr-review-notice.needs-review { border-color: #c59a42; }
+
+.pipeline-stage-panel { margin: 0 0 16px; padding: 16px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); color: var(--color-text); }
+.pipeline-stage-heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.pipeline-stage-heading h3 { margin: 0; font-size: 16px; }
+.pipeline-stage-heading p, .pipeline-stage-correction-note { margin: 4px 0 0; color: var(--color-muted, #66736f); font-size: 13px; }
+.pipeline-stage-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin-top: 14px; }
+.pipeline-stage-controls label { display: grid; gap: 5px; min-width: 150px; color: var(--color-muted, #66736f); font-size: 12px; }
+.pipeline-stage-controls input, .pipeline-stage-controls select { min-height: 38px; padding: 7px 9px; border: 1px solid var(--color-border); border-radius: 7px; background: var(--color-surface-alt); color: var(--color-text); }
+.pipeline-stage-controls .pipeline-stage-note { flex: 1; min-width: 200px; }
+.pipeline-stage-badge { display: inline-flex; padding: 4px 9px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface-alt); color: var(--color-text); font-size: 12px; font-weight: 650; white-space: nowrap; }
+.pipeline-stage-error { display: flex; align-items: center; gap: 7px; color: var(--color-danger, #ba3b3b); }
+.pipeline-stage-history { margin-top: 12px; border-top: 1px solid var(--color-border); padding-top: 10px; }
+.pipeline-stage-history summary { cursor: pointer; font-weight: 600; }
+.pipeline-stage-history ol { margin-bottom: 0; padding-left: 22px; }
+.pipeline-stage-history li { margin: 7px 0; }
+.pipeline-stage-history small { display: block; color: var(--color-muted, #66736f); }
+
 /* ===== HERA Motion integration (ui/motion-redesign) ===== */
 
 /* Stagger wrappers keep the grid cell so cards fill their track */

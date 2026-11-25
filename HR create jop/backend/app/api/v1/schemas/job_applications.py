@@ -21,9 +21,14 @@ class JobApplicationResponse(BaseModel):
     candidate_id: UUID
     resume_id: UUID
     status: str
+    pipeline_stage: str = "screening"
     created_at: datetime
     updated_at: datetime
     screening_status: str = "not_started"
+    advisory_rank: int | None = None
+    advisory_score: float | None = None
+    advisory_status: str | None = None
+    advisory_message: str | None = None
     source: str | None = None
     source_medium: str | None = None
     source_campaign: str | None = None
@@ -66,6 +71,7 @@ class ApplicationSummaryResponse(BaseModel):
     score: str | None = None
     group: str | None = None
     status: str
+    pipeline_stage: str = "screening"
     created_at: datetime
     evidence: list[RequirementEvidenceSummary] = Field(default_factory=list)
     candidate_email: str | None = None
@@ -74,6 +80,10 @@ class ApplicationSummaryResponse(BaseModel):
     source_medium: str | None = None
     source_campaign: str | None = None
     screening_status: str = "not_started"
+    advisory_rank: int | None = None
+    advisory_score: float | None = None
+    advisory_status: str | None = None
+    advisory_message: str | None = None
     decision_status: str = "pending_review"
     decision_created_at: datetime | None = None
 

@@ -6,6 +6,10 @@ class NotFoundError(ApplicationError):
     """Raised when a required domain record does not exist."""
 
 
+class PermissionDeniedError(ApplicationError):
+    """Raised when an authenticated user lacks permission for an operation."""
+
+
 class ValidationError(ApplicationError):
     """Raised when supplied data violates deterministic domain rules."""
 

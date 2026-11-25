@@ -1,7 +1,7 @@
 # HERA — System Architecture & LangGraph Roadmap
 
 Scope: the `hr-ai-assistant` monorepo. Backend is FastAPI (Python), frontend is
-React/Vite (`frontend/frontend3/sandbox`). This document describes the **current**
+React/Vite (`HR create jop/frontend/frontend_last`). This document describes the **current**
 architecture as-built and then assesses **where LangGraph would be introduced**
 and **why** — it is a roadmap, not a code change. No dependencies were added.
 
@@ -12,7 +12,8 @@ and **why** — it is a roadmap, not a code change. No dependencies were added.
 ```
                         ┌──────────────────────────────────────────────┐
                         │               Web Browser                     │
-                        │  HERA React SPA (frontend/frontend3/sandbox)  │
+                        │  HERA React SPA (HR create jop/frontend/       │
+                        │              frontend_last)                   │
                         │  services/*.js → apiClient (Axios)            │
                         └───────────────┬──────────────────────────────┘
                                         │ HTTP (JSON)
@@ -32,8 +33,8 @@ and **why** — it is a roadmap, not a code change. No dependencies were added.
                     HTTP 8000   │              │          │
                                 ▼              ▼          ▼
             ┌──────────────────────┐  ┌────────────┐  ┌──────────────┐
-            │  app.services        │  │    AI      │  │  sync worker │
-            │  job_service,        │  │  stage     │  │  (workflows) │
+            │  app.services        │  │    AI      │  │  screening   │
+            │  job_service,        │  │ workflows  │  │  worker loop │
             │  candidate_pool_service, etc.        │  │              │
             │                      │  └──────┬─────┘  └──────────────┘
             └──────────┬───────────┘         │
@@ -41,15 +42,19 @@ and **why** — it is a roadmap, not a code change. No dependencies were added.
             ┌──────────────────────┐  ┌──────────────────────────┐
             │  PostgreSQL          │  │  AI providers             │
             │  (docker compose,    │  │  app/ai/providers/*       │
-            │   port 5432)         │  │  - base.py  (AIProvider)  │
-            │  SQLAlchemy models   │  │  - fake.py  (deterministic)│
+            │   port 5432)         │  │  - Fake / Soal            │
+            │  SQLAlchemy models   │  │  - Ollama Cloud           │
+            │                      │  │  - OpenRouter             │
             └──────────────────────┘  └──────────────────────────┘
 ```
 
-Processing is synchronous today: a request reaches a route → a service validates
-and persists → (for AI flows) a workflow calls the `AIProvider` and stores
-versioned artifacts + full trace rows. There is **no queue/broker, no worker
-pool, and no LangChain/LangGraph** in the stack.
+Most API operations are handled synchronously. CV screening is queued in the
+PostgreSQL `screening_batches` and `screening_batch_items` tables. The
+`ScreeningWorker` claims eligible items with `FOR UPDATE SKIP LOCKED`, processes
+them asynchronously, and uses leases and retries for recovery. FastAPI starts
+the worker in a background thread when `ENABLE_SCREENING_WORKER` is enabled
+(default: true); `backend/app/worker.py` also provides a standalone CLI. There
+is no separate message broker or LangChain/LangGraph runtime in the stack.
 
 ---
 
@@ -61,7 +66,7 @@ pool, and no LangChain/LangGraph** in the stack.
 | Orchestration | `app/ai/workflows/*.py` | Deterministic, single-run pipelines (profile extraction, candidate evaluation). Plain Python classes, no graph runtime |
 | Domain services | `app/services/*.py` | Reads/writes, scoring, candidate-pool grouping, trace bookkeeping |
 | AI contracts | `app/ai/contracts/*.py` | Pydantic output contracts + validators, hash refs, schema versioning |
-| AI providers | `app/ai/providers/*.py` | Provider-agnostic `AIProvider` interface; deterministic `FakeAIProvider` |
+| AI providers | `app/ai/providers/*.py` | `fake`, `soal`, `ollama` (Ollama Cloud), and `openrouter`, behind the `AIProvider` interface |
 | Persistence | `app/models/*.py`, `alembic/` | SQLAlchemy models + migrations on PostgreSQL |
 | Config | `app/core/config.py` | Settings (CORS origins, etc.) |
 
@@ -73,8 +78,9 @@ Key facts verified:
   AI component → deterministic scoring → persist new versioned `CandidateEvaluation`
   + `MatchEvidence` → record workflow/step/AI traces. The caller owns the
   transaction (workflows never commit).
-- The **only** provider today is `FakeAIProvider`; real provider adapters are
-  explicitly deferred per the package docstrings.
+- Provider selection uses `AI_PROVIDER`: `fake`, `soal`, `ollama` (Ollama Cloud),
+  or `openrouter`. The configured default is `openrouter`; `FakeAIProvider`
+  remains available for deterministic tests.
 - Scoring is deterministic (Phase 4.2); candidate grouping is deterministic
   (Phase 4.5: `MUST_REVIEW_MIN=70`, `CONSIDER_MIN=40` in
   `app/services/candidate_pool_service.py`). The LLM never produces a score.
@@ -85,8 +91,7 @@ Key facts verified:
 
 **LangGraph is not built and not installed.** It is not in `pyproject.toml`
 dependencies, and there is no `langchain`/`langgraph` import anywhere in the
-backend. The workflow package docstring explicitly marks
-"real provider adapters, LangChain/LangGraph/agents, and workers" as
+backend. The workflow package docstring marks LangChain/LangGraph/agents as
 **out of scope**. The frontend also calls external **n8n webhooks** for CV
 screening and interview scheduling (outside this backend).
 

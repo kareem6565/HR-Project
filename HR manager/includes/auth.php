@@ -84,7 +84,7 @@ function requireLogin(): void
     // on every protected request so changed/deleted accounts take effect now.
     try {
         $stmt = getPDO(true)->prepare(
-            'SELECT id, emp_code, name, role FROM users WHERE id = ? LIMIT 1'
+            'SELECT id, emp_code, name, role, must_change_password FROM users WHERE id = ? LIMIT 1'
         );
         $stmt->execute([(int)$_SESSION['user_id']]);
         $user = $stmt->fetch();
@@ -104,6 +104,12 @@ function requireLogin(): void
     $_SESSION['emp_code'] = (string)$user['emp_code'];
     $_SESSION['name'] = (string)$user['name'];
     $_SESSION['role'] = (string)$user['role'];
+    $_SESSION['must_change_password'] = (bool)$user['must_change_password'];
+
+    $currentPage = basename((string)(parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: ''));
+    if ($_SESSION['must_change_password'] && $currentPage !== 'change_password.php') {
+        redirect('/BIC2_Mvp/change_password.php');
+    }
 }
 
 /**
@@ -139,6 +145,7 @@ function getCurrentUser(): array
         'name'     => $_SESSION['name']      ?? '',
         'emp_code' => $_SESSION['emp_code']  ?? '',
         'role'     => $_SESSION['role']      ?? '',
+        'must_change_password' => $_SESSION['must_change_password'] ?? false,
     ];
 }
 
@@ -152,4 +159,5 @@ function loginUser(array $user): void
     $_SESSION['name']     = $user['name'];
     $_SESSION['emp_code'] = $user['emp_code'];
     $_SESSION['role']     = $user['role'];
+    $_SESSION['must_change_password'] = (bool)($user['must_change_password'] ?? false);
 }

@@ -45,6 +45,7 @@ import { getApplicationStatusGroup } from "../../utils/applicationStatus";
 import useCountUp from "../../hooks/useCountUp";
 import { createCandidateInterviewInvitation } from "../../services/interviewService";
 import GitHubEvidencePanel from "../../components/review/GitHubEvidencePanel";
+import PipelineStagePanel from "../../components/review/PipelineStagePanel";
 
 const DECISION_LABELS = {
   [HRDecisionValue.ADVANCE]: "Advance",
@@ -177,6 +178,7 @@ export default function ApplicationReview() {
   const [saving, setSaving] = useState(false);
   const [decisionError, setDecisionError] = useState(null);
   const [isConflictError, setIsConflictError] = useState(false);
+  const [pipelineRefresh, setPipelineRefresh] = useState(0);
 
   const [successMsg, setSuccessMsg] = useState("");
   const [downloading, setDownloading] = useState(false);
@@ -198,8 +200,10 @@ export default function ApplicationReview() {
     try {
       const data = await getReviewWorkspace(applicationId);
       setBundle(data);
+      return data;
     } catch (err) {
       setLoadError(extractError(err));
+      return null;
     } finally {
       setLoading(false);
     }
@@ -231,7 +235,7 @@ export default function ApplicationReview() {
     );
   }
 
-  const { application, candidate, job, evaluation, evidence, poolRow, resume, profile, decisionHistory = [] } = bundle;
+  const { application, candidate, job, evaluation, evidence, poolRow, resume, profile, decisionHistory = [], aiMode = "llm" } = bundle;
 
   const hasEvaluation = !!evaluation;
   const score = parseScore(evaluation?.score);
@@ -305,8 +309,20 @@ export default function ApplicationReview() {
     setSuccessMsg("");
     try {
       const result = await runEvaluation(applicationId);
-      setSuccessMsg(`Evaluation v${result.version_number} completed.`);
-      await load();
+      const refreshed = await load();
+      const persistedEvaluation = refreshed?.evaluation;
+      const hasPersistedEvidence = (refreshed?.evidence || []).length > 0;
+      if (
+        persistedEvaluation?.id === result.evaluation_id &&
+        persistedEvaluation.status === "completed" &&
+        hasPersistedEvidence
+      ) {
+        setSuccessMsg(`Evaluation v${persistedEvaluation.version_number} completed with requirement evidence.`);
+      } else {
+        setEvalError(
+          "The evaluation request returned, but a completed evaluation with requirement evidence was not saved. No new score was confirmed; review the job requirements and try again."
+        );
+      }
     } catch (err) {
       setEvalError(extractError(err));
     } finally {
@@ -332,6 +348,7 @@ export default function ApplicationReview() {
       } else {
         await recordDecision(applicationId, decisionModal.decision, decisionReason);
       }
+      setPipelineRefresh((version) => version + 1);
       setSuccessMsg(`${DECISION_LABELS[decisionModal.decision]} recorded for ${candidate?.name || "this candidate"}.`);
       setDecisionModal({ open: false, decision: null });
 
@@ -346,9 +363,9 @@ export default function ApplicationReview() {
         // Fallback to selected job's results page or general matching
         const targetJobId = routerLocation.state?.jobId || bundle?.job?.id;
         if (targetJobId) {
-          navigate(`/matching?jobId=${targetJobId}`);
+          navigate(`/matching-results?jobId=${targetJobId}`);
         } else {
-          navigate("/matching");
+          navigate("/matching-results");
         }
       } else {
         await load();
@@ -499,6 +516,11 @@ export default function ApplicationReview() {
           <strong><span className="review-signal-count">{hasEvaluation ? signalsCount : "—"}</span></strong>
         </span>
       </div>
+
+      <PipelineStagePanel
+        applicationId={applicationId}
+        refreshKey={pipelineRefresh}
+      />
 
       <div className="review-quick-actions application-review-quick-actions">
         <div className="review-quick-actions-copy">
@@ -679,6 +701,23 @@ export default function ApplicationReview() {
               </button>
             )}
           </div>
+          {resume?.extraction_source === "ocr" && (
+            <div className={`ocr-review-notice${resume.status === "needs_manual_review" ? " needs-review" : ""}`} role="status">
+              <strong>
+                {resume.status === "needs_manual_review"
+                  ? "Needs manual review"
+                  : "Text extracted with local OCR"}
+              </strong>
+              <span>
+                OCR confidence: {Number.isFinite(resume.extraction_confidence)
+                  ? `${Math.round(resume.extraction_confidence * 100)}%`
+                  : "unavailable"}
+              </span>
+              {resume.status === "needs_manual_review" && (
+                <span>Check the original CV before relying on extracted text or evaluation.</span>
+              )}
+            </div>
+          )}
           {cvError && (
             <div className="form-error" style={{ marginTop: 8 }}>
               <AlertCircle size={14} style={{ marginRight: 6, verticalAlign: "-2px" }} />
@@ -769,14 +808,32 @@ export default function ApplicationReview() {
             <h3>AI Evaluation</h3>
           </div>
           <span className="flag flag-ai">
-            <Sparkles size={12} /> AI Generated
+            <Sparkles size={12} />
+            {evaluation?.provenance?.ai_mode === "rules" || (!evaluation && aiMode === "rules")
+              ? "Rules Only"
+              : "AI Generated"}
           </span>
         </div>
+
+        {(aiMode === "rules" || evaluation?.provenance?.ai_mode === "rules") && (
+          <p className="rules-only-notice" role="status">
+            {evaluation?.provenance?.ai_mode === "rules"
+              ? "Rules-only evaluation: deterministic CV evidence was used; no AI model was called."
+              : "Rules-only mode is active. New evaluations use deterministic CV evidence without calling an AI model."}
+          </p>
+        )}
+
+        {application?.advisory_status === "ranked" && !hasEvaluation && (
+          <p className="rules-only-notice" role="status">Advisory rank #{application.advisory_rank}; this ranking does not change the official score or HR decision.</p>
+        )}
+        {application?.advisory_status === "unavailable" && (
+          <p className="rules-only-notice" role="status">{application.advisory_message}</p>
+        )}
 
         {!hasEvaluation ? (
           <EmptyState
             icon={Sparkles}
-            message="Evaluation not run yet. Running the AI evaluation analyzes the candidate profile against job requirements to produce a score, explanation, breakdown, and evidence."
+            message={application?.advisory_status === "not_evaluated" ? application.advisory_message : "Evaluation not run yet. Running the AI evaluation analyzes the candidate profile against job requirements to produce a score, explanation, breakdown, and evidence."}
             action={
               <button type="button" className="primary" onClick={handleEvaluate} disabled={evaluating}>
                 {evaluating ? (
@@ -785,7 +842,7 @@ export default function ApplicationReview() {
                   </>
                 ) : (
                   <>
-                    <Sparkles size={16} /> Evaluate Candidate
+                    <Sparkles size={16} /> {application?.advisory_status === "not_evaluated" ? "Run AI evidence evaluation" : "Evaluate Candidate"}
                   </>
                 )}
               </button>

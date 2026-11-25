@@ -5,12 +5,13 @@ Revises: 018_talent_pool_consent
 Create Date: 2026-10-25
 """
 
-from collections.abc import Sequence
 import hashlib
+from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 revision: str = "019_interview_portal"
 down_revision: str | None = "018_talent_pool_consent"

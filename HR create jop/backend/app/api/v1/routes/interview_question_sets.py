@@ -11,7 +11,7 @@ from app.api.v1.schemas.interview_question_sets import (
     InterviewQuestionSetUpdate,
 )
 from app.core.database import get_db
-from app.services.errors import NotFoundError, ValidationError
+from app.services.errors import NotFoundError
 from app.services.interview_question_service import InterviewQuestionService
 
 router = APIRouter()
@@ -276,7 +276,8 @@ def _derive_question_payload(db: Session, *, application, organization_id: uuid.
             {
                 "category": "candidate_specific",
                 "text": (
-                    f"What is your experience with {skill}, and how have you applied it in a project?"
+                    "What is your experience with "
+                    f"{skill}, and how have you applied it in a project?"
                 ),
                 "topic": skill,
                 "requirement_key": None,
@@ -291,9 +292,7 @@ def _derive_question_payload(db: Session, *, application, organization_id: uuid.
         questions.append(
             {
                 "category": "candidate_specific",
-                "text": (
-                    f"How would you approach a task that requires {gap}?"
-                ),
+                "text": (f"How would you approach a task that requires {gap}?"),
                 "topic": gap,
                 "requirement_key": None,
                 "review_guide": guide(

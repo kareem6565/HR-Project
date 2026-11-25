@@ -8,8 +8,9 @@ Create Date: 2026-10-21
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects.postgresql import UUID
+
+from alembic import op
 
 revision: str = "013_screening_batches"
 down_revision: str | None = "012_auth_roles"
@@ -39,7 +40,9 @@ def upgrade() -> None:
             sa.ForeignKey("users.id", ondelete="SET NULL"),
             nullable=True,
         ),
-        sa.Column("status", sa.String(length=50), nullable=False, server_default=sa.text("'queued'")),
+        sa.Column(
+            "status", sa.String(length=50), nullable=False, server_default=sa.text("'queued'")
+        ),
         sa.Column("total_files", sa.Integer(), nullable=False, server_default=sa.text("0")),
         sa.Column("completed_files", sa.Integer(), nullable=False, server_default=sa.text("0")),
         sa.Column("failed_files", sa.Integer(), nullable=False, server_default=sa.text("0")),
@@ -80,7 +83,9 @@ def upgrade() -> None:
         sa.Column("filename", sa.String(length=255), nullable=False),
         sa.Column("storage_key", sa.Text(), nullable=False),
         sa.Column("sha256", sa.String(length=64), nullable=False),
-        sa.Column("status", sa.String(length=50), nullable=False, server_default=sa.text("'queued'")),
+        sa.Column(
+            "status", sa.String(length=50), nullable=False, server_default=sa.text("'queued'")
+        ),
         sa.Column("stage", sa.String(length=50), nullable=True),
         sa.Column("attempts", sa.Integer(), nullable=False, server_default=sa.text("0")),
         sa.Column("max_attempts", sa.Integer(), nullable=False, server_default=sa.text("3")),
@@ -141,9 +146,7 @@ def upgrade() -> None:
             name="ck_screening_batch_items_status",
         ),
     )
-    op.create_index(
-        "ix_screening_batch_items_batch_id", "screening_batch_items", ["batch_id"]
-    )
+    op.create_index("ix_screening_batch_items_batch_id", "screening_batch_items", ["batch_id"])
     op.create_index(
         "ix_screening_batch_items_claim",
         "screening_batch_items",

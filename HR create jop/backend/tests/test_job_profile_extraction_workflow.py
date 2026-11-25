@@ -268,13 +268,11 @@ def test_quality_review_persists_only_exact_source_quotes(db_session: Session) -
                     },
                     {
                         "finding_type": "not_measurable",
-
                         "source_quote": "At least 3 years of backend experience.",
                         "concern": (
                             "The required experience does not specify what experience is relevant."
                         ),
                         "question_for_hr": "Which backend experience should qualify?",
-
                     },
                     {
                         "finding_type": "unclear_requirement",
@@ -431,7 +429,7 @@ def test_duplicate_requirements_payload_records_validation_failure(
     )
     db_session.commit()
 
-    with pytest.raises(ValidationError, match="[Dd]uplicate"):
+    with pytest.raises(ValidationError, match="Invalid AI output contract"):
         workflow.run(db_session, job_id=job.id, organization_id=organization.id)
     db_session.commit()
 
@@ -499,9 +497,10 @@ def test_new_version_preserves_linkedin_source_provenance(db_session: Session) -
         "status": "succeeded",
     }
     assert new_profile.provenance["source_url"] == source_metadata["source_url"]
-    assert new_profile.provenance["custom_import_metadata"] == prior.provenance[
-        "custom_import_metadata"
-    ]
+    assert (
+        new_profile.provenance["custom_import_metadata"]
+        == prior.provenance["custom_import_metadata"]
+    )
     assert new_profile.raw_input_snapshot["original_listing_text"] == original_text
     assert new_profile.provenance["ai_extraction"]["status"] == "completed"
 
@@ -666,7 +665,7 @@ def test_provider_timeout_records_failure(db_session: Session) -> None:
     assert run.status == "failed"
     assert step.status == "failed"
     assert step.error_type == "ProviderTimeoutError"
-    assert step.error_message == "AI provider request timed out."
+    assert step.error_message == "OpenRouter took too long to respond. Try again later."
     assert trace.status == "failed"
 
 

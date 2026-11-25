@@ -32,7 +32,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.exc import DBAPIError, IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 from starlette.testclient import TestClient
@@ -56,7 +56,7 @@ from app.models import (
 )
 from app.services.audit_service import AuditService, sanitize_audit_metadata
 from app.services.decision_service import DecisionService
-from app.services.errors import ConflictError, NotFoundError, ValidationError
+from app.services.errors import ConflictError, NotFoundError
 from app.services.job_profile_service import JobProfileService
 from app.services.user_service import UserService
 
@@ -206,6 +206,7 @@ def setup_application_and_eval(db_session: Session, setup_org_and_users):
 # 1. Immutability Tests
 # ===========================================================================
 
+
 def test_audit_log_database_trigger_prohibits_update(db_session: Session, setup_org_and_users):
     """Database triggers prohibit direct SQL UPDATE on audit_logs."""
     org, admin, _, _, _ = setup_org_and_users
@@ -220,6 +221,7 @@ def test_audit_log_database_trigger_prohibits_update(db_session: Session, setup_
 
     with pytest.raises((DBAPIError, OperationalError, IntegrityError)) as excinfo:
         from sqlalchemy import update
+
         db_session.execute(
             update(AuditLog).where(AuditLog.id == audit_entry.id).values(action="tampered")
         )
@@ -243,9 +245,8 @@ def test_audit_log_database_trigger_prohibits_delete(db_session: Session, setup_
 
     with pytest.raises((DBAPIError, OperationalError, IntegrityError)) as excinfo:
         from sqlalchemy import delete
-        db_session.execute(
-            delete(AuditLog).where(AuditLog.id == audit_entry.id)
-        )
+
+        db_session.execute(delete(AuditLog).where(AuditLog.id == audit_entry.id))
         db_session.commit()
 
     db_session.rollback()
@@ -256,27 +257,32 @@ def test_audit_service_exposes_no_mutation_or_deletion_methods():
     """Verify application service provides zero edit or delete methods."""
     audit_service = AuditService()
     exposed_methods = [
-        attr for attr in dir(audit_service)
+        attr
+        for attr in dir(audit_service)
         if callable(getattr(audit_service, attr)) and not attr.startswith("_")
     ]
     for method_name in exposed_methods:
-        assert not any(forbidden in method_name for forbidden in ("update", "delete", "remove", "edit", "modify")), (
-            f"AuditService must not expose modification method: {method_name}"
-        )
+        assert not any(
+            forbidden in method_name
+            for forbidden in ("update", "delete", "remove", "edit", "modify")
+        ), f"AuditService must not expose modification method: {method_name}"
 
 
 # ===========================================================================
 # 2. Audit Event Generation & Atomicity
 # ===========================================================================
 
-def test_hr_decision_audited_and_atomic_with_transaction(db_session: Session, setup_application_and_eval):
+
+def test_hr_decision_audited_and_atomic_with_transaction(
+    db_session: Session, setup_application_and_eval
+):
     """A successful HR decision produces an audit log committed in the same transaction."""
     ctx = setup_application_and_eval
     app_id = ctx["application"].id
     user_id = ctx["recruiter"].id
     eval_id = ctx["eval_v1"].id
 
-    decision = DecisionService().create(
+    DecisionService().create(
         db_session,
         job_application_id=app_id,
         user_id=user_id,
@@ -288,8 +294,7 @@ def test_hr_decision_audited_and_atomic_with_transaction(db_session: Session, se
     db_session.commit()
 
     audit_logs = db_session.scalars(
-        select(AuditLog)
-        .where(
+        select(AuditLog).where(
             AuditLog.entity_type == "job_application",
             AuditLog.entity_id == app_id,
             AuditLog.action == "hr_decision.created",
@@ -305,7 +310,9 @@ def test_hr_decision_audited_and_atomic_with_transaction(db_session: Session, se
     assert log.event_metadata["new_status"] == "advanced"
 
 
-def test_hr_decision_rollback_leaves_no_audit_record(db_session: Session, setup_application_and_eval):
+def test_hr_decision_rollback_leaves_no_audit_record(
+    db_session: Session, setup_application_and_eval
+):
     """A rolled-back business transaction does not leave an orphaned audit record."""
     ctx = setup_application_and_eval
     app_id = ctx["application"].id
@@ -370,7 +377,9 @@ def test_job_profile_approval_is_audited(db_session: Session, setup_application_
     assert "requirements" not in audit_entry.event_metadata
 
 
-def test_resume_download_is_audited(client: TestClient, db_session: Session, setup_application_and_eval):
+def test_resume_download_is_audited(
+    client: TestClient, db_session: Session, setup_application_and_eval
+):
     """Authorized resume download produces a resume.downloaded audit entry."""
     ctx = setup_application_and_eval
     resume = ctx["resume"]
@@ -379,6 +388,7 @@ def test_resume_download_is_audited(client: TestClient, db_session: Session, set
     # Setup fake file on disk for storage
     from app.core.config import settings
     from app.services.storage_service import LocalFileSystemStorage
+
     storage = LocalFileSystemStorage(settings.storage_root_dir)
     storage_key = storage.save(
         organization_id=ctx["org"].id,
@@ -478,7 +488,9 @@ def test_user_creation_role_change_and_deactivation_are_audited(
 def test_failed_login_records_safe_category_without_credentials(
     client: TestClient, db_session: Session, setup_org_and_users, monkeypatch
 ):
-    """Authentication failures log safe categories without exposing submitted passwords or emails."""
+    """Authentication failures log safe categories without exposing submitted passwords or
+    emails.
+    """
     org, admin, _, _, _ = setup_org_and_users
     # Password login is disabled in production; this test exercises its audit trail.
     monkeypatch.setattr(settings, "allow_local_login", True)
@@ -531,7 +543,10 @@ def test_data_minimization_scrubs_prohibited_keys():
 # 3. Decision Integrity, Freshness, and Concurrency
 # ===========================================================================
 
-def test_decision_with_stale_expected_evaluation_returns_409(db_session: Session, setup_application_and_eval):
+
+def test_decision_with_stale_expected_evaluation_returns_409(
+    db_session: Session, setup_application_and_eval
+):
     """A decision specifying a superseded evaluation id fails with 409 Conflict."""
     ctx = setup_application_and_eval
     app_id = ctx["application"].id
@@ -588,7 +603,9 @@ def test_decision_with_mismatched_organization_or_application_fails(
 def test_idempotent_repeated_decision_does_not_duplicate_records(
     db_session: Session, setup_application_and_eval
 ):
-    """Repeated identical decision request returns existing decision without appending a duplicate row."""
+    """Repeated identical decision request returns existing decision without appending a duplicate
+    row.
+    """
     ctx = setup_application_and_eval
     app_id = ctx["application"].id
     user_id = ctx["recruiter"].id
@@ -679,6 +696,7 @@ def test_intentional_subsequent_decision_preserves_history(
 # 4. Access Control & Admin-Only Querying
 # ===========================================================================
 
+
 def test_audit_logs_unauthenticated_returns_401(client: TestClient):
     """Unauthenticated access to audit history returns 401."""
     resp = client.get("/api/v1/audit-logs")
@@ -760,5 +778,7 @@ def test_audit_logs_pagination_and_filters(
     # Invalid date range returns 422
     future = (datetime.now(UTC) + timedelta(days=5)).isoformat()
     past = (datetime.now(UTC) - timedelta(days=5)).isoformat()
-    resp_bad_date = client.get(f"/api/v1/audit-logs?from_date={future}&to_date={past}", headers=headers)
+    resp_bad_date = client.get(
+        f"/api/v1/audit-logs?from_date={future}&to_date={past}", headers=headers
+    )
     assert resp_bad_date.status_code == 422

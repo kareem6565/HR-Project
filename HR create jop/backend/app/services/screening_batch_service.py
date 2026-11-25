@@ -12,9 +12,9 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import PurePosixPath
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -33,7 +33,7 @@ from app.services.errors import (
 )
 from app.services.job_profile_requirements import get_effective_job_requirements
 from app.services.storage_service import StorageProvider
-from app.services.upload_stream_service import BoundedFilePayload
+from app.services.upload_stream_service import BoundedFilePayload, detect_resume_format
 
 
 class ScreeningBatchService:
@@ -43,10 +43,12 @@ class ScreeningBatchService:
         self, db: Session, *, application: JobApplication, job: Job, resume: Resume
     ) -> ScreeningBatchItem:
         """Durably enqueue a public application using the existing screening worker."""
-        existing = db.scalar(select(ScreeningBatchItem).where(
-            ScreeningBatchItem.source == "public_application",
-            ScreeningBatchItem.application_id == application.id,
-        ))
+        existing = db.scalar(
+            select(ScreeningBatchItem).where(
+                ScreeningBatchItem.source == "public_application",
+                ScreeningBatchItem.application_id == application.id,
+            )
+        )
         if existing is not None:
             return existing
         profile_id = job.published_job_profile_id
@@ -54,21 +56,52 @@ class ScreeningBatchService:
         if profile is None or profile.job_id != job.id or profile.status != "approved":
             raise ValidationError("The published approved JobProfile is unavailable for screening.")
         batch = ScreeningBatch(
-            organization_id=job.organization_id, job_id=job.id, created_by_user_id=None,
-            status="queued", total_files=1, completed_files=0, failed_files=0,
+            organization_id=job.organization_id,
+            job_id=job.id,
+            created_by_user_id=None,
+            status="queued",
+            total_files=1,
+            completed_files=0,
+            failed_files=0,
         )
         db.add(batch)
         db.flush()
         item = ScreeningBatchItem(
-            batch_id=batch.id, filename=resume.original_filename or "resume",
-            storage_key=resume.file_uri, sha256=resume.checksum or "",
-            status="queued", stage="queued", source="public_application",
-            job_profile_id=profile.id, candidate_id=application.candidate_id,
-            resume_id=resume.id, application_id=application.id, max_attempts=3,
+            batch_id=batch.id,
+            filename=resume.original_filename or "resume",
+            storage_key=resume.file_uri,
+            sha256=resume.checksum or "",
+            status="queued",
+            stage="queued",
+            source="public_application",
+            job_profile_id=profile.id,
+            candidate_id=application.candidate_id,
+            resume_id=resume.id,
+            application_id=application.id,
+            max_attempts=3,
         )
         db.add(item)
         db.flush()
         return item
+
+    @staticmethod
+    def reserve_org_batch_slot(db: Session, *, organization_id: uuid.UUID, limit: int) -> None:
+        """Serialize per-organization batch admission and enforce the active cap."""
+        if db.get_bind().dialect.name == "postgresql":
+            db.execute(select(func.pg_advisory_xact_lock(func.hashtext(str(organization_id)))))
+        active = (
+            db.scalar(
+                select(func.count(ScreeningBatch.id)).where(
+                    ScreeningBatch.organization_id == organization_id,
+                    ScreeningBatch.status.in_(("queued", "running")),
+                )
+            )
+            or 0
+        )
+        if active >= limit:
+            raise ValidationError(
+                "This organization already has the maximum number of active screening batches."
+            )
 
     def create_batch(
         self,
@@ -79,6 +112,7 @@ class ScreeningBatchService:
         user_id: uuid.UUID | None,
         payloads: list[BoundedFilePayload],
         storage: StorageProvider,
+        max_concurrent_batches: int = 2,
     ) -> ScreeningBatch:
         """Create a new screening batch and enqueue its items.
 
@@ -86,6 +120,9 @@ class ScreeningBatchService:
         and per-file failure isolation. On storage/database failure, created
         files are cleaned up so no orphaned files remain.
         """
+        self.reserve_org_batch_slot(
+            db, organization_id=organization_id, limit=max_concurrent_batches
+        )
         job = db.get(Job, job_id)
         if job is None or job.organization_id != organization_id:
             raise NotFoundError("Job was not found.")
@@ -135,8 +172,15 @@ class ScreeningBatchService:
         try:
             for payload in payloads:
                 item_id = uuid.uuid4()
-                filename = payload.filename.strip()
-                extension = Path(filename).suffix.lower().lstrip(".")
+                filename = PurePosixPath(payload.filename.strip().replace("\\", "/")).name
+                detected_extension = payload.detected_extension or detect_resume_format(
+                    payload.data
+                )
+                extension = detected_extension or "bin"
+                if detected_extension:
+                    base_name = filename.rsplit(".", 1)[0] if "." in filename else filename
+                    suffix = f".{detected_extension}"
+                    filename = f"{(base_name or 'resume')[: 255 - len(suffix)]}{suffix}"
 
                 # Save raw upload into batch storage prefix
                 storage_key = storage.save_batch_file(
@@ -169,31 +213,23 @@ class ScreeningBatchService:
                     error_message = "An identical resume has already been applied to this job."
 
                 # 3. Check obvious permanent format invalidity per Prompt 5
-                elif extension in ("png", "jpg", "jpeg", "webp"):
-                    # Photographed/scanned CVs are OCR'd by the worker; validate the
-                    # real image signature here so bad uploads fail fast.
+                elif detected_extension in ("png", "jpg", "jpeg", "webp"):
+                    # Validate the actual image signature; never infer its type from the name.
                     from app.services.ocr_service import detect_image_extension
 
-                    if detect_image_extension(payload.data) is None:
+                    if detect_image_extension(payload.data) != detected_extension:
                         status = "failed"
                         error_code = UPLOAD_ERROR_UNSUPPORTED_TYPE
-                        error_message = "File content does not match a supported image signature (PNG/JPEG/WEBP)."
+                        error_message = (
+                            "File content does not match a supported image signature "
+                            "(PNG/JPEG/WEBP)."
+                        )
                     else:
                         seen_batch_checksums[checksum] = item_id
-                elif extension not in ("pdf", "docx"):
+                elif detected_extension not in ("pdf", "docx"):
                     status = "failed"
                     error_code = UPLOAD_ERROR_UNSUPPORTED_TYPE
-                    error_message = (
-                        f"Unsupported file type: {extension or 'unknown'!r}. Only .pdf and .docx are allowed."
-                    )
-                elif extension == "pdf" and not payload.data.startswith(b"%PDF-"):
-                    status = "failed"
-                    error_code = UPLOAD_ERROR_UNSUPPORTED_TYPE
-                    error_message = "File content does not match PDF signature."
-                elif extension == "docx" and not payload.data.startswith(b"PK"):
-                    status = "failed"
-                    error_code = UPLOAD_ERROR_UNSUPPORTED_TYPE
-                    error_message = "File content does not match DOCX/ZIP signature."
+                    error_message = "File content is not a supported PDF, DOCX, or image document."
                 else:
                     seen_batch_checksums[checksum] = item_id
 

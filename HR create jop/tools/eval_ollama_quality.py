@@ -25,7 +25,7 @@ from app.ai.workflows import CandidateEvaluationWorkflow
 from app.core.config import Settings
 from app.services.text_normalization import find_quote_in_source
 
-CASES_PATH = BACKEND_DIR / "tests" / "data" / "ollama_quality_cases.json"
+CASES_PATH = BACKEND_DIR / "tests" / "data" / "synthetic_ai_quality_cases.json"
 PINNED_MODEL = "gemma4:31b"
 
 

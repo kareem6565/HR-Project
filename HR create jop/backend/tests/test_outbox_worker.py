@@ -29,7 +29,9 @@ def test_worker_runs_email_and_calendar_claimers(monkeypatch):
         sessions.append(session)
         return session
 
-    monkeypatch.setattr("app.services.outbox_worker.EmailOutboxService.process_one", lambda self, db: False)
+    monkeypatch.setattr(
+        "app.services.outbox_worker.EmailOutboxService.process_one", lambda self, db: False
+    )
     monkeypatch.setattr(
         "app.services.calendar_outbox_service.CalendarOutboxService.process_one",
         lambda self, db: True,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+
 from starlette.testclient import TestClient
 
 from app.main import create_app
@@ -29,7 +30,9 @@ def test_unauthenticated_user_provisioning_is_closed() -> None:
 
 
 def test_raw_storage_path_resume_creation_is_closed() -> None:
-    """POST /api/v1/candidates/{candidate_id}/resumes must not accept client-chosen raw storage paths."""
+    """POST /api/v1/candidates/{candidate_id}/resumes must not accept client-chosen raw storage
+    paths.
+    """
     app = create_app()
     fake_cand_id = str(uuid.uuid4())
     with TestClient(app) as client:

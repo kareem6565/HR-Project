@@ -129,22 +129,5 @@ VALUES ('شركة البيان للتقنية', 24.7136000, 46.6753000, 300);
 INSERT INTO `categories` (`name`, `work_start_time`, `work_end_time`, `break_start_time`, `break_duration_minutes`, `cutoff_minutes`, `center_latitude`, `center_longitude`, `allowed_radius_meters`)
 VALUES ('الشفت الصباحي (الافتراضي)', '09:00:00', '18:00:00', '13:00:00', 60, 60, 24.7136000, 46.6753000, 300);
 
--- Default admin account (password: admin123)
-INSERT INTO `users` (`emp_code`, `email`, `name`, `password_hash`, `role`, `category_id`, `basic_salary`, `yearly_vacation_days`)
-VALUES (
-  'ADM001',
-  'admin@example.test',
-  'System Administrator',
-  '$2y$12$c6E.okZQSkylX0pqI7UROeJTm6kOYm72TWxpeJ8xG9FQSfeXNlBX6',
-  'admin',
-  NULL,
-  15000.00,
-  30
-);
-
--- Sample employees (password: emp123)
-INSERT INTO `users` (`emp_code`, `email`, `name`, `password_hash`, `role`, `category_id`, `basic_salary`, `yearly_vacation_days`) VALUES
-('EMP001', 'emp001@example.test', 'Ahmed Al-Rashidi',  '$2y$12$g.Nshp5Zwoyy/wLLfgagIelvj9gHuAo8U8MYt3G0ey0ULa9t7TcXy', 'employee', 1, 8500.00, 21),
-('EMP002', 'emp002@example.test', 'Fatima Al-Zahraa', '$2y$12$g.Nshp5Zwoyy/wLLfgagIelvj9gHuAo8U8MYt3G0ey0ULa9t7TcXy', 'employee', 1, 7200.00, 21),
-('EMP003', 'emp003@example.test', 'Omar Khalid',      '$2y$12$g.Nshp5Zwoyy/wLLfgagIelvj9gHuAo8U8MYt3G0ey0ULa9t7TcXy', 'employee', 1, 9000.00, 25),
-('EMP004', 'emp004@example.test', 'Sara Al-Mutairi',  '$2y$12$g.Nshp5Zwoyy/wLLfgagIelvj9gHuAo8U8MYt3G0ey0ULa9t7TcXy', 'employee', 1, 6800.00, 21);
+-- No default users are inserted here. The former MySQL schema is retired;
+-- active HR Manager accounts are provisioned by tools/seed_hr_manager.py.

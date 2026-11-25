@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 import hashlib
+import uuid
 from contextlib import nullcontext
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
-import uuid
 
+import app.worker as worker_module
 from app.models import Candidate, Job, JobApplication, JobProfile, Resume, ScreeningBatchItem
 from app.services.screening_batch_service import ScreeningBatchService
+from app.services.text_extraction_service import ExtractedDocumentText
 from app.worker import ScreeningWorker
-import app.worker as worker_module
 
 
 def test_public_application_worker_reuses_records_and_pinned_profile(monkeypatch) -> None:
@@ -27,7 +28,11 @@ def test_public_application_worker_reuses_records_and_pinned_profile(monkeypatch
         id=profile_id,
         job_id=job_id,
         status="superseded",
-        profile_data={"requirements": [{"text": "Python", "category": "must_have", "dimension": "technical_skill"}]},
+        profile_data={
+            "requirements": [
+                {"text": "Python", "category": "must_have", "dimension": "technical_skill"}
+            ]
+        },
     )
     job = SimpleNamespace(id=job_id, organization_id=organization_id, title="Engineer")
     candidate = SimpleNamespace(
@@ -38,6 +43,9 @@ def test_public_application_worker_reuses_records_and_pinned_profile(monkeypatch
         candidate_id=candidate_id,
         file_uri="private/resume.pdf",
         extracted_text="Candidate CV text",
+        extraction_source="text_layer",
+        extraction_confidence=None,
+        status="uploaded",
     )
     application = SimpleNamespace(
         id=application_id,
@@ -45,6 +53,10 @@ def test_public_application_worker_reuses_records_and_pinned_profile(monkeypatch
         job_id=job_id,
         candidate_id=candidate_id,
         resume_id=resume_id,
+        advisory_rank=None,
+        advisory_score=None,
+        advisory_status=None,
+        advisory_message=None,
     )
     batch = SimpleNamespace(
         id=batch_id,
@@ -61,6 +73,10 @@ def test_public_application_worker_reuses_records_and_pinned_profile(monkeypatch
         sha256=hashlib.sha256(file_bytes).hexdigest(),
         source="public_application",
         job_profile_id=profile_id,
+        advisory_rank=None,
+        advisory_score=None,
+        advisory_status=None,
+        advisory_message=None,
         candidate_id=candidate_id,
         resume_id=resume_id,
         application_id=application_id,
@@ -75,8 +91,10 @@ def test_public_application_worker_reuses_records_and_pinned_profile(monkeypatch
     )
 
     class FakeStorage:
-        def read(self, *, file_uri):
+        def read(self, *, file_uri, organization_id=None, file_id=None):
             assert file_uri == resume.file_uri
+            assert organization_id == item.batch.organization_id
+            assert file_id == resume.id
             return file_bytes
 
     class FakeSession:
@@ -90,6 +108,10 @@ def test_public_application_worker_reuses_records_and_pinned_profile(monkeypatch
                 Candidate: candidate,
             }
             return records[model]
+
+        def scalar(self, query):
+            assert "FOR UPDATE" in str(query)
+            return self.get(ScreeningBatchItem, item.id)
 
         def begin_nested(self):
             return nullcontext()
@@ -116,21 +138,33 @@ def test_public_application_worker_reuses_records_and_pinned_profile(monkeypatch
             assert kwargs["job_profile_id"] == profile_id
             return SimpleNamespace(evaluation_id=uuid.uuid4())
 
-    monkeypatch.setattr(worker_module, "extract_text", lambda *args, **kwargs: "CV text")
     monkeypatch.setattr(
-        worker_module, "derive_screening_payloads", lambda **kwargs: ("profile", "evidence", "explanation")
+        worker_module,
+        "extract_document_text",
+        lambda *args, **kwargs: ExtractedDocumentText(
+            "CV text", source="ocr", confidence=0.42, needs_manual_review=True
+        ),
+    )
+    monkeypatch.setattr(
+        worker_module,
+        "derive_screening_payloads",
+        lambda **kwargs: ("profile", "evidence", "explanation"),
     )
     monkeypatch.setattr(worker_module, "get_provider", lambda *args, **kwargs: object())
     monkeypatch.setattr(worker_module, "CandidateProfileExtractionWorkflow", FakeProfileWorkflow)
     monkeypatch.setattr(worker_module, "CandidateEvaluationWorkflow", FakeEvaluationWorkflow)
     monkeypatch.setattr(ScreeningBatchService, "_update_batch_state", lambda batch: None)
     monkeypatch.setattr(
-        worker_module, "CandidateService",
+        worker_module,
+        "CandidateService",
         lambda: (_ for _ in ()).throw(AssertionError("Public applications must reuse candidates.")),
     )
     monkeypatch.setattr(
-        worker_module, "JobApplicationService",
-        lambda: (_ for _ in ()).throw(AssertionError("Public applications must reuse applications.")),
+        worker_module,
+        "JobApplicationService",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("Public applications must reuse applications.")
+        ),
     )
 
     succeeded = ScreeningWorker(storage=FakeStorage()).process_item(
@@ -143,3 +177,7 @@ def test_public_application_worker_reuses_records_and_pinned_profile(monkeypatch
     assert item.resume_id == resume_id
     assert item.application_id == application_id
     assert item.evaluation_id is not None
+    assert resume.extracted_text == "CV text"
+    assert resume.extraction_source == "ocr"
+    assert resume.extraction_confidence == 0.42
+    assert resume.status == "needs_manual_review"

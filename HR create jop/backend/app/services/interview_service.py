@@ -54,7 +54,9 @@ class InterviewService:
         calendar_prechecked: bool = False,
     ) -> Interview:
         from zoneinfo import ZoneInfo
+
         from sqlalchemy.exc import IntegrityError
+
         from app.models import InterviewSlotReservation
 
         organization = db.get(Organization, organization_id)
@@ -148,9 +150,7 @@ class InterviewService:
 
         # Concurrency protection: lock application row to prevent race conditions
         db.scalars(
-            select(JobApplication)
-            .where(JobApplication.id == application.id)
-            .with_for_update()
+            select(JobApplication).where(JobApplication.id == application.id).with_for_update()
         ).first()
 
         conflicts = self.find_conflicts(
@@ -268,6 +268,7 @@ class InterviewService:
         organization_id: uuid.UUID,
     ) -> Interview:
         from sqlalchemy import update
+
         from app.models import InterviewSlotReservation
 
         interview = self.get(db, interview_id=interview_id, organization_id=organization_id)
@@ -296,7 +297,9 @@ class InterviewService:
                 idempotency_key=f"interview:{interview.id}:cancel:{interview.google_event_id}",
                 payload={
                     "interview_id": str(interview.id),
-                    "hr_user_id": str(interview.interviewer_user_id) if interview.interviewer_user_id else None,
+                    "hr_user_id": str(interview.interviewer_user_id)
+                    if interview.interviewer_user_id
+                    else None,
                     "calendar_id": interview.google_calendar_id or "primary",
                     "event_id": interview.google_event_id,
                 },
@@ -346,7 +349,7 @@ class InterviewService:
 
     @staticmethod
     def _check_advance_gate(db: Session, application: JobApplication) -> None:
-        """Enforce that only candidates with an authoritative HR 'advance' decision can be scheduled."""
+        """Require an authoritative HR 'advance' decision before scheduling."""
         from app.models.hr_decision import HRDecision
 
         latest_decision = db.scalars(
@@ -362,9 +365,7 @@ class InterviewService:
             return
 
         decision_state = (
-            latest_decision.decision
-            if latest_decision is not None
-            else application.status
+            latest_decision.decision if latest_decision is not None else application.status
         )
         raise ValidationError(
             f"Interview scheduling denied: Application status is {decision_state!r}. "

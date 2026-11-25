@@ -8,7 +8,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import CalendarSyncOutbox, HRGoogleConnection, Interview
+from app.models import CalendarSyncOutbox, Interview
 from app.services.audit_service import AuditService
 from app.services.google_calendar_service import GoogleCalendarService
 from app.services.google_oauth_service import GoogleOAuthService
@@ -36,7 +36,7 @@ class CalendarOutboxService:
         if existing is not None:
             # Reconcile/retry: if failed or pending, keep it; if succeeded, idempotent no-op.
             if existing.status in {"failed", "succeeded"}:
-                # For reconciliation, allow requeue when caller explicitly wants same key reused? keep idempotent.
+                # Reconciliation can reuse the same key; keep this operation idempotent.
                 pass
             return existing
         now = datetime.now(UTC)
@@ -88,9 +88,7 @@ class CalendarOutboxService:
         db.flush()
         return row
 
-    def requeue_disconnected(
-        self, db: Session, *, interview_id: uuid.UUID | None = None
-    ) -> int:
+    def requeue_disconnected(self, db: Session, *, interview_id: uuid.UUID | None = None) -> int:
         """Explicitly requeue user-action-required rows after reconnection."""
         statement = select(CalendarSyncOutbox).where(
             CalendarSyncOutbox.status == "failed",
@@ -114,11 +112,13 @@ class CalendarOutboxService:
         row.last_error = None
         row.updated_at = now
 
-    def mark_failure(self, row: CalendarSyncOutbox, error: str, *, now: datetime | None = None) -> None:
+    def mark_failure(
+        self, row: CalendarSyncOutbox, error: str, *, now: datetime | None = None
+    ) -> None:
         now = now or datetime.now(UTC)
         row.last_error = (error or "calendar_sync_failed")[:500]
         row.updated_at = now
-        # Disconnected account requires user action; do not keep retrying as a transient API failure.
+        # A disconnected account requires user action; it is not a transient failure.
         if row.last_error == "google_account_disconnected":
             row.status = "failed"
             row.next_attempt_at = now
@@ -136,7 +136,9 @@ class CalendarOutboxService:
         gcal = GoogleCalendarService()
 
         if row.operation == "upsert_interview":
-            interview_id = payload.get("interview_id") or (str(row.interview_id) if row.interview_id else None)
+            interview_id = payload.get("interview_id") or (
+                str(row.interview_id) if row.interview_id else None
+            )
             if not interview_id:
                 raise ValueError("missing_interview_id")
             interview = db.get(Interview, uuid.UUID(interview_id))
@@ -147,7 +149,9 @@ class CalendarOutboxService:
                 interview.calendar_sync_status = "cancelled"
                 interview.calendar_sync_error = None
                 return
-            hr_user_id = payload.get("hr_user_id") or (str(row.hr_user_id) if row.hr_user_id else None)
+            hr_user_id = payload.get("hr_user_id") or (
+                str(row.hr_user_id) if row.hr_user_id else None
+            )
             conn = None
             if hr_user_id:
                 conn = GoogleOAuthService().get_connection(
@@ -155,7 +159,9 @@ class CalendarOutboxService:
                 )
             elif interview.interviewer_user_id:
                 conn = GoogleOAuthService().get_connection(
-                    db, organization_id=interview.organization_id, user_id=interview.interviewer_user_id
+                    db,
+                    organization_id=interview.organization_id,
+                    user_id=interview.interviewer_user_id,
                 )
             timezone_name = payload.get("timezone") or "UTC"
             cal_id, event_id, status, err = gcal.create_or_update_event(
@@ -170,7 +176,9 @@ class CalendarOutboxService:
             return
 
         if row.operation == "cancel_event":
-            hr_user_id = payload.get("hr_user_id") or (str(row.hr_user_id) if row.hr_user_id else None)
+            hr_user_id = payload.get("hr_user_id") or (
+                str(row.hr_user_id) if row.hr_user_id else None
+            )
             calendar_id = payload.get("calendar_id")
             event_id = payload.get("event_id")
             if not event_id:
@@ -180,7 +188,9 @@ class CalendarOutboxService:
                 conn = GoogleOAuthService().get_connection(
                     db, organization_id=row.organization_id, user_id=uuid.UUID(hr_user_id)
                 )
-            ok, err = gcal.delete_event(db, conn, calendar_id=calendar_id or "primary", event_id=event_id)
+            ok, err = gcal.delete_event(
+                db, conn, calendar_id=calendar_id or "primary", event_id=event_id
+            )
             if gcal.is_google_mode() and not ok:
                 if row.interview_id:
                     interview = db.get(Interview, row.interview_id)

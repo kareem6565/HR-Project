@@ -14,11 +14,16 @@ from sqlalchemy.orm import sessionmaker
 from app.ai import cost_policy
 from app.ai.actor_context import ai_actor_context
 from app.ai.providers.base import StructuredGenerationRequest, TextGenerationRequest
-from app.ai.providers.errors import ProviderRateLimitError, ProviderUnavailableError
+from app.ai.providers.errors import (
+    ProviderBudgetExceededError,
+    ProviderConfigurationError,
+    ProviderRateLimitError,
+    ProviderUnavailableError,
+)
 from app.ai.providers.openrouter import OpenRouterProvider
+from app.core import logging as app_logging
 from app.core.config import Settings
 from app.core.database import Base
-from app.core import logging as app_logging
 from app.models.ai_usage import AIPolicyControl, AIUsageCounter, AIUsageEvent
 
 
@@ -77,6 +82,56 @@ def test_invalid_tester_allowlist_never_grants_elevated_limits():
     ) == (5, 20)
 
 
+def test_self_hosted_usage_has_separate_quota_namespace_and_ledger(policy_db):
+    settings = _settings(
+        ai_paid_mode_enabled=True,
+        ai_paid_budget_usd=250,
+        ai_self_hosted_global_rpm_limit=2,
+        ai_self_hosted_global_daily_limit=40,
+        ai_self_hosted_user_rpm_limit=2,
+        ai_self_hosted_user_daily_limit=20,
+    )
+    event_id = cost_policy.authorize_self_hosted_and_reserve(
+        provider="ollama_local",
+        model="operator-configured-model",
+        metadata={"workflow": "synthetic_test"},
+        settings=settings,
+    )
+    cost_policy.record_result(
+        event_id,
+        status="succeeded",
+        response={"usage": {"prompt_tokens": 9, "completion_tokens": 2}},
+    )
+    with policy_db() as session:
+        event = session.get(AIUsageEvent, event_id)
+        keys = {row.bucket_key for row in session.scalars(select(AIUsageCounter)).all()}
+        assert event.provider == "ollama_local"
+        assert event.status == "succeeded"
+        assert event.input_tokens == 9
+        assert event.output_tokens == 2
+        assert "self_hosted:global:minute" in keys
+        assert "self_hosted:global:day" in keys
+        assert "global:minute" not in keys
+        assert "global:day" not in keys
+
+
+def test_self_hosted_quota_limit_fails_closed_without_consuming_external_quota(policy_db):
+    settings = _settings(
+        ai_self_hosted_global_rpm_limit=1,
+        ai_self_hosted_global_daily_limit=5,
+    )
+    cost_policy.authorize_self_hosted_and_reserve(
+        provider="local", model="operator-configured-model", metadata=None, settings=settings
+    )
+    with pytest.raises(ProviderRateLimitError):
+        cost_policy.authorize_self_hosted_and_reserve(
+            provider="local", model="operator-configured-model", metadata=None, settings=settings
+        )
+    with policy_db() as session:
+        keys = {row.bucket_key for row in session.scalars(select(AIUsageCounter)).all()}
+        assert keys == {"self_hosted:global:minute", "self_hosted:global:day"}
+
+
 def test_output_validation_failure_updates_provider_attempt_and_keeps_safe_field_paths(monkeypatch):
     request_id = "test-request-output-schema"
     from types import SimpleNamespace
@@ -112,9 +167,10 @@ def test_output_validation_failure_updates_provider_attempt_and_keeps_safe_field
         [{"location": ["title"], "type": "missing"}],
     )
     assert safe_errors == [{"location": ["title"], "type": "missing"}]
-    assert app_logging._safe_diagnostic_context(
-        "provider_request_id", "gen-1234567890123-abc"
-    ) == "gen-1234567890123-abc"
+    assert (
+        app_logging._safe_diagnostic_context("provider_request_id", "gen-1234567890123-abc")
+        == "gen-1234567890123-abc"
+    )
 
 
 def _catalog_model(*, prompt="0", completion="0", supported=None):
@@ -158,15 +214,88 @@ def test_approved_free_model_is_catalog_verified_and_metered(policy_db, monkeypa
         assert session.scalar(select(func.sum(AIUsageCounter.request_count))) == 2
 
 
+def test_owner_approved_paid_deepseek_is_metered_with_a_reserved_budget(policy_db, monkeypatch):
+    model = "deepseek/deepseek-v4.1-flash-1017"
+    monkeypatch.setattr(
+        cost_policy,
+        "_fetch_catalog",
+        lambda: {
+            model: {
+                "architecture": {"input_modalities": ["text"], "output_modalities": ["text"]},
+                "pricing": {"prompt": "0.00000003", "completion": "0.0000002"},
+                "supported_parameters": ["response_format"],
+            }
+        },
+    )
+    settings = _settings(
+        ai_paid_mode_enabled=True,
+        ai_paid_budget_usd=0.05,
+        ai_paid_model_allowlist=model,
+    )
+    monkeypatch.setattr(cost_policy, "_fetch_key_usage", lambda _api_key: 0.0)
+    event_id = cost_policy.authorize_and_reserve(
+        provider="openrouter",
+        model=model,
+        base_url=settings.openrouter_base_url,
+        structured=True,
+        metadata={"workflow": "application_review"},
+        has_api_key=True,
+        input_bytes=7000,
+        max_output_tokens=8192,
+        settings=settings,
+    )
+    with policy_db() as session:
+        event = session.get(AIUsageEvent, event_id)
+        assert event.model == model
+        assert event.status == "started"
+        assert event.reported_cost_usd is None
+    assert 0 < float(cost_policy._paid_pending[event_id]) < 0.05
+
+    with pytest.raises(
+        ProviderBudgetExceededError,
+        match="previous AI request has unknown final usage",
+    ):
+        cost_policy.authorize_and_reserve(
+            provider="openrouter",
+            model=model,
+            base_url=settings.openrouter_base_url,
+            structured=True,
+            metadata={"workflow": "application_review"},
+            has_api_key=True,
+            input_bytes=2_000_000,
+            max_output_tokens=8192,
+            settings=settings,
+        )
+
+
+def test_paid_routing_is_exact_model_and_price_capped():
+    model = "deepseek/deepseek-v4.1-flash-1017"
+    kwargs = {"model": model}
+
+    cost_policy.add_paid_routing_constraints(kwargs, model=model)
+
+    assert kwargs["extra_body"]["provider"] == {
+        "require_parameters": True,
+        "sort": "price",
+        "allow_fallbacks": False,
+        "max_price": {"prompt": 0.03, "completion": 0.2},
+    }
+    with pytest.raises(ProviderUnavailableError):
+        cost_policy.add_paid_routing_constraints(
+            {"model": "deepseek/deepseek-other"}, model="deepseek/deepseek-other"
+        )
+
+
 @pytest.mark.parametrize(
-    ("model", "catalog", "allowlist"),
+    ("model", "catalog", "allowlist", "expected_error"),
     [
-        ("deepseek/deepseek-v4.1-flash-1017", {}, ""),
-        ("unlisted/model:free", {}, ""),
+        ("deepseek/deepseek-v4.1-flash-1017", {}, "", ProviderConfigurationError),
+        ("unlisted/model:free", {}, "", ProviderConfigurationError),
         (
             "example/model:free",
             {"example/model:free": _catalog_model(prompt="0.01")},
             "example/model:free",
+            ProviderUnavailableError,
         ),
         (
             "example/model:free",
@@ -177,11 +306,12 @@ def test_approved_free_model_is_catalog_verified_and_metered(policy_db, monkeypa
                 }
             },
             "example/model:free",
+            ProviderUnavailableError,
         ),
     ],
 )
 def test_paid_unknown_or_unpriced_model_is_rejected_before_inference(
-    policy_db, monkeypatch, model, catalog, allowlist
+    policy_db, monkeypatch, model, catalog, allowlist, expected_error
 ):
     monkeypatch.setattr(cost_policy, "_fetch_catalog", lambda: catalog)
     provider = OpenRouterProvider(api_key="test-only-key", model=model)
@@ -189,7 +319,7 @@ def test_paid_unknown_or_unpriced_model_is_rejected_before_inference(
     provider._client.chat.completions.create = Mock()
     s = _settings(openrouter_model=model, ai_free_model_allowlist=allowlist)
     monkeypatch.setattr(cost_policy, "get_settings", lambda: s)
-    with pytest.raises(ProviderUnavailableError):
+    with pytest.raises(expected_error):
         provider.generate_text(TextGenerationRequest(input="synthetic"))
     provider._client.chat.completions.create.assert_not_called()
 
@@ -200,7 +330,7 @@ def test_direct_provider_construction_is_guarded_by_default():
     )
     provider._client.chat.completions.create = Mock()
     assert provider.cost_policy_enabled is True
-    with pytest.raises(ProviderUnavailableError):
+    with pytest.raises(ProviderConfigurationError):
         provider.generate_text(TextGenerationRequest(input="synthetic"))
     provider._client.chat.completions.create.assert_not_called()
 
@@ -352,7 +482,7 @@ def test_sensitive_identifiers_are_minimized_without_erasing_dates():
 
 def test_paid_mode_or_nonzero_cost_fails_closed(policy_db, monkeypatch):
     s = _settings(ai_paid_mode_enabled=True)
-    with pytest.raises(ProviderUnavailableError):
+    with pytest.raises(ProviderConfigurationError):
         cost_policy.authorize_and_reserve(
             provider="openrouter",
             model="openrouter/free",
@@ -392,7 +522,7 @@ def test_missing_api_key_does_not_activate_fake_provider(monkeypatch):
 
 
 def test_explicit_other_provider_is_blocked_by_policy_before_http(policy_db):
-    with pytest.raises(ProviderUnavailableError):
+    with pytest.raises(ProviderConfigurationError):
         cost_policy.authorize_and_reserve(
             provider="soal",
             model="gemini-3.5-flash",

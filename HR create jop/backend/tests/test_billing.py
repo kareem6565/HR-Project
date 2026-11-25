@@ -58,9 +58,7 @@ def test_plans_catalog_seeded_and_ordered(client: httpx.Client, db_session: Sess
     assert plans[0]["features"]["ocr_cv_intake"] is False
 
 
-def test_subscription_auto_provisions_free_tier(
-    client: httpx.Client, db_session: Session
-) -> None:
+def test_subscription_auto_provisions_free_tier(client: httpx.Client, db_session: Session) -> None:
     org, user = _org_user(db_session, "auto")
     resp = client.get("/api/v1/billing/subscription", headers=_headers(org, user))
     assert resp.status_code == 200

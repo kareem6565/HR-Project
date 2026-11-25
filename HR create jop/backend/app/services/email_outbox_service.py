@@ -28,7 +28,7 @@ class EmailOutboxService:
         template: str,
         payload: dict[str, Any],
     ) -> TransactionalEmailOutbox:
-        # Never store raw tokens/booking URLs/email bodies beyond safe payload fields; caller must sanitize.
+        # Store only safe payload fields; callers must sanitize tokens, booking URLs, and bodies.
         now = datetime.now(UTC)
         row = TransactionalEmailOutbox(
             organization_id=organization_id,
@@ -56,7 +56,9 @@ class EmailOutboxService:
         )
         return row
 
-    def claim_next(self, db: Session, *, now: datetime | None = None) -> TransactionalEmailOutbox | None:
+    def claim_next(
+        self, db: Session, *, now: datetime | None = None
+    ) -> TransactionalEmailOutbox | None:
         now = now or datetime.now(UTC)
         stmt = (
             select(TransactionalEmailOutbox)
@@ -65,7 +67,10 @@ class EmailOutboxService:
                 TransactionalEmailOutbox.next_attempt_at <= now,
                 TransactionalEmailOutbox.attempts < TransactionalEmailOutbox.max_attempts,
             )
-            .order_by(TransactionalEmailOutbox.next_attempt_at.asc(), TransactionalEmailOutbox.created_at.asc())
+            .order_by(
+                TransactionalEmailOutbox.next_attempt_at.asc(),
+                TransactionalEmailOutbox.created_at.asc(),
+            )
             .with_for_update(skip_locked=True)
             .limit(1)
         )
@@ -94,7 +99,9 @@ class EmailOutboxService:
         row.last_error = None
         row.updated_at = now
 
-    def mark_failure(self, row: TransactionalEmailOutbox, error: str, *, now: datetime | None = None) -> None:
+    def mark_failure(
+        self, row: TransactionalEmailOutbox, error: str, *, now: datetime | None = None
+    ) -> None:
         now = now or datetime.now(UTC)
         row.last_error = (error or "delivery_failed")[:500]
         row.updated_at = now

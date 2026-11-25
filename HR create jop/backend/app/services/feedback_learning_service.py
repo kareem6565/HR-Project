@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import HRFeedbackCorrection, Organization, User
@@ -85,7 +85,9 @@ class FeedbackLearningService:
             entity_id=correction.id,
             metadata={
                 "correction_type": correction_type,
-                "candidate_evaluation_id": str(candidate_evaluation_id) if candidate_evaluation_id else None,
+                "candidate_evaluation_id": str(candidate_evaluation_id)
+                if candidate_evaluation_id
+                else None,
             },
             flush=False,
         )

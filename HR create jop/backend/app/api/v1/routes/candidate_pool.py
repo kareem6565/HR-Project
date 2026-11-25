@@ -11,6 +11,7 @@ from app.core.database import get_db
 from app.services.candidate_pool_service import CandidatePoolService
 from app.services.review_service import ReviewService
 
+
 def _format_score(score: Any) -> str | None:
     if score is None:
         return None

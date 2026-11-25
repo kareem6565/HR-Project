@@ -157,6 +157,7 @@ class ReviewService:
         *,
         organization_id: uuid.UUID,
         status: str | None = None,
+        pipeline_stage: str | None = None,
         candidate_id: uuid.UUID | None = None,
         job_id: uuid.UUID | None = None,
         search: str | None = None,
@@ -184,6 +185,17 @@ class ReviewService:
         """
         if status is not None and status not in VALID_APPLICATION_STATUSES:
             raise ValidationError(f"Invalid application status filter: {status!r}.")
+        if pipeline_stage is not None and pipeline_stage not in {
+            "screening",
+            "review",
+            "interview",
+            "offer",
+            "hired",
+            "rejected",
+            "withdrawn",
+            "archived",
+        }:
+            raise ValidationError(f"Invalid pipeline stage filter: {pipeline_stage!r}.")
 
         latest_item_status = (
             select(ScreeningBatchItem.status)
@@ -232,6 +244,8 @@ class ReviewService:
         )
         if status is not None:
             query = query.where(JobApplication.status == status)
+        if pipeline_stage is not None:
+            query = query.where(JobApplication.pipeline_stage == pipeline_stage)
         if candidate_id is not None:
             query = query.where(JobApplication.candidate_id == candidate_id)
         if job_id is not None:

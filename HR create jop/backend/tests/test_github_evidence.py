@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session
 
 from app.ai.providers.fake import FakeAIProvider
@@ -23,6 +24,12 @@ from app.models import (
     User,
 )
 from app.services.github_evidence_service import GitHubEvidenceService
+
+
+def test_processing_query_locks_claimed_github_analysis_until_transaction_finishes():
+    statement = GitHubEvidenceService._processing_analysis_query(uuid.uuid4())
+
+    assert "FOR UPDATE" in str(statement.compile(dialect=postgresql.dialect()))
 
 
 @pytest.fixture()

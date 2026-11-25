@@ -8,8 +8,9 @@ Create Date: 2026-11-10
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 revision: str = "021_epic6_calendar"
 down_revision: str | None = "020_hr_ops_schema"
@@ -33,8 +34,18 @@ def upgrade() -> None:
         sa.Column("scopes", sa.Text(), nullable=True),
         sa.Column("status", sa.String(length=30), nullable=False, server_default="connected"),
         sa.Column("last_error", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.ForeignKeyConstraint(["organization_id"], ["organizations.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
@@ -54,17 +65,39 @@ def upgrade() -> None:
         sa.Column("recipient", sa.String(length=320), nullable=False),
         sa.Column("subject", sa.String(length=500), nullable=False),
         sa.Column("template", sa.String(length=120), nullable=False),
-        sa.Column("payload", postgresql.JSONB(astext_type=sa.Text()), nullable=False, server_default=sa.text("'{}'::jsonb")),
+        sa.Column(
+            "payload",
+            postgresql.JSONB(astext_type=sa.Text()),
+            nullable=False,
+            server_default=sa.text("'{}'::jsonb"),
+        ),
         sa.Column("status", sa.String(length=20), nullable=False, server_default="pending"),
         sa.Column("attempts", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("max_attempts", sa.Integer(), nullable=False, server_default="5"),
-        sa.Column("next_attempt_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "next_attempt_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("provider", sa.String(length=50), nullable=False, server_default="console"),
         sa.Column("last_error", sa.Text(), nullable=True),
         sa.Column("sent_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.CheckConstraint("status IN ('pending', 'processing', 'sent', 'failed')", name="ck_email_outbox_status"),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.CheckConstraint(
+            "status IN ('pending', 'processing', 'sent', 'failed')", name="ck_email_outbox_status"
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
@@ -82,16 +115,39 @@ def upgrade() -> None:
         sa.Column("hr_user_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("operation", sa.String(length=40), nullable=False),  # upsert/cancel
         sa.Column("idempotency_key", sa.String(length=200), nullable=False),
-        sa.Column("payload", postgresql.JSONB(astext_type=sa.Text()), nullable=False, server_default=sa.text("'{}'::jsonb")),
+        sa.Column(
+            "payload",
+            postgresql.JSONB(astext_type=sa.Text()),
+            nullable=False,
+            server_default=sa.text("'{}'::jsonb"),
+        ),
         sa.Column("status", sa.String(length=20), nullable=False, server_default="pending"),
         sa.Column("attempts", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("max_attempts", sa.Integer(), nullable=False, server_default="8"),
-        sa.Column("next_attempt_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "next_attempt_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("last_error", sa.Text(), nullable=True),
         sa.Column("processed_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.CheckConstraint("status IN ('pending', 'processing', 'succeeded', 'failed')", name="ck_calendar_outbox_status"),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.CheckConstraint(
+            "status IN ('pending', 'processing', 'succeeded', 'failed')",
+            name="ck_calendar_outbox_status",
+        ),
         sa.ForeignKeyConstraint(["organization_id"], ["organizations.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(["interview_id"], ["interviews.id"], ondelete="SET NULL"),
         sa.ForeignKeyConstraint(["hr_user_id"], ["users.id"], ondelete="SET NULL"),
@@ -105,20 +161,35 @@ def upgrade() -> None:
         unique=False,
     )
 
-    op.add_column("interviews", sa.Column("scheduled_start_at", sa.DateTime(timezone=True), nullable=True))
-    op.add_column("interviews", sa.Column("scheduled_end_at", sa.DateTime(timezone=True), nullable=True))
-    op.add_column("interviews", sa.Column("google_calendar_id", sa.String(length=255), nullable=True))
+    op.add_column(
+        "interviews", sa.Column("scheduled_start_at", sa.DateTime(timezone=True), nullable=True)
+    )
+    op.add_column(
+        "interviews", sa.Column("scheduled_end_at", sa.DateTime(timezone=True), nullable=True)
+    )
+    op.add_column(
+        "interviews", sa.Column("google_calendar_id", sa.String(length=255), nullable=True)
+    )
     op.add_column("interviews", sa.Column("google_event_id", sa.String(length=255), nullable=True))
     op.add_column(
         "interviews",
-        sa.Column("calendar_sync_status", sa.String(length=30), nullable=False, server_default="not_required"),
+        sa.Column(
+            "calendar_sync_status",
+            sa.String(length=30),
+            nullable=False,
+            server_default="not_required",
+        ),
     )
-    op.add_column("interviews", sa.Column("calendar_sync_error", sa.String(length=1000), nullable=True))
+    op.add_column(
+        "interviews", sa.Column("calendar_sync_error", sa.String(length=1000), nullable=True)
+    )
 
     # Historical rows are left with NULL scheduled_start_at/end_at intentionally:
     # naive scheduled_date/scheduled_time have no proven timezone contract, so this
     # migration must not invent or silently backfill historical instants.
-    op.create_index("ix_interviews_scheduled_start_at", "interviews", ["scheduled_start_at"], unique=False)
+    op.create_index(
+        "ix_interviews_scheduled_start_at", "interviews", ["scheduled_start_at"], unique=False
+    )
 
     op.add_column(
         "candidate_invitations",
@@ -138,19 +209,45 @@ def upgrade() -> None:
         sa.Column("interviewer_user_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("scheduled_start_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("scheduled_end_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("status", sa.String(length=20), nullable=False, server_default="active"),  # active/released
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.CheckConstraint("status IN ('active', 'released')", name="ck_interview_reservations_status"),
-        sa.CheckConstraint("scheduled_end_at > scheduled_start_at", name="ck_interview_reservations_range"),
+        sa.Column(
+            "status", sa.String(length=20), nullable=False, server_default="active"
+        ),  # active/released
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.CheckConstraint(
+            "status IN ('active', 'released')", name="ck_interview_reservations_status"
+        ),
+        sa.CheckConstraint(
+            "scheduled_end_at > scheduled_start_at", name="ck_interview_reservations_range"
+        ),
         sa.ForeignKeyConstraint(["organization_id"], ["organizations.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(["interview_id"], ["interviews.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["candidate_id"], ["candidates.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(["interviewer_user_id"], ["users.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_interview_reservations_interview", "interview_slot_reservations", ["interview_id"], unique=False)
-    op.create_index("ix_interview_reservations_org", "interview_slot_reservations", ["organization_id", "status"], unique=False)
+    op.create_index(
+        "ix_interview_reservations_interview",
+        "interview_slot_reservations",
+        ["interview_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_interview_reservations_org",
+        "interview_slot_reservations",
+        ["organization_id", "status"],
+        unique=False,
+    )
 
     # DB-enforced overlap protection for active reservations
     op.execute(
@@ -178,8 +275,14 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute("ALTER TABLE interview_slot_reservations DROP CONSTRAINT IF EXISTS ex_interview_reservations_candidate")
-    op.execute("ALTER TABLE interview_slot_reservations DROP CONSTRAINT IF EXISTS ex_interview_reservations_interviewer")
+    op.execute(
+        "ALTER TABLE interview_slot_reservations "
+        "DROP CONSTRAINT IF EXISTS ex_interview_reservations_candidate"
+    )
+    op.execute(
+        "ALTER TABLE interview_slot_reservations "
+        "DROP CONSTRAINT IF EXISTS ex_interview_reservations_interviewer"
+    )
     op.drop_index("ix_interview_reservations_org", table_name="interview_slot_reservations")
     op.drop_index("ix_interview_reservations_interview", table_name="interview_slot_reservations")
     op.drop_table("interview_slot_reservations")

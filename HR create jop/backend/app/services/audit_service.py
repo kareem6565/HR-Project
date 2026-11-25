@@ -161,7 +161,9 @@ class AuditService:
         Does not record raw submitted credentials, email addresses, or user identifiers.
         Uses an isolated flush to guarantee event recording.
         """
-        safe_category = category if category in SAFE_AUTH_FAILURE_CATEGORIES else "invalid_credentials"
+        safe_category = (
+            category if category in SAFE_AUTH_FAILURE_CATEGORIES else "invalid_credentials"
+        )
         return self.log_event(
             db,
             action="auth.login_failed",

@@ -13,6 +13,8 @@ const AI_REVIEW_LABELS = { must_review: "Must Review", consider: "Consider", low
 const SOURCES = ["LinkedIn", "WUZZUF", "Facebook", "Referral", "Direct"];
 const SCREENING_LABELS = { not_started: "Pending", queued: "Queued", processing: "Processing", completed: "Completed", failed: "Failed" };
 const DECISION_LABELS = { pending_review: "Pending review", advanced: "Advanced", hold: "Hold", rejected: "Rejected" };
+const PIPELINE_STAGE_LABELS = { screening: "Screening", review: "HR review", interview: "Interview", offer: "Offer", hired: "Hired", rejected: "Rejected", withdrawn: "Withdrawn", archived: "Archived" };
+const PIPELINE_STAGES = Object.entries(PIPELINE_STAGE_LABELS);
 const PAGE_SIZE = 20;
 
 export default function ApplicationsList() {
@@ -31,6 +33,7 @@ export default function ApplicationsList() {
   const [dateTo, setDateTo] = useState("");
   const [processingStatus, setProcessingStatus] = useState("");
   const [decisionStatus, setDecisionStatus] = useState("");
+  const [pipelineStage, setPipelineStage] = useState("");
   const [sort, setSort] = useState("created_at:desc");
   const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false);
   const navigate = useNavigate();
@@ -56,13 +59,14 @@ export default function ApplicationsList() {
       ...(dateTo ? { date_to: dateTo } : {}),
       ...(processingStatus ? { processing_status: processingStatus } : {}),
       ...(decisionStatus ? { decision_status: decisionStatus } : {}),
+      ...(pipelineStage ? { pipeline_stage: pipelineStage } : {}),
       ...(search ? { search } : {}),
       sort_by: sortBy,
       sort_order: sortOrder,
       page,
       page_size: PAGE_SIZE,
     };
-  }, [filter, jobId, source, dateFrom, dateTo, processingStatus, decisionStatus, search, sort, page]);
+  }, [filter, jobId, source, dateFrom, dateTo, processingStatus, decisionStatus, pipelineStage, search, sort, page]);
 
   const load = () => {
     setLoading(true);
@@ -80,12 +84,13 @@ export default function ApplicationsList() {
   const resetFilters = () => {
     setFilter("all"); setSearchInput(""); setSearch(""); setJobId(""); setSource("");
     setDateFrom(""); setDateTo(""); setProcessingStatus(""); setDecisionStatus("");
+    setPipelineStage("");
     setSort("created_at:desc"); setPage(1); setAdvancedFiltersOpen(false);
   };
 
   const activeFilterCount = [
     filter !== "all", Boolean(search), Boolean(jobId), Boolean(source), Boolean(dateFrom), Boolean(dateTo),
-    Boolean(processingStatus), Boolean(decisionStatus), sort !== "created_at:desc",
+    Boolean(processingStatus), Boolean(decisionStatus), Boolean(pipelineStage), sort !== "created_at:desc",
   ].filter(Boolean).length;
 
   const columns = [
@@ -95,7 +100,8 @@ export default function ApplicationsList() {
     { key: "source", header: <span className="applications-column-heading"><Link2 size={14} aria-hidden="true" /> Reported source</span>, render: (row) => <div className="application-source-cell"><strong>{row.source || "Unspecified"}</strong>{row.sourceMedium && <small>{row.sourceMedium}{row.sourceCampaign ? ` · ${row.sourceCampaign}` : ""}</small>}</div> },
     { key: "screeningStatus", header: <span className="applications-column-heading"><Activity size={14} aria-hidden="true" /> CV screening</span>, render: (row) => <span className={`application-status-pill is-${row.screeningStatus || "pending"}`}><span className="application-status-dot" />{SCREENING_LABELS[row.screeningStatus] || "Pending"}</span> },
     { key: "score", header: <span className="applications-column-heading"><Gauge size={14} aria-hidden="true" /> Screening result</span>, render: (row) => {
-      if (row.screeningStatus !== "completed") return "—";
+      if (row.advisoryStatus === "not_evaluated") return <span title={row.advisoryMessage || "LLM evaluation not run; ranking is advisory only"}>LLM not run · rank #{row.advisoryRank}</span>;
+      if (row.screeningStatus !== "completed" || row.score == null) return "—";
       const evidence = Array.isArray(row.evidence) ? row.evidence : [];
       const matched = evidence.filter((entry) => entry.evidence_type === "matched").length;
       const partial = evidence.filter((entry) => entry.evidence_type === "partial").length;
@@ -104,6 +110,7 @@ export default function ApplicationsList() {
       return <div className="application-score-cell"><div className="application-score-topline"><strong>{formatScore(row.score)}</strong><span>{matched} matched</span></div><div className="application-score-track" aria-label={`Screening score ${formatScore(row.score)}`}><span style={{ width: `${scorePercent}%` }} /></div><small>{partial} partial · {missing} missing</small></div>;
     } },
     { key: "decisionStatus", header: <span className="applications-column-heading"><CheckCircle2 size={14} aria-hidden="true" /> HR decision</span>, render: (row) => <span className={`application-decision-pill is-${row.decisionStatus || "pending"}`}>{DECISION_LABELS[row.decisionStatus] || "Pending review"}</span> },
+    { key: "pipelineStage", header: <span className="applications-column-heading">Pipeline stage</span>, render: (row) => <span className={`pipeline-stage-badge is-${row.pipelineStage || "screening"}`}>{PIPELINE_STAGE_LABELS[row.pipelineStage] || "Screening"}</span> },
     { key: "group", header: <span className="applications-column-heading"><Sparkles size={14} aria-hidden="true" /> AI review</span>, render: (row) => row.group ? <span className={`application-review-pill is-${row.group}`}>{AI_REVIEW_LABELS[row.group] || row.group}</span> : "—" },
   ];
 
@@ -185,12 +192,13 @@ export default function ApplicationsList() {
           <label><span>Applied to</span><input type="date" value={dateTo} onChange={(event) => { setDateTo(event.target.value); setPage(1); }} /></label>
           <label><span>CV processing</span><select value={processingStatus} onChange={(event) => { setProcessingStatus(event.target.value); setPage(1); }}><option value="">All processing states</option>{Object.entries(SCREENING_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
           <label><span>HR decision</span><select value={decisionStatus} onChange={(event) => { setDecisionStatus(event.target.value); setPage(1); }}><option value="">All decisions</option>{Object.entries(DECISION_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+          <label><span>Pipeline stage</span><select aria-label="Filter by pipeline stage" value={pipelineStage} onChange={(event) => { setPipelineStage(event.target.value); setPage(1); }}><option value="">All pipeline stages</option>{PIPELINE_STAGES.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
           <label><span>Sort by</span><select value={sort} onChange={(event) => { setSort(event.target.value); setPage(1); }}><option value="created_at:desc">Newest applications</option><option value="created_at:asc">Oldest applications</option><option value="score:desc">Highest screening score</option><option value="score:asc">Lowest screening score</option></select></label>
         </div>}
       </div>
 
       {loading ? <LoadingSpinner label="Loading applications..." /> : error ? <ErrorState message="Unable to load applications. Please try again." onRetry={load} /> : <>
-        <DataTable columns={columns} data={applications} onRowClick={(row) => navigate(`/applications/${row.id}/review`)} header={<div className="applications-table-heading"><div><span className="applications-table-heading-icon"><ClipboardList size={17} aria-hidden="true" /></span><span><strong>Application pipeline</strong><small>Candidate progress, screening, and decisions</small></span></div><span className="applications-table-count">Showing {applications.length} of {total}</span></div>} emptyLabel={total === 0 && filter === "all" && !search && !jobId && !source && !dateFrom && !dateTo && !processingStatus && !decisionStatus ? "No applications yet." : "No applications match these filters."} emptyAction={total === 0 && filter === "all" && !search && !jobId && !source && !dateFrom && !dateTo && !processingStatus && !decisionStatus ? <button type="button" className="btn btn-secondary btn-small" onClick={() => navigate("/candidates/screen")}>Start screening</button> : <button type="button" className="btn btn-secondary btn-small" onClick={resetFilters}>Reset filters</button>} />
+        <DataTable columns={columns} data={applications} onRowClick={(row) => navigate(`/applications/${row.id}/review`)} header={<div className="applications-table-heading"><div><span className="applications-table-heading-icon"><ClipboardList size={17} aria-hidden="true" /></span><span><strong>Application pipeline</strong><small>Candidate progress, screening, and decisions</small></span></div><span className="applications-table-count">Showing {applications.length} of {total}</span></div>} emptyLabel={total === 0 && filter === "all" && !search && !jobId && !source && !dateFrom && !dateTo && !processingStatus && !decisionStatus && !pipelineStage ? "No applications yet." : "No applications match these filters."} emptyAction={total === 0 && filter === "all" && !search && !jobId && !source && !dateFrom && !dateTo && !processingStatus && !decisionStatus && !pipelineStage ? <button type="button" className="btn btn-secondary btn-small" onClick={() => navigate("/candidates/screen")}>Start screening</button> : <button type="button" className="btn btn-secondary btn-small" onClick={resetFilters}>Reset filters</button>} />
         <Pagination total={total} pageSize={PAGE_SIZE} page={page} onPageChange={setPage} />
       </>}
     </section>

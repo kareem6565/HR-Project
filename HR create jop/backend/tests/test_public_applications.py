@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 import httpx
 import pytest
 from fastapi.testclient import TestClient
-from resume_upload_fixtures import make_pdf_bytes
+from resume_upload_fixtures import make_image_pdf, make_pdf_bytes, scanned_image
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -23,6 +23,7 @@ from app.models import (
     JobProfile,
     Organization,
     PublicApplicationRateLimit,
+    Resume,
     ScreeningBatchItem,
     User,
 )
@@ -38,7 +39,8 @@ def public_client(db_session: Session) -> Generator[TestClient, None, None]:
         yield db_session
 
     app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as client:
+    test_client_host = f"testclient-{uuid.uuid4()}"
+    with TestClient(app, client=(test_client_host, 50000)) as client:
         yield client
     app.dependency_overrides.pop(get_db, None)
 
@@ -165,15 +167,44 @@ def test_anonymous_submission_reuses_models_and_saves_consent_and_attribution(
     assert application.candidate.email == "alex@example.test"
     assert application.public_contact_email == "Alex@example.test"
     assert application.resume.file_uri.startswith(f"resumes/{job.organization_id}/")
-    item = db_session.scalar(select(ScreeningBatchItem).where(
-        ScreeningBatchItem.application_id == application.id
-    ))
+    item = db_session.scalar(
+        select(ScreeningBatchItem).where(ScreeningBatchItem.application_id == application.id)
+    )
     assert item is not None
     assert item.source == "public_application"
     assert item.status == "queued"
     assert item.job_profile_id == job.published_job_profile_id
     assert item.candidate_id == application.candidate_id
     assert item.resume_id == application.resume_id
+
+
+def test_scanned_public_resume_is_queued_without_running_ocr_in_request(
+    public_client: TestClient, db_session: Session
+) -> None:
+    job = make_published_job(db_session)
+    response = submit(
+        public_client,
+        job.public_id,
+        key="scanned-application-key-1234",
+        resume_name="synthetic-scan.pdf",
+        resume_file=make_image_pdf([scanned_image("scan_en.jpg")]),
+    )
+    assert response.status_code == 201, response.text
+    body = response.json()
+    application = db_session.scalar(
+        select(JobApplication).where(
+            JobApplication.public_reference == body["application_reference"]
+        )
+    )
+    assert application is not None
+    resume = db_session.get(Resume, application.resume_id)
+    assert resume is not None
+    assert resume.extracted_text is None
+    assert resume.status == "uploaded"
+    item = db_session.scalar(
+        select(ScreeningBatchItem).where(ScreeningBatchItem.resume_id == resume.id)
+    )
+    assert item is not None and item.status == "queued"
 
 
 def test_known_distribution_campaign_canonicalizes_public_application_source(
@@ -227,9 +258,16 @@ def test_idempotent_retry_returns_same_reference_without_creating_another_applic
         == 1
     )
     application = db_session.scalar(select(JobApplication).where(JobApplication.job_id == job.id))
-    assert len(db_session.scalars(select(ScreeningBatchItem).where(
-        ScreeningBatchItem.application_id == application.id
-    )).all()) == 1
+    assert (
+        len(
+            db_session.scalars(
+                select(ScreeningBatchItem).where(
+                    ScreeningBatchItem.application_id == application.id
+                )
+            ).all()
+        )
+        == 1
+    )
 
 
 def test_same_email_submitted_with_new_idempotency_key_is_not_merged(

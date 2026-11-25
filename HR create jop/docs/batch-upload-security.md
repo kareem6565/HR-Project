@@ -1,0 +1,7 @@
+# Screening batch and ZIP upload limits
+
+The backend `GET /api/v1/screening-upload-config` endpoint is authoritative for the UI. Configure limits in the backend environment; do not duplicate the numbers in frontend code. Defaults are: 5 MiB per CV, 300 items per batch, 100 MiB total uncompressed ZIP data, 50 MiB uploaded ZIP, 500 ZIP entries, compression ratio 100:1, and 2 active batches per organization. The existing regular multi-file endpoint retains its separate 50 MiB request-body budget.
+
+ZIP entry names are validated, but extracted data is written only to generated temporary names and then to storage keys based on server-generated item IDs. ZIP extraction counts actual expanded bytes as it streams, checks disk free space before extraction, and removes its temporary directory on success or failure. DOCX is recognized by its ZIP structure and required document parts; it is accepted as a CV container. Other archives inside the batch ZIP are rejected. Supported file type is determined from content rather than its filename extension.
+
+Items with matching SHA-256 content are retained as `duplicate` skipped entries with a reason. Provider rate limits retain work in the queue with stage `waiting_for_quota`; bounded backoff retries automatically and does not consume the normal retry ceiling. Batch audit entries include only organization/actor/batch IDs and aggregate counts, never upload filenames. Progress includes item state/reason and an ETA only after at least three terminal items provide an observed processing rate.

@@ -23,6 +23,7 @@ from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.ai.providers import get_provider
 from app.ai.providers.errors import (
     ProviderBudgetExceededError,
     ProviderError,
@@ -30,7 +31,6 @@ from app.ai.providers.errors import (
     ProviderRateLimitError,
     ProviderTimeoutError,
 )
-from app.ai.providers import get_provider
 from app.ai.workflows import CandidateEvaluationWorkflow, CandidateProfileExtractionWorkflow
 from app.core.config import settings
 from app.core.database import SessionLocal
@@ -43,13 +43,14 @@ from app.models import (
     ScreeningBatchItem,
 )
 from app.services.candidate_service import CandidateService
-from app.services.errors import UploadValidationError, ValidationError as ServiceValidationError
+from app.services.errors import UploadValidationError
+from app.services.errors import ValidationError as ServiceValidationError
 from app.services.job_application_service import JobApplicationService
+from app.services.job_profile_requirements import get_effective_job_requirements
 from app.services.resume_details_service import derive_screening_payloads
 from app.services.screening_batch_service import ScreeningBatchService
-from app.services.job_profile_requirements import get_effective_job_requirements
 from app.services.storage_service import LocalFileSystemStorage, StorageProvider
-from app.services.text_extraction_service import extract_text
+from app.services.text_extraction_service import extract_document_text
 
 logger = logging.getLogger("app.worker")
 _SAFE_DIAGNOSTIC_FIELD = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
@@ -60,7 +61,8 @@ def _screening_error_details(error: Exception) -> tuple[str, str, bool]:
     if isinstance(error, ProviderBudgetExceededError):
         return (
             "AI_BUDGET_EXCEEDED",
-            "Screening paused because the approved OpenRouter test budget would be exceeded. No request was sent for this step; raise the cap and retry.",
+            "Screening paused because the approved OpenRouter test budget would be exceeded. "
+            "No request was sent for this step; raise the cap and retry.",
             False,
         )
     if isinstance(error, ProviderRateLimitError):
@@ -75,17 +77,20 @@ def _screening_error_details(error: Exception) -> tuple[str, str, bool]:
         if getattr(error, "code", None) == "invalid_ai_output":
             return (
                 "AI_OUTPUT_INVALID",
-                "OpenRouter replied, but its screening result did not match the required format. No score was saved. Review the setup and retry.",
+                "OpenRouter replied, but its screening result did not match the required format. "
+                "No score was saved. Review the setup and retry.",
                 False,
             )
         return (
             "SCREENING_VALIDATION_FAILED",
-            "Screening stopped because a required check failed. Review the job criteria or CV, then retry.",
+            "Screening stopped because a required check failed. "
+            "Review the job criteria or CV, then retry.",
             False,
         )
     return (
         "SCREENING_INTERNAL_ERROR",
-        "Screening stopped because of an unexpected system error. The technical trace is available in the screening logs.",
+        "Screening stopped because of an unexpected system error. "
+        "The technical trace is available in the screening logs.",
         False,
     )
 
@@ -239,6 +244,16 @@ class ScreeningWorker:
             logger.warning("Recovered %d stale screening batch items.", recovered)
         return recovered
 
+    @staticmethod
+    def _processing_item_query(item_id: uuid.UUID):
+        """Lock an active item so lease recovery cannot reclaim live work."""
+        return (
+            select(ScreeningBatchItem)
+            .where(ScreeningBatchItem.id == item_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+
     def process_item(
         self,
         db: Session,
@@ -246,12 +261,8 @@ class ScreeningWorker:
         claim_token: str,
     ) -> bool:
         """Process a single claimed item end-to-end with failure isolation."""
-        item = db.get(ScreeningBatchItem, item_id)
-        if (
-            item is None
-            or item.claim_token != claim_token
-            or item.status != "running"
-        ):
+        item = db.scalar(self._processing_item_query(item_id))
+        if item is None or item.claim_token != claim_token or item.status != "running":
             logger.warning("Claim lost or item reclaimed by another worker: %s", item_id)
             return False
 
@@ -277,12 +288,13 @@ class ScreeningWorker:
             approved_profile = next((p for p in job.profiles if p.status == "approved"), None)
 
         valid_profile_statuses = (
-            {"approved", "superseded"}
-            if item_source == "public_application"
-            else {"approved"}
+            {"approved", "superseded"} if item_source == "public_application" else {"approved"}
         )
-        if (approved_profile is None or getattr(approved_profile, "job_id", job.id) != job.id
-                or approved_profile.status not in valid_profile_statuses):
+        if (
+            approved_profile is None
+            or getattr(approved_profile, "job_id", job.id) != job.id
+            or approved_profile.status not in valid_profile_statuses
+        ):
             self._record_permanent_failure(
                 item_id,
                 claim_token,
@@ -292,29 +304,56 @@ class ScreeningWorker:
             )
             return False
 
+        if settings.a5_prerank_enabled:
+            from app.services.advisory_preranking_service import rank_worker_cohort
+
+            rank_worker_cohort(
+                db, job=job, batch=batch, approved_profile=approved_profile, storage=self.storage
+            )
+
         # Public applications already own a private Resume file; manual batches own a batch copy.
         if item_source == "public_application":
             app = db.get(JobApplication, item.application_id) if item.application_id else None
             resume_record = db.get(Resume, item.resume_id) if item.resume_id else None
             candidate_record = db.get(Candidate, item.candidate_id) if item.candidate_id else None
-            if (app is None or resume_record is None or candidate_record is None
-                    or app.organization_id != org_id or app.job_id != job.id
-                    or candidate_record.organization_id != org_id
-                    or app.resume_id != resume_record.id or app.candidate_id != candidate_record.id
-                    or resume_record.candidate_id != candidate_record.id):
-                self._record_permanent_failure(item_id, claim_token, "APPLICATION_CONTEXT_INVALID",
-                    "Public application screening context is invalid.", db=db)
+            if (
+                app is None
+                or resume_record is None
+                or candidate_record is None
+                or app.organization_id != org_id
+                or app.job_id != job.id
+                or candidate_record.organization_id != org_id
+                or app.resume_id != resume_record.id
+                or app.candidate_id != candidate_record.id
+                or resume_record.candidate_id != candidate_record.id
+            ):
+                self._record_permanent_failure(
+                    item_id,
+                    claim_token,
+                    "APPLICATION_CONTEXT_INVALID",
+                    "Public application screening context is invalid.",
+                    db=db,
+                )
                 return False
             if resume_record.file_uri != item.storage_key:
-                self._record_permanent_failure(item_id, claim_token, "RESUME_STORAGE_MISMATCH",
-                    "Stored resume reference does not match the application.", db=db)
+                self._record_permanent_failure(
+                    item_id,
+                    claim_token,
+                    "RESUME_STORAGE_MISMATCH",
+                    "Stored resume reference does not match the application.",
+                    db=db,
+                )
                 return False
 
         # Read stored file
         processing_stage = "storage_read"
         self._publish_item_stage(db, item_id, claim_token, processing_stage)
         try:
-            raw_bytes = self.storage.read(file_uri=item.storage_key)
+            raw_bytes = self.storage.read(
+                file_uri=item.storage_key,
+                organization_id=org_id,
+                file_id=item.resume_id if item_source == "public_application" else item.id,
+            )
         except Exception as exc:
             self._log_item_failure(item, "storage_read", exc)
             self._record_permanent_failure(
@@ -326,8 +365,11 @@ class ScreeningWorker:
             and hashlib.sha256(raw_bytes).hexdigest() != item.sha256
         ):
             self._record_permanent_failure(
-                item_id, claim_token, "RESUME_CHECKSUM_MISMATCH",
-                "Stored resume integrity check failed.", db=db
+                item_id,
+                claim_token,
+                "RESUME_CHECKSUM_MISMATCH",
+                "Stored resume integrity check failed.",
+                db=db,
             )
             return False
 
@@ -335,18 +377,17 @@ class ScreeningWorker:
         processing_stage = "cv_text_extraction"
         self._publish_item_stage(db, item_id, claim_token, processing_stage)
         try:
-            text = extract_text(
+            extraction = extract_document_text(
                 raw_bytes,
                 filename=item.filename,
                 max_pdf_pages=settings.max_pdf_pages,
                 max_docx_uncompressed_bytes=settings.max_docx_uncompressed_bytes,
                 max_docx_entries=settings.max_docx_entries,
             )
+            text = extraction.text
         except UploadValidationError as exc:
             self._log_item_failure(item, "cv_text_extraction", exc, level=logging.WARNING)
-            self._record_permanent_failure(
-                item_id, claim_token, exc.code, str(exc), db=db
-            )
+            self._record_permanent_failure(item_id, claim_token, exc.code, str(exc), db=db)
             return False
         except Exception as exc:
             self._log_item_failure(item, "cv_text_extraction", exc, level=logging.WARNING)
@@ -369,6 +410,14 @@ class ScreeningWorker:
                     candidate = db.get(Candidate, item.candidate_id)
                     resume = db.get(Resume, item.resume_id)
                     application = db.get(JobApplication, item.application_id)
+                    resume.extracted_text = text
+                    resume.extraction_source = extraction.source
+                    resume.extraction_confidence = extraction.confidence
+                    resume.status = (
+                        "needs_manual_review"
+                        if extraction.needs_manual_review
+                        else "text_extracted"
+                    )
                 else:
                     candidate_name = self._candidate_name_from_filename(item.filename)
                     candidate = CandidateService().create(
@@ -379,11 +428,15 @@ class ScreeningWorker:
                     resume_id = uuid.uuid4()
                     extension = Path(item.filename).suffix.lower().lstrip(".")
                     created_resume_uri = self.storage.save(
-                        organization_id=org_id, resume_id=resume_id, extension=extension,
+                        organization_id=org_id,
+                        resume_id=resume_id,
+                        extension=extension,
                         stream=lambda: raw_bytes,
                     )
                     resume = Resume(
-                        id=resume_id, candidate_id=candidate.id, file_uri=created_resume_uri,
+                        id=resume_id,
+                        candidate_id=candidate.id,
+                        file_uri=created_resume_uri,
                         original_filename=item.filename,
                         content_type={
                             "pdf": "application/pdf",
@@ -395,8 +448,16 @@ class ScreeningWorker:
                             extension,
                             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                         ),
-                        file_size_bytes=len(raw_bytes), checksum=item.sha256,
-                        extracted_text=text, status="text_extracted",
+                        file_size_bytes=len(raw_bytes),
+                        checksum=item.sha256,
+                        extracted_text=text,
+                        extraction_source=extraction.source,
+                        extraction_confidence=extraction.confidence,
+                        status=(
+                            "needs_manual_review"
+                            if extraction.needs_manual_review
+                            else "text_extracted"
+                        ),
                     )
                     db.add(resume)
                     db.flush()
@@ -404,9 +465,7 @@ class ScreeningWorker:
                 # 3. Profile extraction
                 processing_stage = "candidate_profile_extraction"
                 self._publish_item_stage(db, item_id, claim_token, processing_stage)
-                screening_requirements, _ = get_effective_job_requirements(
-                    job, approved_profile
-                )
+                screening_requirements, _ = get_effective_job_requirements(job, approved_profile)
                 profile_payload, evidence_payload, explanation_payload = derive_screening_payloads(
                     full_name=candidate.full_name,
                     job_title=job.title,
@@ -429,28 +488,39 @@ class ScreeningWorker:
                     processing_stage = "application_creation"
                     self._publish_item_stage(db, item_id, claim_token, processing_stage)
                     application = JobApplicationService().create(
-                        db, organization_id=org_id, job_id=job.id,
-                        candidate_id=candidate.id, resume_id=resume.id,
+                        db,
+                        organization_id=org_id,
+                        job_id=job.id,
+                        candidate_id=candidate.id,
+                        resume_id=resume.id,
                     )
 
-                # 5. Candidate evaluation
+                application.advisory_rank = item.advisory_rank
+                application.advisory_score = item.advisory_score
+                application.advisory_status = item.advisory_status
+                application.advisory_message = item.advisory_message
+
+                # Outside the advisory top N, defer only AI evidence evaluation.
                 processing_stage = "candidate_evaluation"
                 self._publish_item_stage(db, item_id, claim_token, processing_stage)
-                eval_result = CandidateEvaluationWorkflow(
-                    evidence_provider=get_provider(
-                        settings,
-                        structured_payload=evidence_payload,
-                    ),
-                    explanation_provider=get_provider(
-                        settings,
-                        structured_payload=explanation_payload,
-                    ),
-                ).run(
-                    db,
-                    job_application_id=application.id,
-                    organization_id=org_id,
-                    job_profile_id=approved_profile.id,
-                )
+                if item.advisory_status == "not_evaluated":
+                    eval_result = None
+                else:
+                    eval_result = CandidateEvaluationWorkflow(
+                        evidence_provider=get_provider(
+                            settings,
+                            structured_payload=evidence_payload,
+                        ),
+                        explanation_provider=get_provider(
+                            settings,
+                            structured_payload=explanation_payload,
+                        ),
+                    ).run(
+                        db,
+                        job_application_id=application.id,
+                        organization_id=org_id,
+                        job_profile_id=approved_profile.id,
+                    )
 
                 # Re-verify claim token before finalizing item state
                 if item.claim_token != claim_token:
@@ -462,7 +532,7 @@ class ScreeningWorker:
                 item.candidate_id = candidate.id
                 item.resume_id = resume.id
                 item.application_id = application.id
-                item.evaluation_id = eval_result.evaluation_id
+                item.evaluation_id = eval_result.evaluation_id if eval_result else None
                 item.status = "done"
                 item.stage = "done"
                 item.claim_token = None
@@ -486,10 +556,7 @@ class ScreeningWorker:
             }
             db.rollback()
             if created_resume_uri:
-                try:
-                    self.storage.delete(file_uri=created_resume_uri)
-                except Exception:
-                    pass
+                self._cleanup_created_resume_file(created_resume_uri, item_id=item_id)
 
             self._log_item_failure(
                 item,
@@ -497,25 +564,40 @@ class ScreeningWorker:
                 exc,
                 context=failure_context,
             )
-            error_code, error_message, retryable = _screening_error_details(exc)
-            if retryable:
-                self._handle_transient_failure(
-                    item_id,
-                    claim_token,
-                    error_code,
-                    db=db,
-                    processing_stage=processing_stage,
-                    error_message=error_message,
+            if self._caused_by_rate_limit(exc):
+                self._record_quota_wait(
+                    item_id, claim_token, db=db, processing_stage=processing_stage
                 )
             else:
-                self._record_permanent_failure(
-                    item_id,
-                    claim_token,
-                    error_code,
-                    error_message,
-                    db=db,
-                )
+                error_code, error_message, retryable = _screening_error_details(exc)
+                if retryable:
+                    self._handle_transient_failure(
+                        item_id,
+                        claim_token,
+                        error_code,
+                        db=db,
+                        processing_stage=processing_stage,
+                        error_message=error_message,
+                    )
+                else:
+                    self._record_permanent_failure(
+                        item_id,
+                        claim_token,
+                        error_code,
+                        error_message,
+                        db=db,
+                    )
             return False
+
+    def _cleanup_created_resume_file(self, file_uri: str, *, item_id: uuid.UUID) -> None:
+        """Attempt failed-item cleanup without logging storage paths or PII."""
+        try:
+            self.storage.delete(file_uri=file_uri)
+        except Exception as exc:
+            logger.warning(
+                "Failed to clean up a resume file after screening failure.",
+                extra={"item_id": str(item_id), "exception_class": type(exc).__name__},
+            )
 
     def _publish_item_stage(
         self,
@@ -524,17 +606,17 @@ class ScreeningWorker:
         claim_token: str,
         stage: str,
     ) -> None:
-        """Persist active work stages so the UI can show real screening progress."""
-        if db.get_bind().dialect.name != "postgresql":
+        """Persist observable work stages for live batch progress."""
+        get_bind = getattr(db, "get_bind", None)
+        dialect_name = get_bind().dialect.name if callable(get_bind) else None
+        if dialect_name != "postgresql":
             item = db.get(ScreeningBatchItem, item_id)
             if item and item.claim_token == claim_token:
                 item.stage = stage
-                db.flush()
+                flush = getattr(db, "flush", None)
+                if callable(flush):
+                    flush()
             return
-
-        # The processing transaction intentionally stays open while profile and
-        # evaluation work runs. Publish progress through a short independent
-        # session so status polling can observe each stage immediately.
         with self.session_factory() as stage_db:
             item = stage_db.get(ScreeningBatchItem, item_id)
             if item and item.claim_token == claim_token and item.status == "running":
@@ -567,6 +649,46 @@ class ScreeningWorker:
             },
         )
 
+    @staticmethod
+    def _caused_by_rate_limit(error: BaseException) -> bool:
+        seen: set[int] = set()
+        current: BaseException | None = error
+        while current is not None and id(current) not in seen:
+            if isinstance(current, ProviderRateLimitError):
+                return True
+            seen.add(id(current))
+            current = current.__cause__ or current.__context__
+        return False
+
+    def _record_quota_wait(
+        self, item_id: uuid.UUID, claim_token: str, *, db: Session, processing_stage: str
+    ) -> None:
+        """Keep rate-limited work queued indefinitely with bounded retry delay."""
+        item = db.get(ScreeningBatchItem, item_id)
+        if item is None or item.claim_token != claim_token:
+            return
+        delay = min(
+            300, self.initial_retry_delay_seconds * (2 ** min(max(0, item.attempts - 1), 5))
+        )
+        item.status = "queued"
+        item.stage = "waiting_for_quota"
+        item.error_code = "WAITING_FOR_QUOTA"
+        item.error_message = "Waiting for provider quota; this file will resume automatically."
+        item.claim_token = None
+        item.lease_expires_at = None
+        item.next_attempt_at = datetime.now(UTC) + timedelta(seconds=delay)
+        ScreeningBatchService._update_batch_state(item.batch)
+        db.commit()
+        logger.info(
+            "Screening batch item waiting for provider quota.",
+            extra={
+                "batch_id": str(item.batch_id),
+                "item_id": str(item.id),
+                "processing_stage": processing_stage,
+                "retry_delay_seconds": delay,
+            },
+        )
+
     def _record_permanent_failure(
         self,
         item_id: uuid.UUID,
@@ -576,6 +698,7 @@ class ScreeningWorker:
         db: Session | None = None,
     ) -> None:
         """Mark an item permanently failed in a short committed transaction."""
+
         def _apply(session: Session) -> None:
             item = session.get(ScreeningBatchItem, item_id)
             if item and item.claim_token == claim_token:
@@ -604,6 +727,7 @@ class ScreeningWorker:
         error_message: str | None = None,
     ) -> None:
         """Requeue an item with exponential backoff or fail if attempts exhausted."""
+
         def _apply(session: Session) -> None:
             item = session.get(ScreeningBatchItem, item_id)
             if item and item.claim_token == claim_token:
@@ -663,9 +787,7 @@ class ScreeningWorker:
 
             GitHubEvidenceService.recover_stale(db)
             analysis_id = (
-                GitHubEvidenceService().claim_next(db)
-                if self._prefer_github_analysis
-                else None
+                GitHubEvidenceService().claim_next(db) if self._prefer_github_analysis else None
             )
             if analysis_id is not None:
                 self._prefer_github_analysis = False

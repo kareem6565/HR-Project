@@ -18,6 +18,7 @@ class JobCreate(BaseModel):
     experience: str | None = None
     requirements: list[str] = Field(default_factory=list)
     required_skills: list[str] = Field(default_factory=list)
+    prerank_top_n: int = Field(default=20, ge=1, le=100)
 
     @field_validator("title")
     @classmethod
@@ -40,6 +41,7 @@ class JobUpdate(BaseModel):
     experience: str | None = None
     requirements: list[str] | None = None
     required_skills: list[str] | None = None
+    prerank_top_n: int = Field(default=20, ge=1, le=100)
 
     @field_validator("title")
     @classmethod
@@ -73,6 +75,7 @@ class JobResponse(BaseModel):
     experience: str | None = None
     requirements: list[str] | None = None
     required_skills: list[str] | None = None
+    prerank_top_n: int | None = Field(default=None, ge=1, le=100)
     source_file_name: str | None = None
     source_file_status: str | None = None
     source_file_error: str | None = None

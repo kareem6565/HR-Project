@@ -110,9 +110,7 @@ class TesseractCLIOCRProvider(OCRProvider):
             )
         except FileNotFoundError as exc:
             logger.error("tesseract_binary_missing")
-            raise ValidationError(
-                "OCR engine is not installed on this server."
-            ) from exc
+            raise ValidationError("OCR engine is not installed on this server.") from exc
         except subprocess.TimeoutExpired as exc:
             raise UploadValidationError(
                 "The scan took too long to read. Try a clearer photo.",

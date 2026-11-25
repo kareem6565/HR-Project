@@ -5,7 +5,6 @@ import React from "react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import ScreenCandidates from "./ScreenCandidates";
 import {
-  MAX_SINGLE_FILE_BYTES,
   ACCEPTED_EXTENSIONS,
   formatFileSize,
   getFileFingerprint,
@@ -23,6 +22,7 @@ vi.mock("../../services/screeningBatchService", () => ({
   getScreeningBatch: vi.fn(),
   retryBatchItem: vi.fn(),
   getJobBatches: vi.fn().mockResolvedValue([]),
+  getScreeningUploadConfig: vi.fn().mockResolvedValue({ max_file_bytes: 5 * 1024 * 1024, max_batch_files: 300 }),
 }));
 
 vi.mock("../../services/candidateService", () => ({
@@ -62,8 +62,7 @@ const mockJobs = [
 ];
 
 describe("UI-07: Helper Functions and Constants", () => {
-  it("defines explicit UI constants consistent with backend defaults", () => {
-    expect(MAX_SINGLE_FILE_BYTES).toBe(5 * 1024 * 1024);
+  it("accepts supported documents and scanned CV image formats", () => {
     expect(ACCEPTED_EXTENSIONS).toEqual([".pdf", ".docx", ".png", ".jpg", ".jpeg", ".webp"]);
   });
 
@@ -95,16 +94,16 @@ describe("UI-07: Helper Functions and Constants", () => {
     expect(txtResult.reason).toContain("PDF, DOCX");
   });
 
-  it("validates file size limit strictly against MAX_SINGLE_FILE_BYTES (5 MB)", () => {
+  it("validates file size against the server-provided limit", () => {
     const normalFile = { name: "resume.pdf", size: 4 * 1024 * 1024, lastModified: 1 };
     const oversizedFile = { name: "large_resume.pdf", size: 6 * 1024 * 1024, lastModified: 1 };
 
-    expect(validateFile(normalFile).valid).toBe(true);
+    expect(validateFile(normalFile, new Set(), 5 * 1024 * 1024).valid).toBe(true);
 
-    const oversizedResult = validateFile(oversizedFile);
+    const oversizedResult = validateFile(oversizedFile, new Set(), 5 * 1024 * 1024);
     expect(oversizedResult.valid).toBe(false);
     expect(oversizedResult.code).toBe("size_limit");
-    expect(oversizedResult.reason).toContain("exceeds the 5 MB maximum size limit");
+    expect(oversizedResult.reason).toContain("exceeds the 5.00 MB maximum size limit");
   });
 
   it("flags duplicate selection as an advisory local client hint", () => {
@@ -242,7 +241,7 @@ describe("UI-07: File Selection, Pre-Submission Validation & Removal", () => {
 
     expect(screen.getByText("huge_portfolio.pdf")).toBeInTheDocument();
     expect(
-      screen.getByText(/File exceeds the 5 MB maximum size limit \(6.00 MB\)/i)
+      screen.getByText(/File exceeds the 5.00 MB maximum size limit \(6.00 MB\)/i)
     ).toBeInTheDocument();
   });
 
@@ -436,6 +435,40 @@ describe("UI-07: Submission Progress & Real API Rendering", () => {
     expect(screen.getByText("—")).toBeInTheDocument();
   });
 
+  it("uploads a ZIP archive through the archive field with server limits shown", async () => {
+    const user = userEvent.setup();
+    screeningBatchService.createScreeningBatch.mockResolvedValue({
+      batch_id: "batch-zip",
+      job_id: "job-1",
+      status: "queued",
+      total_items: 1,
+      counts: { total: 1, queued: 1 },
+      items: [],
+    });
+    render(
+      <MemoryRouter>
+        <ScreenCandidates />
+      </MemoryRouter>
+    );
+
+    await screen.findByText("Senior Full Stack Engineer");
+    expect(screen.getByText(/Max 5.00 MB per file/)).toBeInTheDocument();
+    const zipFile = new File(["synthetic zip"], "candidates.zip", { type: "application/zip" });
+    fireEvent.change(screen.getByLabelText(/Upload CV ZIP archive/i), {
+      target: { files: [zipFile] },
+    });
+    await user.click(screen.getByRole("button", { name: /Start Batch Screening/i }));
+
+    await waitFor(() => {
+      expect(screeningBatchService.createScreeningBatch).toHaveBeenCalledWith({
+        jobId: "job-1",
+        files: [],
+        archive: zipFile,
+      });
+    });
+    expect(await screen.findByText("batch-zip")).toBeInTheDocument();
+  });
+
   it("handles synchronous submission errors honestly from API response", async () => {
     const user = userEvent.setup();
     screeningBatchService.createScreeningBatch.mockRejectedValue({
@@ -620,9 +653,9 @@ describe("Screening setup loading and empty states", () => {
     await waitFor(() => {
       expect(screeningBatchService.getScreeningBatch).toHaveBeenCalledWith("batch-running");
     });
-    expect(
-      screen.getByText("Connecting to screening batch batch-running...")
-    ).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Loading your CV’s screening progress"
+    );
 
     await user.click(screen.getByRole("button", { name: "View" }));
 

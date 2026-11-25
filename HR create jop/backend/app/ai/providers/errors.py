@@ -102,24 +102,50 @@ _SAFE_MESSAGES = {
     "missing_api_key": "The OpenRouter API key is missing; no AI request was sent.",
     "invalid_api_key": "OpenRouter rejected the API key. Check the key configuration.",
     "provider_access_denied": "OpenRouter denied access to this model or account.",
-    "usage_baseline_mismatch": "OpenRouter usage does not match the configured test baseline; no request was sent.",
+    "usage_baseline_mismatch": (
+        "OpenRouter usage does not match the configured test baseline; no request was sent."
+    ),
     "provider_timeout": "OpenRouter took too long to respond. Try again later.",
     "provider_rate_limit": "OpenRouter is rate-limiting requests. Try again shortly.",
     "provider_credits_exhausted": "The OpenRouter key reached its provider spending limit.",
     "provider_unavailable": "OpenRouter is temporarily unavailable. Try again shortly.",
-    "unclassified_provider_error": "OpenRouter returned an unexpected error. Use the request ID to find its trace.",
-    "provider_rejected_request": "OpenRouter rejected this AI request. Check the model and request configuration.",
-    "app_test_budget_exceeded": "This request would exceed the app's approved AI test budget; no request was sent.",
-    "invalid_structured_response": "OpenRouter replied, but the response was incomplete or could not be parsed.",
-    "provider_response_truncated": "OpenRouter cut off its response before finishing. Try again; if it repeats, shorten the job description.",
+    "unclassified_provider_error": (
+        "OpenRouter returned an unexpected error. Use the request ID to find its trace."
+    ),
+    "provider_rejected_request": (
+        "OpenRouter rejected this AI request. Check the model and request configuration."
+    ),
+    "app_test_budget_exceeded": (
+        "This request would exceed the app's approved AI test budget; no request was sent."
+    ),
+    "invalid_structured_response": (
+        "OpenRouter replied, but the response was incomplete or could not be parsed."
+    ),
+    "provider_response_truncated": (
+        "OpenRouter cut off its response before finishing. Try again; "
+        "if it repeats, shorten the job description."
+    ),
     "provider_usage_check_failed": "Could not check OpenRouter usage, so no AI request was sent.",
     "provider_pricing_unavailable": "Could not verify the model price, so no AI request was sent.",
     "ai_metering_unavailable": "AI usage tracking is unavailable, so no AI request was sent.",
     "app_rate_limit": "The development AI request rate limit was reached. Try again shortly.",
-    "cost_guard_paused": "AI requests are paused by the spend-safety monitor. Check the latest AI event before retrying.",
-    "in_flight_cost_unknown": "A previous AI request has unknown final usage. Check its AI event before retrying.",
+    "cost_guard_paused": (
+        "AI requests are paused by the spend-safety monitor. "
+        "Check the latest AI event before retrying."
+    ),
+    "in_flight_cost_unknown": (
+        "A previous AI request has unknown final usage. Check its AI event before retrying."
+    ),
     "provider_error": "The AI request failed. Try again.",
 }
+
+
+class ProviderContextLimitError(ProviderError):
+    """The prompt reached the configured context limit; no generated result is usable."""
+
+
+class ProviderTruncatedResponseError(ProviderError):
+    """The provider did not finish generation; partial output is never returned."""
 
 
 _PROVIDER_ERROR_CLASSES = {

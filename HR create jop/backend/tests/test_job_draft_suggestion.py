@@ -645,5 +645,5 @@ class TestJobDescriptionBuilder:
             headers=auth_headers(str(organization.id), str(user.id)),
             json={"operation": "generate", "title": "Engineer", "department": "Engineering"},
         )
-        assert response.status_code == 503
+        assert response.status_code == 504
         assert response.json()["error_type"] == "timeout"

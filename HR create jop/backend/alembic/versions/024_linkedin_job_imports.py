@@ -1,8 +1,9 @@
 """Track organization-scoped LinkedIn job imports from Apify."""
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 revision = "024_linkedin_job_imports"
 down_revision = "023_public_application_screening"
@@ -25,8 +26,12 @@ def upgrade() -> None:
         sa.Column("error_code", sa.String(length=48), nullable=True),
         sa.Column("result_data", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("last_checked_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
         sa.CheckConstraint(
             "status IN ('queued', 'running', 'succeeded', 'failed')",

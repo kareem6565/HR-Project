@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import ApplicationsList from "./ApplicationsList";
 import { getApplications } from "../../services/applicationService";
+import { APPLICATION_STATUS_GROUPS, APPLICATION_STATUS_LABELS } from "../../utils/applicationStatus";
 
 vi.mock("../../services/applicationService", () => ({ getApplications: vi.fn(), getApplicationJobs: vi.fn().mockResolvedValue([]) }));
 
@@ -44,6 +45,7 @@ describe("Applications score formatting", () => {
         score: "81.579",
         group: "must_review",
         status: "ready_for_review",
+        pipelineStage: "review",
       },
     ]));
 
@@ -52,22 +54,28 @@ describe("Applications score formatting", () => {
     expect(screen.getByRole("group", { name: "Processing status" })).toBeInTheDocument();
     expect(screen.getByRole("group", { name: "HR decision status" })).toBeInTheDocument();
     expect(screen.getByRole("group", { name: "Other status" })).toBeInTheDocument();
-    expect(screen.getByText(/application states mirror an HR decision/i)).toBeInTheDocument();
     expect(await screen.findByText("Must Review")).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "AI review" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "HR decision" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Pipeline stage" })).toBeInTheDocument();
+    expect(screen.getByText("HR review")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Analysis Pending" }));
-    await waitFor(() => expect(getApplications).toHaveBeenLastCalledWith(expect.objectContaining({ status: "analysis_pending", page: 1, page_size: 20 })));
-    expect(screen.getByRole("button", { name: "Analysis Pending" })).toHaveAttribute("aria-pressed", "true");
+    const decisionGroup = screen.getByRole("group", { name: "HR decision status" });
+    expect(within(decisionGroup).getByRole("button", { name: "Advanced" })).toHaveAttribute("aria-pressed", "false");
 
-    await user.click(screen.getByRole("button", { name: "Advanced" }));
-    await waitFor(() => expect(getApplications).toHaveBeenLastCalledWith(expect.objectContaining({ status: "advanced", page: 1, page_size: 20 })));
-    expect(screen.getByRole("button", { name: "Advanced" })).toHaveAttribute("aria-pressed", "true");
+    for (const status of APPLICATION_STATUS_GROUPS.flatMap((group) => group.statuses)) {
+      const statusButton = screen.getByRole("button", { name: APPLICATION_STATUS_LABELS[status] });
+      await user.click(statusButton);
+      await waitFor(() =>
+        expect(getApplications).toHaveBeenLastCalledWith(
+          expect.objectContaining({ status, page: 1, page_size: 20 })
+        )
+      );
+      expect(statusButton).toHaveAttribute("aria-pressed", "true");
+    }
 
     await user.click(screen.getByRole("button", { name: "All" }));
     await waitFor(() => expect(getApplications).toHaveBeenLastCalledWith(expect.not.objectContaining({ status: expect.anything() })));
-    expect(screen.getByRole("button", { name: "All" })).toHaveAttribute("aria-pressed", "true");
   });
 
   it("distinguishes no applications from an empty status filter and offers supported next actions", async () => {
@@ -96,10 +104,23 @@ describe("Applications score formatting", () => {
     render(<MemoryRouter><ApplicationsList /></MemoryRouter>);
     await user.type(screen.getByRole("searchbox", { name: "Search candidates or jobs" }), "Ada");
     await waitFor(() => expect(getApplications).toHaveBeenLastCalledWith(expect.objectContaining({ search: "Ada", page: 1, page_size: 20 })));
-    await user.click(screen.getByRole("button", { name: /More filters/ }));
+
+    const moreFilters = screen.getByRole("button", { name: /More filters/ });
+    moreFilters.focus();
+    await user.keyboard("{Enter}");
+    expect(moreFilters).toHaveAttribute("aria-expanded", "true");
     await user.selectOptions(screen.getByLabelText("CV processing"), "failed");
     await waitFor(() => expect(getApplications).toHaveBeenLastCalledWith(expect.objectContaining({ search: "Ada", processing_status: "failed" })));
     await user.click(screen.getAllByRole("button", { name: "Reset filters" })[0]);
     await waitFor(() => expect(getApplications).toHaveBeenLastCalledWith(expect.not.objectContaining({ search: expect.anything(), processing_status: expect.anything() })));
+  });
+
+  it("filters applications by the selected pipeline stage", async () => {
+    getApplications.mockResolvedValue(pageResult([]));
+    const user = userEvent.setup();
+    render(<MemoryRouter><ApplicationsList /></MemoryRouter>);
+    await user.click(screen.getByRole("button", { name: /More filters/ }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "Filter by pipeline stage" }), "interview");
+    await waitFor(() => expect(getApplications).toHaveBeenLastCalledWith(expect.objectContaining({ pipeline_stage: "interview" })));
   });
 });

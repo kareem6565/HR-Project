@@ -50,9 +50,7 @@ def build_job_description(
     source = body.source_text if body.operation == "parse" else body.selected_section
     trusted_inputs = {
         key: value
-        for key, value in body.model_dump(
-            exclude={"source_text", "selected_section"}
-        ).items()
+        for key, value in body.model_dump(exclude={"source_text", "selected_section"}).items()
         if value is not None and (not isinstance(value, str) or value.strip())
     }
     request_input = {
@@ -63,7 +61,8 @@ def build_job_description(
             "to the shortest exact phrase that supports it. Do not repeat the same requirement. "
             "Return the exact schema fields title, summary, requirements, and needs_confirmation. "
             "Each requirement must contain text, category, and dimension. Use schema_version "
-            "1.4. Do not rename fields or omit title. Requirements are grouped as skill, technical_skill, "
+            "1.4. Do not rename fields or omit title. Requirements are grouped as skill, "
+            "technical_skill, "
             "soft_skill, experience, education, certification, or responsibility. Put duties "
             "under responsibility, tenure under experience, credentials under education or "
             "certification, and capabilities under skills. Mark must_have or nice_to_have only "
@@ -104,9 +103,7 @@ def build_job_description(
             raise ValidationError("The AI did not return an improved section.")
         draft = draft.model_copy(update={"requirements": [], "needs_confirmation": []})
     confirmation = list(draft.needs_confirmation)
-    confirmation.extend(
-        item.text for item in draft.requirements if item.category == "important"
-    )
+    confirmation.extend(item.text for item in draft.requirements if item.category == "important")
     if body.operation == "parse":
         verified = []
         for requirement in draft.requirements:
@@ -160,8 +157,10 @@ def _derive_description_payload(body: JobDescriptionBuilderRequest) -> dict:
             label in lowered for label in ("required skills", "preferred skills", "role notes")
         ):
             requirement_category = (
-                "must_have" if lowered.startswith("required skills")
-                else "nice_to_have" if lowered.startswith("preferred skills")
+                "must_have"
+                if lowered.startswith("required skills")
+                else "nice_to_have"
+                if lowered.startswith("preferred skills")
                 else "important"
             )
             item = item.split(":", 1)[1].strip()

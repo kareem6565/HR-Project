@@ -21,6 +21,9 @@ describe("getApplications", () => {
           group: "must_review",
           status: "analysis_pending",
           screening_status: "processing",
+          advisory_rank: 23,
+          advisory_status: "not_evaluated",
+          advisory_message: "LLM evaluation not run; ranking is advisory only",
         },
       ],
     });
@@ -41,10 +44,14 @@ describe("getApplications", () => {
         score: "81.579",
         group: "must_review",
         status: "analysis_pending",
+        pipelineStage: "screening",
         screeningStatus: "processing",
         decisionStatus: "pending_review",
         decisionCreatedAt: undefined,
         evidence: [],
+        advisoryRank: 23,
+        advisoryStatus: "not_evaluated",
+        advisoryMessage: "LLM evaluation not run; ranking is advisory only",
       },
     ]);
     expect(apiClient.get).toHaveBeenCalledWith("/job-applications", {

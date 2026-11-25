@@ -84,10 +84,6 @@ def respond_to_talent_pool_consent(
     body: ConsentLinkDecisionRequest,
     db: Session = Depends(get_db),
 ):
-    expires_at = TalentPoolConsentService().respond(
-        db, token=body.token, decision=body.decision
-    )
+    expires_at = TalentPoolConsentService().respond(db, token=body.token, decision=body.decision)
     db.commit()
-    return ConsentLinkDecisionResponse(
-        decision=body.decision, consent_expires_at=expires_at
-    )
+    return ConsentLinkDecisionResponse(decision=body.decision, consent_expires_at=expires_at)

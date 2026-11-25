@@ -20,6 +20,7 @@ class StructuredGenerationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     input: str
+    system_prompt: str | None = None
     output_schema: type[BaseModel] | None = None
     schema_version: str = AI_CONTRACT_SCHEMA_VERSION
     metadata: dict[str, Any] | None = None

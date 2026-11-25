@@ -1,0 +1,4 @@
+# Previously reviewed synthetic/test-only matches (no live credentials).
+2a0661cb7fa1ae7a3ccbe1eaee6bdb3c41fb8961:HR create jop/backend/tests/test_public_applications.py:generic-api-key:187
+a9ecf18b5b5ab8b30212393e512a0d02bd25e2ee:HR create jop/tools/eval_a5_preranking.py:generic-api-key:222
+b7903e77d2e1ba13670d6707298fc16878f7a206:HR create jop/backend/tests/test_seed_hr_manager.py:generic-api-key:33

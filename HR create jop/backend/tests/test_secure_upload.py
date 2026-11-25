@@ -13,14 +13,15 @@ Validates:
 from __future__ import annotations
 
 import io
+import stat
 import uuid
 import zipfile
 from collections.abc import Generator
 from datetime import UTC, datetime
 from pathlib import Path
 
-import httpx
 import pytest
+from fastapi import UploadFile
 from fastapi.testclient import TestClient
 from pypdf import PdfWriter
 from sqlalchemy.orm import Session
@@ -32,7 +33,6 @@ from app.main import app
 from app.models import (
     Candidate,
     Job,
-    JobApplication,
     JobProfile,
     Organization,
     Resume,
@@ -47,18 +47,18 @@ from app.services.errors import (
     UPLOAD_ERROR_PAGE_LIMIT_EXCEEDED,
     UPLOAD_ERROR_TOO_LARGE,
     UPLOAD_ERROR_UNSUPPORTED_TYPE,
-    NotFoundError,
     UploadValidationError,
-    ValidationError,
 )
 from app.services.resume_service import ResumeService
 from app.services.storage_service import LocalFileSystemStorage
 from app.services.text_extraction_service import (
-    DocxTextExtractor,
-    PdfTextExtractor,
     extract_text,
 )
-from app.services.upload_stream_service import read_batch_bounded, read_upload_file_bounded
+from app.services.upload_stream_service import (
+    read_batch_bounded,
+    read_upload_file_bounded,
+    read_zip_batch_bounded,
+)
 from tests.resume_upload_fixtures import make_docx_bytes, make_pdf_bytes
 
 # ---------------------------------------------------------------------------
@@ -84,7 +84,7 @@ def make_encrypted_pdf_bytes(password: str = "secret123") -> bytes:
 def make_multi_page_pdf_bytes(page_count: int) -> bytes:
     """Build a multi-page PDF using pypdf."""
     writer = PdfWriter()
-    for i in range(page_count):
+    for _ in range(page_count):
         writer.add_blank_page(width=612, height=792)
     buf = io.BytesIO()
     writer.write(buf)
@@ -283,8 +283,7 @@ def test_batch_bounded_reader_enforces_max_files() -> None:
     from starlette.datastructures import UploadFile
 
     files = [
-        UploadFile(filename=f"cv_{i}.pdf", file=io.BytesIO(make_pdf_bytes()))
-        for i in range(25)
+        UploadFile(filename=f"cv_{i}.pdf", file=io.BytesIO(make_pdf_bytes())) for i in range(25)
     ]
     with pytest.raises(UploadValidationError) as exc_info:
         read_batch_bounded(files, max_files=20)
@@ -309,7 +308,9 @@ def test_batch_bounded_reader_enforces_single_file_limit_in_batch() -> None:
 
     files = [
         UploadFile(filename="cv_1.pdf", file=io.BytesIO(b"%PDF-" + b"x" * 10_000)),
-        UploadFile(filename="cv_2.pdf", file=io.BytesIO(b"%PDF-" + b"x" * 60_000)),  # Exceeds 50 KiB
+        UploadFile(
+            filename="cv_2.pdf", file=io.BytesIO(b"%PDF-" + b"x" * 60_000)
+        ),  # Exceeds 50 KiB
     ]
     with pytest.raises(UploadValidationError) as exc_info:
         read_batch_bounded(files, max_files=20, max_file_bytes=50_000, max_batch_bytes=200_000)
@@ -565,10 +566,7 @@ def test_api_screen_batch_exceeding_file_count_rejected(
 
     monkeypatch.setattr(settings, "max_batch_files", 3)
 
-    files = [
-        ("files", (f"cv_{i}.pdf", make_pdf_bytes(), "application/pdf"))
-        for i in range(4)
-    ]
+    files = [("files", (f"cv_{i}.pdf", make_pdf_bytes(), "application/pdf")) for i in range(4)]
     resp = client.post(f"/api/v1/jobs/{job.id}/screen", headers=h, files=files)
     assert resp.status_code == 422
     body = resp.json()
@@ -662,9 +660,7 @@ def test_upload_failure_cleans_up_stored_file(db_session: Session, tmp_path: Pat
     assert all(not f.is_file() for f in files)
 
 
-def test_cross_tenant_upload_isolation_preserved(
-    client: TestClient, db_session: Session
-) -> None:
+def test_cross_tenant_upload_isolation_preserved(client: TestClient, db_session: Session) -> None:
     org_a, user_a, cand_a, _job_a = setup_tenant(db_session, org_name="Org A")
     org_b, user_b, cand_b, _job_b = setup_tenant(db_session, org_name="Org B")
 
@@ -701,3 +697,104 @@ def test_existing_download_and_opaque_uri_preserved(
     assert 'attachment; filename="download_test.pdf"' in dl_resp.headers.get(
         "content-disposition", ""
     )
+
+
+class TestBoundedZipBatchUpload:
+    @staticmethod
+    def make_zip(entries):
+        stream = io.BytesIO()
+        with zipfile.ZipFile(stream, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            for name, content, mode in entries:
+                info = zipfile.ZipInfo(name)
+                info.compress_type = zipfile.ZIP_DEFLATED
+                if mode:
+                    info.external_attr = mode << 16
+                archive.writestr(info, content)
+        return stream.getvalue()
+
+    def extract(self, tmp_path, payload, **overrides):
+        root = tmp_path / "storage"
+        root.mkdir(exist_ok=True)
+        args = {
+            "max_entries": 50,
+            "max_files": 50,
+            "max_file_bytes": 5 * 1024 * 1024,
+            "max_total_bytes": 20 * 1024 * 1024,
+            "max_compression_ratio": 100,
+            "max_archive_bytes": 5 * 1024 * 1024,
+            "staging_root": str(root),
+        }
+        args.update(overrides)
+        return read_zip_batch_bounded(
+            UploadFile(filename="ignored.zip", file=io.BytesIO(payload)), **args
+        ), root
+
+    def test_accepts_docx_container_inside_zip_and_detects_by_content(self, tmp_path):
+        docx = make_docx_bytes("Candidate with Python and SQL")
+        extracted, root = self.extract(tmp_path, self.make_zip([("candidate.data", docx, 0)]))
+        assert len(extracted) == 1
+        assert extracted[0].detected_extension == "docx"
+        assert extracted[0].filename == "candidate.data"
+        assert list(root.iterdir()) == []
+
+    @pytest.mark.parametrize(
+        "name,content,mode,code",
+        [
+            ("../escape.pdf", b"%PDF-test", 0, "INVALID_ARCHIVE"),
+            ("C:/escape.pdf", b"%PDF-test", 0, "INVALID_ARCHIVE"),
+            ("CON.pdf", b"%PDF-test", 0, "INVALID_ARCHIVE"),
+            ("cv.txt", b"not a resume", 0, "UNSUPPORTED_TYPE"),
+            ("nested.zip", b"PK\\x03\\x04not-a-docx", 0, "UNSUPPORTED_TYPE"),
+            ("link.pdf", b"%PDF-test", stat.S_IFLNK | 0o777, "INVALID_ARCHIVE"),
+        ],
+    )
+    def test_rejects_hostile_or_unsupported_members(self, tmp_path, name, content, mode, code):
+        payload = self.make_zip([(name, content, mode)])
+        with pytest.raises(UploadValidationError) as error:
+            self.extract(tmp_path, payload)
+        assert error.value.code == code
+        assert list((tmp_path / "storage").iterdir()) == []
+
+    def test_rejects_nested_archive_but_accepts_docx(self, tmp_path):
+        nested = self.make_zip([("inner.pdf", b"%PDF-test", 0)])
+        outer = self.make_zip([("nested.zip", nested, 0)])
+        with pytest.raises(UploadValidationError, match="Nested archives"):
+            self.extract(tmp_path, outer)
+
+    def test_rejects_zip_bomb_by_actual_expanded_to_compressed_ratio(self, tmp_path):
+        payload = self.make_zip([("bomb.pdf", b"%PDF-" + b"x" * 4000, 0)])
+        with pytest.raises(UploadValidationError, match="compression-ratio"):
+            self.extract(tmp_path, payload, max_compression_ratio=2)
+
+    def test_rejects_actual_entry_size_above_limit(self, tmp_path):
+        payload = self.make_zip([("large.pdf", b"%PDF-" + b"x" * 100, 0)])
+        with pytest.raises(UploadValidationError, match="per-file size"):
+            self.extract(tmp_path, payload, max_file_bytes=50)
+
+    def test_rejects_total_uncompressed_bytes_and_entry_count(self, tmp_path):
+        payload = self.make_zip(
+            [("a.pdf", b"%PDF-" + b"a" * 40, 0), ("b.pdf", b"%PDF-" + b"b" * 40, 0)]
+        )
+        with pytest.raises(UploadValidationError, match="total uncompressed"):
+            self.extract(tmp_path, payload, max_total_bytes=80)
+        with pytest.raises(UploadValidationError, match="entry count"):
+            self.extract(tmp_path, payload, max_entries=1)
+
+    def test_rejects_duplicate_names_after_case_normalization(self, tmp_path):
+        payload = self.make_zip([("CV.pdf", b"%PDF-a", 0), ("cv.PDF", b"%PDF-b", 0)])
+        with pytest.raises(UploadValidationError, match="duplicate normalized"):
+            self.extract(tmp_path, payload)
+
+    def test_rejects_invalid_zip_magic_and_always_cleans_temp(self, tmp_path):
+        with pytest.raises(UploadValidationError, match="valid ZIP"):
+            self.extract(tmp_path, b"not a zip archive")
+        assert list((tmp_path / "storage").iterdir()) == []
+
+    def test_rejects_encrypted_entry_flag(self, tmp_path):
+        payload = bytearray(self.make_zip([("candidate.pdf", b"%PDF-test", 0)]))
+        local = payload.find(b"PK\x03\x04")
+        central = payload.find(b"PK\x01\x02")
+        payload[local + 6] |= 1
+        payload[central + 8] |= 1
+        with pytest.raises(UploadValidationError, match="Encrypted"):
+            self.extract(tmp_path, bytes(payload))

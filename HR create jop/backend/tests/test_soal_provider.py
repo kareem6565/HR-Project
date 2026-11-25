@@ -20,6 +20,7 @@ from app.ai.providers import (
     OpenRouterProvider,
     ProviderConfigurationError,
     ProviderInvalidRequestError,
+    ProviderInvalidResponseError,
     ProviderRateLimitError,
     ProviderTimeoutError,
     ProviderUnavailableError,
@@ -248,12 +249,13 @@ def test_structured_retries_when_parsing_fails_then_succeeds() -> None:
     assert result.data == json_payload_dict()
 
 
-def test_structured_exhausts_retries_and_returns_none() -> None:
-    provider = _structured_provider(_FakeCompletions(completion=_completion("always broken")))
+def test_structured_exhausts_retries_and_returns_typed_error() -> None:
+    completions = _FakeCompletions(completion=_completion("always broken"))
+    provider = _structured_provider(completions)
 
-    result = provider.generate_structured(_structured_request(CandidateProfileExtractionOutput))
-
-    assert result.data is None
+    with pytest.raises(ProviderInvalidResponseError):
+        provider.generate_structured(_structured_request(CandidateProfileExtractionOutput))
+    assert len(completions.calls) == 3
 
 
 # --------------------------------------------------------------------------- #

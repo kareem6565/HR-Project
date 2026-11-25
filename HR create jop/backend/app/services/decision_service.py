@@ -31,7 +31,11 @@ from sqlalchemy.orm import Session
 
 from app.models import CandidateEvaluation, HRDecision, JobApplication, User
 from app.services.audit_service import AuditService
-from app.services.errors import ConflictError, NotFoundError, ValidationError
+from app.services.errors import ConflictError, InvalidStateError, NotFoundError, ValidationError
+from app.services.pipeline_stage_service import (
+    PipelineStageService,
+    authorize_pipeline_action,
+)
 
 VALID_DECISIONS = frozenset({"advance", "reject", "hold"})
 
@@ -74,12 +78,22 @@ class DecisionService:
             job_application_id=job_application_id,
             organization_id=organization_id,
         )
-        self._get_user(
+        user = self._get_user(
             db,
             user_id=user_id,
             expected_organization_id=organization_id,
             application=application,
         )
+        authorize_pipeline_action(
+            db,
+            application=application,
+            organization_id=application.organization_id,
+            actor_user_id=user_id,
+        )
+        if application.pipeline_stage == "hired":
+            raise InvalidStateError("A hired application cannot receive a normal HR decision.")
+        if application.pipeline_stage == "archived":
+            raise InvalidStateError("An archived application cannot receive a new HR decision.")
 
         # 2. Resolve and validate evaluation, including freshness guarantees
         evaluation = self._get_evaluation(
@@ -124,6 +138,13 @@ class DecisionService:
 
         # Mirror the decision into the application's pipeline status
         application.status = new_status
+        if decision == "reject":
+            PipelineStageService().record_hr_rejection(
+                db,
+                application=application,
+                actor_user_id=user.id,
+                reason=reason,
+            )
 
         # Write audit event in the exact same transaction before flush
         AuditService().log_event(
@@ -145,14 +166,14 @@ class DecisionService:
         )
 
         # If an application is rejected or put on hold after an interview has been scheduled,
-        # apply documented transition policy: cancel scheduled interviews to prevent contradictory state.
+        # apply documented transition policy: cancel scheduled interviews to prevent
+        # contradictory state.
         if decision in ("hold", "reject"):
             from app.models.interview import Interview
 
             active_interviews = list(
                 db.scalars(
-                    select(Interview)
-                    .where(
+                    select(Interview).where(
                         Interview.job_application_id == application.id,
                         Interview.status == "scheduled",
                     )
@@ -185,9 +206,7 @@ class DecisionService:
         organization_id: uuid.UUID | None,
     ) -> JobApplication:
         stmt = (
-            select(JobApplication)
-            .where(JobApplication.id == job_application_id)
-            .with_for_update()
+            select(JobApplication).where(JobApplication.id == job_application_id).with_for_update()
         )
         application = db.scalars(stmt).first()
         if application is None:
@@ -219,7 +238,9 @@ class DecisionService:
         if user is None:
             raise NotFoundError("User was not found.")
         if user.organization_id != application.organization_id:
-            raise ValidationError("User must belong to the same organization as the JobApplication.")
+            raise ValidationError(
+                "User must belong to the same organization as the JobApplication."
+            )
         if (
             expected_organization_id is not None
             and user.organization_id != expected_organization_id
@@ -238,7 +259,9 @@ class DecisionService:
     ) -> CandidateEvaluation | None:
         if candidate_evaluation_id and expected_evaluation_id:
             if candidate_evaluation_id != expected_evaluation_id:
-                raise ConflictError("candidate_evaluation_id and expected_evaluation_id must match.")
+                raise ConflictError(
+                    "candidate_evaluation_id and expected_evaluation_id must match."
+                )
 
         target_id = expected_evaluation_id or candidate_evaluation_id
         if target_id is None:

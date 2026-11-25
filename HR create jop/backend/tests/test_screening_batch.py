@@ -3,11 +3,14 @@
 Validates:
 - Batch submission via POST /api/v1/jobs/{job_id}/screening-batches returning 202 Accepted.
 - Input validation: max file count, size limits, required files, tenant authorization.
-- Duplicate CV detection: in-batch duplicate handling and historical duplicate handling without candidate merging.
+- Duplicate CV detection: in-batch duplicate handling and historical duplicate handling without
+  candidate merging.
 - Organization isolation for batch and item inspection.
-- Organization isolation and validation for item retry (POST /api/v1/screening-batch-items/{item_id}/retry).
+- Organization isolation and validation for item retry
+  (POST /api/v1/screening-batch-items/{item_id}/retry).
 - PostgreSQL worker claim semantics (SKIP LOCKED, claim tokens, lease timeouts).
-- Worker end-to-end processing: candidate creation, resume storage, application creation, evaluation.
+- Worker end-to-end processing: candidate creation, resume storage, application creation,
+  evaluation.
 - Per-file failure isolation on mixed batches (valid + corrupt files).
 - Safe provider guard refusing unapproved live AI providers in background worker.
 - Stale lease recovery for crashed or timed-out worker tasks.
@@ -16,19 +19,25 @@ Validates:
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
 import io
 import time
 import uuid
+import zipfile
+from datetime import UTC, datetime, timedelta
 
 import pytest
+from sqlalchemy import select
+from sqlalchemy.dialects import postgresql
+from sqlalchemy.orm import sessionmaker
 from starlette.testclient import TestClient
 
+from app.ai.providers.errors import ProviderRateLimitError
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import create_access_token
 from app.main import create_app
 from app.models import (
+    AuditLog,
     Candidate,
     CandidateEvaluation,
     Job,
@@ -47,9 +56,15 @@ from app.worker import ScreeningWorker
 from tests.resume_upload_fixtures import make_docx_bytes, make_pdf_bytes
 
 
+def _test_session_factory(db_session):
+    """Keep worker progress writes on the isolated test database, never app DATABASE_URL."""
+    return sessionmaker(bind=db_session.get_bind())
+
+
 # ==============================================================================
 # Fixtures & Setup
 # ==============================================================================
+
 
 @pytest.fixture()
 def client(db_session):
@@ -201,6 +216,7 @@ def job_b(db_session, org_b, recruiter_b) -> Job:
 # 1. Batch Submission Tests
 # ==============================================================================
 
+
 class TestBatchSubmission:
     def test_submit_batch_immediate_202_acceptance(self, client, job_a, recruiter_a):
         pdf1 = make_pdf_bytes("Alice Engineer resume content with Python and FastAPI")
@@ -208,7 +224,14 @@ class TestBatchSubmission:
 
         files = [
             ("files", ("alice_cv.pdf", io.BytesIO(pdf1), "application/pdf")),
-            ("files", ("bob_cv.docx", io.BytesIO(docx1), "application/vnd.openxmlformats-officedocument.wordprocessingml.document")),
+            (
+                "files",
+                (
+                    "bob_cv.docx",
+                    io.BytesIO(docx1),
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                ),
+            ),
         ]
 
         resp = client.post(
@@ -270,12 +293,16 @@ class TestBatchSubmission:
             headers=auth_header(recruiter_a),
         )
         assert resp.status_code in (400, 422)
-        assert resp.json().get("code") == UPLOAD_ERROR_BATCH_LIMIT_EXCEEDED or "limit" in resp.text.lower()
+        assert (
+            resp.json().get("code") == UPLOAD_ERROR_BATCH_LIMIT_EXCEEDED
+            or "limit" in resp.text.lower()
+        )
 
 
 # ==============================================================================
 # 2. Duplicate Detection Tests
 # ==============================================================================
+
 
 class TestDuplicateDetection:
     def test_in_batch_duplicate_cv_handling(self, client, job_a, recruiter_a):
@@ -302,6 +329,7 @@ class TestDuplicateDetection:
 
     def test_historical_duplicate_cv_handling(self, client, db_session, job_a, recruiter_a):
         import hashlib
+
         existing_pdf = make_pdf_bytes("Historical Applied Candidate Content")
         sha256_hash = hashlib.sha256(existing_pdf).hexdigest()
 
@@ -350,6 +378,7 @@ class TestDuplicateDetection:
 # 3. Batch and Item Status Query Tests
 # ==============================================================================
 
+
 class TestBatchStatusQuery:
     def test_get_batch_status_success_and_counts(self, client, job_a, recruiter_a):
         pdf = make_pdf_bytes("Queryable Resume Text")
@@ -394,6 +423,7 @@ class TestBatchStatusQuery:
 # ==============================================================================
 # 4. Item Retry Tests
 # ==============================================================================
+
 
 class TestItemRetry:
     def test_retry_failed_item_success(self, client, db_session, job_a, recruiter_a):
@@ -476,8 +506,34 @@ class TestItemRetry:
 # 5. Worker Processing & Failure Isolation Tests
 # ==============================================================================
 
+
 class TestWorkerProcessing:
-    def test_worker_claims_and_screens_item_successfully(self, client, db_session, job_a, recruiter_a):
+    def test_processing_query_locks_claimed_item_until_transaction_finishes(self):
+        statement = ScreeningWorker._processing_item_query(uuid.uuid4())
+
+        assert "FOR UPDATE" in str(statement.compile(dialect=postgresql.dialect()))
+
+    def test_worker_logs_resume_cleanup_failure_without_logging_file_path(self, caplog):
+        class FailingStorage:
+            def delete(self, *, file_uri):
+                raise OSError(f"cannot delete {file_uri}")
+
+        file_uri = "private/candidate-resume.pdf"
+        worker = ScreeningWorker(storage=FailingStorage())
+        worker._cleanup_created_resume_file(file_uri, item_id=uuid.uuid4())
+
+        assert "Failed to clean up a resume file after screening failure." in caplog.text
+        assert file_uri not in caplog.text
+        record = next(
+            record
+            for record in caplog.records
+            if record.message == "Failed to clean up a resume file after screening failure."
+        )
+        assert record.exception_class == "OSError"
+
+    def test_worker_claims_and_screens_item_successfully(
+        self, client, db_session, job_a, recruiter_a
+    ):
         pdf = make_pdf_bytes("Ada Lovelace is a brilliant Python software engineer.")
         files = [("files", ("ada_lovelace.pdf", io.BytesIO(pdf), "application/pdf"))]
         post_resp = client.post(
@@ -489,7 +545,7 @@ class TestWorkerProcessing:
 
         # Instantiate worker
         storage = LocalFileSystemStorage(settings.storage_root_dir)
-        worker = ScreeningWorker(storage=storage)
+        worker = ScreeningWorker(storage=storage, session_factory=_test_session_factory(db_session))
 
         # 1. Claim
         claim = worker.claim_next_item(db_session)
@@ -536,7 +592,7 @@ class TestWorkerProcessing:
         batch_id = uuid.UUID(post_resp.json()["batch_id"])
 
         storage = LocalFileSystemStorage(settings.storage_root_dir)
-        worker = ScreeningWorker(storage=storage)
+        worker = ScreeningWorker(storage=storage, session_factory=_test_session_factory(db_session))
 
         # Process first item
         claim1 = worker.claim_next_item(db_session)
@@ -663,6 +719,7 @@ class TestWorkerProcessing:
 # 6. Storage Cleanup Tests
 # ==============================================================================
 
+
 class TestStorageCleanup:
     def test_cleanup_orphaned_batches_preserves_resumes(self, tmp_path, org_a):
         storage = LocalFileSystemStorage(str(tmp_path / "storage"))
@@ -723,3 +780,213 @@ class TestStorageCleanup:
         batch = next(b for b in batches if b["id"] == batch_id)
         assert "counts" in batch
         assert batch["total_files"] == 1
+
+
+class TestB2LargeBatch:
+    def test_zip_endpoint_accepts_docx_and_stores_using_opaque_keys(
+        self, client, db_session, job_a, recruiter_a
+    ):
+        payload = io.BytesIO()
+        with zipfile.ZipFile(payload, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("human-name.docx", make_docx_bytes("Candidate with Python"))
+        response = client.post(
+            f"/api/v1/jobs/{job_a.id}/screening-batches",
+            files={"archive": ("submitted.zip", io.BytesIO(payload.getvalue()), "application/zip")},
+            headers=auth_header(recruiter_a),
+        )
+        assert response.status_code == 202, response.text
+        batch = db_session.get(ScreeningBatch, uuid.UUID(response.json()["batch_id"]))
+        item = batch.items[0]
+        assert item.filename == "human-name.docx"
+        assert "human-name" not in item.storage_key
+        assert item.storage_key.endswith(f"{item.id}.docx")
+        audit = db_session.scalar(
+            select(AuditLog).where(
+                AuditLog.entity_id == batch.id, AuditLog.action == "screening.batch_created"
+            )
+        )
+        assert audit.event_metadata == {"total_files": 1, "failed_count": 0, "duplicate_count": 0}
+        assert "filename" not in audit.event_metadata
+
+    def test_upload_config_is_backend_authoritative_and_org_role_scoped(self, client, recruiter_a):
+        response = client.get("/api/v1/screening-upload-config", headers=auth_header(recruiter_a))
+        assert response.status_code == 200
+        config = response.json()
+        assert config["max_file_bytes"] == settings.max_upload_bytes
+        assert config["max_batch_files"] == settings.max_batch_files
+        assert config["max_zip_total_bytes"] == settings.max_zip_total_bytes
+
+    def test_progress_is_cross_tenant_scoped(
+        self, client, db_session, job_a, recruiter_a, recruiter_b
+    ):
+        response = client.post(
+            f"/api/v1/jobs/{job_a.id}/screening-batches",
+            files=[("files", ("one.pdf", io.BytesIO(make_pdf_bytes("One")), "application/pdf"))],
+            headers=auth_header(recruiter_a),
+        )
+        assert response.status_code == 202
+        batch_id = response.json()["batch_id"]
+        other_tenant = client.get(
+            f"/api/v1/screening-batches/{batch_id}", headers=auth_header(recruiter_b)
+        )
+        assert other_tenant.status_code == 404
+
+    def test_org_concurrent_batch_cap_is_enforced(self, client, job_a, recruiter_a, monkeypatch):
+        monkeypatch.setattr(settings, "max_concurrent_batches_per_org", 1)
+
+        def upload(label):
+            return [
+                ("files", (f"{label}.pdf", io.BytesIO(make_pdf_bytes(label)), "application/pdf"))
+            ]
+
+        accepted = client.post(
+            f"/api/v1/jobs/{job_a.id}/screening-batches",
+            files=upload("first"),
+            headers=auth_header(recruiter_a),
+        )
+        assert accepted.status_code == 202
+        rejected = client.post(
+            f"/api/v1/jobs/{job_a.id}/screening-batches",
+            files=upload("second"),
+            headers=auth_header(recruiter_a),
+        )
+        assert rejected.status_code == 422
+        assert "maximum number" in rejected.json()["detail"]
+
+    def test_worker_routes_mid_batch_rate_limit_to_quota_wait(
+        self, client, db_session, job_a, recruiter_a, monkeypatch
+    ):
+        response = client.post(
+            f"/api/v1/jobs/{job_a.id}/screening-batches",
+            files=[
+                (
+                    "files",
+                    ("quota.pdf", io.BytesIO(make_pdf_bytes("Quota candidate")), "application/pdf"),
+                )
+            ],
+            headers=auth_header(recruiter_a),
+        )
+        assert response.status_code == 202
+        item_id = uuid.UUID(response.json()["items"][0]["id"])
+        item = db_session.get(ScreeningBatchItem, item_id)
+        claim_token = "rate-limit-claim"
+        item.status = "running"
+        item.stage = "claimed"
+        item.claim_token = claim_token
+        item.attempts = 1
+        db_session.flush()
+
+        worker = ScreeningWorker(
+            storage=LocalFileSystemStorage(settings.storage_root_dir),
+            session_factory=_test_session_factory(db_session),
+        )
+        routed = []
+        monkeypatch.setattr(db_session, "rollback", lambda: None)
+        monkeypatch.setattr(
+            worker,
+            "_record_quota_wait",
+            lambda *args, **kwargs: routed.append((args, kwargs)),
+        )
+        monkeypatch.setattr(
+            "app.worker.CandidateProfileExtractionWorkflow.run",
+            lambda *args, **kwargs: (_ for _ in ()).throw(ProviderRateLimitError("provider quota")),
+        )
+        worker.process_item(db_session, item_id, claim_token)
+        assert len(routed) == 1
+        assert routed[0][0][:2] == (item_id, claim_token)
+        assert routed[0][1]["processing_stage"] == "candidate_profile_extraction"
+
+    def test_rate_limit_is_classified_as_quota_wait_without_retry_ceiling(self, db_session, job_a):
+        batch = ScreeningBatch(
+            organization_id=job_a.organization_id, job_id=job_a.id, status="running", total_files=1
+        )
+        item = ScreeningBatchItem(
+            batch=batch,
+            filename="quota.pdf",
+            storage_key="generated-item-id.pdf",
+            sha256="0" * 64,
+            status="running",
+            stage="claimed",
+            attempts=9,
+            max_attempts=3,
+            claim_token="quota-token",
+        )
+        db_session.add(batch)
+        db_session.add(item)
+        db_session.flush()
+        error = RuntimeError("wrapped")
+        error.__cause__ = ProviderRateLimitError("provider quota")
+        assert ScreeningWorker._caused_by_rate_limit(error)
+
+        worker = ScreeningWorker(storage=LocalFileSystemStorage(settings.storage_root_dir))
+        worker._record_quota_wait(
+            item.id, "quota-token", db=db_session, processing_stage="candidate_evaluation"
+        )
+        assert item.status == "queued"
+        assert item.stage == "waiting_for_quota"
+        assert item.error_code == "WAITING_FOR_QUOTA"
+        assert "resume automatically" in item.error_message
+        next_attempt_at = item.next_attempt_at
+        if next_attempt_at.tzinfo is None:
+            next_attempt_at = next_attempt_at.replace(tzinfo=UTC)
+        assert next_attempt_at > datetime.now(UTC)
+
+    def test_300_synthetic_files_complete_with_isolated_failure_reporting(
+        self, client, db_session, job_a, recruiter_a, monkeypatch
+    ):
+        uploads = []
+        for index in range(299):
+            pdf = make_pdf_bytes(
+                f"Synthetic applicant {index} with Python SQL engineering skills {index}"
+            )
+            uploads.append(
+                ("files", (f"applicant-{index}.pdf", io.BytesIO(pdf), "application/pdf"))
+            )
+        uploads.append(
+            ("files", ("broken.pdf", io.BytesIO(b"%PDF-1.4\nnot a real PDF"), "application/pdf"))
+        )
+        monkeypatch.setattr(settings, "max_batch_files", 300)
+        monkeypatch.setattr(settings, "max_concurrent_batches_per_org", 2)
+        old_provider = settings.ai_provider
+        settings.ai_provider = "fake"
+        try:
+            response = client.post(
+                f"/api/v1/jobs/{job_a.id}/screening-batches",
+                files=uploads,
+                headers=auth_header(recruiter_a),
+            )
+            assert response.status_code == 202
+            batch_id = uuid.UUID(response.json()["batch_id"])
+            assert response.json()["counts"]["total"] == 300
+            assert response.json()["counts"]["failed"] == 0
+
+            worker = ScreeningWorker(
+                storage=LocalFileSystemStorage(settings.storage_root_dir),
+                session_factory=_test_session_factory(db_session),
+            )
+            for _ in range(300):
+                claim = worker.claim_next_item(db_session)
+                if claim is None:
+                    break
+                worker.process_item(db_session, claim[0], claim[1])
+
+            db_session.expire_all()
+            batch = db_session.get(ScreeningBatch, batch_id)
+            assert batch.total_files == 300
+            assert batch.completed_files == 299
+            assert batch.failed_files == 1
+            statuses = {item.filename: item.status for item in batch.items}
+            assert statuses["broken.pdf"] == "failed"
+            assert sum(status == "done" for status in statuses.values()) == 299
+            progress = client.get(
+                f"/api/v1/screening-batches/{batch_id}", headers=auth_header(recruiter_a)
+            )
+            assert progress.status_code == 200
+            assert progress.json()["counts"]["completed"] == 299
+            failed = next(
+                item for item in progress.json()["items"] if item["filename"] == "broken.pdf"
+            )
+            assert failed["status"] == "failed"
+            assert failed["reason"]
+        finally:
+            settings.ai_provider = old_provider

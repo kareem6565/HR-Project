@@ -48,7 +48,14 @@ const DEFAULT_SUGGESTION = {
 
 function LocationProbe() {
   const location = useLocation();
-  return <div data-testid="location-path">{location.pathname}</div>;
+  return (
+    <>
+      <div data-testid="location-path">{location.pathname}</div>
+      {location.state?.jobSaveNotice && (
+        <div role="status">{location.state.jobSaveNotice}</div>
+      )}
+    </>
+  );
 }
 
 function renderForm(initialPath = "/jobs/new") {
@@ -374,7 +381,7 @@ describe("JobForm AI-assisted creation", () => {
     expect(suggestJobDraft).not.toHaveBeenCalled();
   });
 
-  test("saving a job keeps the form open; Analyze navigates to the job review", async () => {
+  test("saving a job navigates to its page with a draft confirmation", async () => {
     createJob.mockResolvedValue({ id: "job-abc" });
     extractJobProfile.mockResolvedValue({ profile_id: "profile-1" });
     renderForm();
@@ -384,16 +391,12 @@ describe("JobForm AI-assisted creation", () => {
     await user.type(screen.getByLabelText(/Description/), "Build APIs in Python.");
     await user.click(screen.getByRole("button", { name: "Save Draft" }));
 
-    await waitFor(() => expect(createJob).toHaveBeenCalledTimes(1));
-    expect(screen.getByRole("button", { name: "Analyze with HERA" })).toBeInTheDocument();
-    expect(screen.queryByTestId("location-path")).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "Analyze with HERA" }));
-
-    await waitFor(() => expect(extractJobProfile).toHaveBeenCalledWith("job-abc", expect.any(String)));
     await waitFor(() =>
       expect(screen.getByTestId("location-path")).toHaveTextContent("/jobs/job-abc")
     );
+    expect(screen.getByRole("status")).toHaveTextContent("Job saved as a draft.");
+    expect(createJob).toHaveBeenCalledTimes(1);
+    expect(extractJobProfile).not.toHaveBeenCalled();
   });
 
   test("stores manually authored descriptions with the API's HR-created provenance value", async () => {
@@ -534,8 +537,10 @@ describe("JobForm AI-assisted creation", () => {
         "requirements",
         "requiredSkills",
         "workMode",
+        "prerankTopN",
       ].sort()
     );
+    expect(payload.prerankTopN).toBe(20);
     expect(payload).not.toHaveProperty("confidence");
     expect(payload).not.toHaveProperty("score");
     expect(payload).not.toHaveProperty("match_percent");
@@ -553,7 +558,8 @@ describe("JobForm AI-assisted creation", () => {
     await user.click(screen.getByRole("button", { name: "Save Draft" }));
 
     await waitFor(() => expect(uploadJobSourceFile).toHaveBeenCalledWith("job-file", file));
-    expect(await screen.findByText(/Job saved as a draft/i)).toBeInTheDocument();
+    expect(await screen.findByTestId("location-path")).toHaveTextContent("/jobs/job-file");
+    expect(screen.getByRole("status")).toHaveTextContent("Job saved as a draft.");
 
   });
 

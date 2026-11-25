@@ -121,7 +121,7 @@ export default function Dashboard() {
             <div className="dashboard-shortcuts">
               <Link className="btn btn-primary" to="/jobs/new">Create a vacancy</Link>
               <Link className="btn btn-secondary" to="/candidates">Review candidates</Link>
-              <Link className="btn btn-secondary" to="/evaluations">Open evaluations</Link>
+              <Link className="btn btn-secondary" to="/applications">Open applications</Link>
             </div>
           </div>
         </section>

@@ -18,6 +18,7 @@ if (strlen($secret) < 32 || !is_array($parts) || !in_array($parts['scheme'] ?? '
 }
 
 $encode = static fn(string $value): string => rtrim(strtr(base64_encode($value), '+/', '-_'), '=');
+$issuedAt = time();
 $header = $encode(json_encode(['alg' => 'HS256', 'typ' => 'JWT'], JSON_THROW_ON_ERROR));
 $payload = $encode(json_encode([
     'iss' => $issuer,
@@ -25,8 +26,9 @@ $payload = $encode(json_encode([
     'sub' => (string)($_SESSION['emp_code'] ?? ''),
     'name' => (string)($_SESSION['name'] ?? ''),
     'role' => 'hr',
-    'iat' => time(),
-    'exp' => time() + 45,
+    'iat' => $issuedAt,
+    'exp' => $issuedAt + 45,
+    'jti' => bin2hex(random_bytes(16)),
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
 $unsigned = $header . '.' . $payload;
 $signature = $encode(hash_hmac('sha256', $unsigned, $secret, true));

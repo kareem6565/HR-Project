@@ -1,7 +1,7 @@
 from app.models.candidate import Candidate
 from app.models.job import Job
 from app.models.resume import Resume
-from app.services.errors import NotFoundError, ValidationError
+from app.services.errors import ValidationError
 
 
 def validate_job_application_consistency(

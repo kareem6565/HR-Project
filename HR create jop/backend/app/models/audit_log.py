@@ -58,7 +58,8 @@ def _install_audit_log_triggers(target, connection, **kw) -> None:
                 CREATE OR REPLACE FUNCTION audit_logs_immutable()
                 RETURNS TRIGGER AS $$
                 BEGIN
-                    RAISE EXCEPTION 'audit_logs table is append-only: UPDATE and DELETE are prohibited';
+                    RAISE EXCEPTION 'audit_logs table is append-only: UPDATE and DELETE '
+                        'are prohibited';
                 END;
                 $$ LANGUAGE plpgsql;
                 """

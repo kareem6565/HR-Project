@@ -34,17 +34,13 @@ def get_effective_job_requirements(job: Any, approved_profile: Any) -> tuple[lis
             if not normalized or normalized in seen:
                 continue
             seen.add(normalized)
-            requirements.append(
-                {"text": text, "category": "must_have", "dimension": dimension}
-            )
+            requirements.append({"text": text, "category": "must_have", "dimension": dimension})
 
     experience = str(getattr(job, "experience", None) or "").strip()
     if experience:
         text = f"Relevant professional experience: {experience}"
         if text.casefold() not in seen:
-            requirements.append(
-                {"text": text, "category": "must_have", "dimension": "experience"}
-            )
+            requirements.append({"text": text, "category": "must_have", "dimension": "experience"})
 
     if not requirements:
         raise ValidationError(

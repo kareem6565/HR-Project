@@ -21,9 +21,9 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.models import Job, JobApplication
 from app.services.errors import UploadValidationError
+from app.services.job_distribution_service import JobDistributionService
 from app.services.job_service import JobService
 from app.services.public_application_service import PublicApplicationService
-from app.services.job_distribution_service import JobDistributionService
 from app.services.upload_stream_service import read_upload_file_bounded
 
 router = APIRouter()
@@ -51,6 +51,7 @@ def create_job(
         experience=body.experience,
         requirements=body.requirements,
         required_skills=body.required_skills,
+        prerank_top_n=body.prerank_top_n,
         created_by_user_id=ctx.user_id,
         idempotency_key=idempotency_key,
     )
@@ -125,7 +126,11 @@ def download_job_source_file(
     job = JobService().get(db, job_id=uuid.UUID(job_id), organization_id=ctx.organization_id)
     if not job.source_file_uri:
         raise NotFoundError("This vacancy has no uploaded source file.")
-    content = LocalFileSystemStorage(settings.storage_root_dir).read(file_uri=job.source_file_uri)
+    content = LocalFileSystemStorage(settings.storage_root_dir).read(
+        file_uri=job.source_file_uri,
+        organization_id=job.organization_id,
+        file_id=job.id,
+    )
     filename = (job.source_file_name or "job-description").replace('"', "")
     filename = filename.replace("\r", "").replace("\n", "")
     return StreamingResponse(
@@ -188,6 +193,7 @@ def update_job(
         experience=body.experience,
         requirements=body.requirements,
         required_skills=body.required_skills,
+        prerank_top_n=body.prerank_top_n,
     )
 
 
@@ -222,9 +228,7 @@ def get_public_job(
     response.headers["Cache-Control"] = "no-store"
     details = JobService().public_details(db, public_id=public_id)
     if details["accepting_applications"]:
-        JobDistributionService().record_view(
-            db, public_id=public_id, tracking_key=utm_campaign
-        )
+        JobDistributionService().record_view(db, public_id=public_id, tracking_key=utm_campaign)
     return details
 
 

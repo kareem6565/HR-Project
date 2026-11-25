@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import threading
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -11,6 +11,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.database import get_db
 from app.models import HRGoogleConnection, HRGoogleOAuthState, Organization, User
+from app.services.errors import ValidationError
 from app.services.google_oauth_service import GoogleOAuthService
 
 
@@ -53,20 +54,34 @@ def oauth_settings(monkeypatch):
 
     monkeypatch.setattr(settings, "google_oauth_client_id", "test-client-id")
     monkeypatch.setattr(settings, "google_oauth_client_secret", "test-client-secret")
-    monkeypatch.setattr(settings, "google_oauth_redirect_uri", "http://localhost:8000/api/v1/hr/google/callback")
-    monkeypatch.setattr(settings, "google_oauth_post_login_redirect_uri", "http://localhost:5174/interviews/availability")
+    monkeypatch.setattr(
+        settings, "google_oauth_redirect_uri", "http://localhost:8000/api/v1/hr/google/callback"
+    )
+    monkeypatch.setattr(
+        settings,
+        "google_oauth_post_login_redirect_uri",
+        "http://localhost:5174/interviews/availability",
+    )
     monkeypatch.setattr(settings, "frontend_base_url", "http://localhost:5174")
     monkeypatch.setattr(settings, "google_calendar_mode", "google")
-    monkeypatch.setattr(settings, "google_token_encryption_key", "test-google-token-encryption-key-32chars")
+    monkeypatch.setattr(
+        settings, "google_token_encryption_key", "test-google-token-encryption-key-32chars"
+    )
     return settings
 
 
 def auth_headers(org_id, user_id) -> dict[str, str]:
-    return {"X-User-Id": str(org_id and user_id and user_id), "X-Organization-Id": str(org_id)} if False else {"X-User-Id": str(user_id), "X-Organization-Id": str(org_id)}
+    return (
+        {"X-User-Id": str(org_id and user_id and user_id), "X-Organization-Id": str(org_id)}
+        if False
+        else {"X-User-Id": str(user_id), "X-Organization-Id": str(org_id)}
+    )
 
 
 class TestGoogleOAuthRoutesAuthBoundary:
-    def test_connect_status_disconnect_require_auth_callback_is_public(self, client, db_session, seeded_org_user, oauth_settings):
+    def test_connect_status_disconnect_require_auth_callback_is_public(
+        self, client, db_session, seeded_org_user, oauth_settings
+    ):
         org_id, user_id = seeded_org_user
 
         # Protected routes reject unauthenticated requests
@@ -84,26 +99,36 @@ class TestGoogleOAuthRoutesAuthBoundary:
         assert connect_resp.status_code == 200
         assert "authorize_url" in connect_resp.json()
 
-        # Callback is reachable without HERA auth (redirects with safe error when params/state invalid)
+        # The callback is public and returns a safe error for invalid state.
         cb_resp = client.get("/api/v1/hr/google/callback", follow_redirects=False)
         assert cb_resp.status_code in (302, 307)
         assert "google=error" in cb_resp.headers.get("location", "")
 
 
 class TestGoogleOAuthCallback:
-    def test_unauthenticated_callback_success_persists_tokens(self, client, db_session, seeded_org_user, oauth_settings, monkeypatch):
+    def test_unauthenticated_callback_success_persists_tokens(
+        self, client, db_session, seeded_org_user, oauth_settings, monkeypatch
+    ):
         org_id, user_id = seeded_org_user
         service = GoogleOAuthService()
         state = service.create_state(db_session, organization_id=org_id, user_id=user_id)
         db_session.commit()
 
-        monkeypatch.setattr(GoogleOAuthService, "exchange_code", lambda self, code: {
-            "access_token": "access-token-value",
-            "refresh_token": "refresh-token-value",
-            "expires_in": 3600,
-            "scope": "openid email https://www.googleapis.com/auth/calendar.events",
-        })
-        monkeypatch.setattr(GoogleOAuthService, "fetch_userinfo", lambda self, access_token: {"email": "hr-google@example.com"})
+        monkeypatch.setattr(
+            GoogleOAuthService,
+            "exchange_code",
+            lambda self, code: {
+                "access_token": "access-token-value",
+                "refresh_token": "refresh-token-value",
+                "expires_in": 3600,
+                "scope": "openid email https://www.googleapis.com/auth/calendar.events",
+            },
+        )
+        monkeypatch.setattr(
+            GoogleOAuthService,
+            "fetch_userinfo",
+            lambda self, access_token: {"email": "hr-google@example.com"},
+        )
 
         # No auth headers: Google redirect callback
         resp = client.get(
@@ -117,18 +142,24 @@ class TestGoogleOAuthCallback:
         assert "google=connected" in location
 
         db_session.expire_all()
-        conn = db_session.scalar(select(HRGoogleConnection).where(
-            HRGoogleConnection.organization_id == org_id,
-            HRGoogleConnection.user_id == user_id,
-        ))
+        conn = db_session.scalar(
+            select(HRGoogleConnection).where(
+                HRGoogleConnection.organization_id == org_id,
+                HRGoogleConnection.user_id == user_id,
+            )
+        )
         assert conn is not None
         assert conn.status == "connected"
         assert conn.google_email == "hr-google@example.com"
         # tokens are encrypted at rest (not stored as plaintext)
         assert conn.access_token_encrypted != "access-token-value"
-        assert conn.refresh_token_encrypted and conn.refresh_token_encrypted != "refresh-token-value"
+        assert (
+            conn.refresh_token_encrypted and conn.refresh_token_encrypted != "refresh-token-value"
+        )
 
-        state_row = db_session.scalar(select(HRGoogleOAuthState).where(HRGoogleOAuthState.user_id == user_id))
+        state_row = db_session.scalar(
+            select(HRGoogleOAuthState).where(HRGoogleOAuthState.user_id == user_id)
+        )
         assert state_row is not None and state_row.used_at is not None
 
     def test_invalid_state_rejected(self, client, db_session, seeded_org_user, oauth_settings):
@@ -141,7 +172,9 @@ class TestGoogleOAuthCallback:
         assert resp.status_code in (302, 307)
         assert "google=error" in resp.headers.get("location", "")
         db_session.expire_all()
-        conn = db_session.scalar(select(HRGoogleConnection).where(HRGoogleConnection.user_id == user_id))
+        conn = db_session.scalar(
+            select(HRGoogleConnection).where(HRGoogleConnection.user_id == user_id)
+        )
         assert conn is None
 
     def test_expired_state_rejected(self, client, db_session, seeded_org_user, oauth_settings):
@@ -149,9 +182,11 @@ class TestGoogleOAuthCallback:
         service = GoogleOAuthService()
         state = service.create_state(db_session, organization_id=org_id, user_id=user_id)
         db_session.commit()
-        row = db_session.scalar(select(HRGoogleOAuthState).where(HRGoogleOAuthState.user_id == user_id))
+        row = db_session.scalar(
+            select(HRGoogleOAuthState).where(HRGoogleOAuthState.user_id == user_id)
+        )
         assert row is not None
-        row.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+        row.expires_at = datetime.now(UTC) - timedelta(minutes=1)
         db_session.commit()
 
         resp = client.get(
@@ -162,10 +197,14 @@ class TestGoogleOAuthCallback:
         assert resp.status_code in (302, 307)
         assert "google=error" in resp.headers.get("location", "")
         db_session.expire_all()
-        conn = db_session.scalar(select(HRGoogleConnection).where(HRGoogleConnection.user_id == user_id))
+        conn = db_session.scalar(
+            select(HRGoogleConnection).where(HRGoogleConnection.user_id == user_id)
+        )
         assert conn is None
 
-    def test_replayed_state_rejected_and_not_reusable(self, client, db_session, seeded_org_user, oauth_settings, monkeypatch):
+    def test_replayed_state_rejected_and_not_reusable(
+        self, client, db_session, seeded_org_user, oauth_settings, monkeypatch
+    ):
         org_id, user_id = seeded_org_user
         service = GoogleOAuthService()
         state = service.create_state(db_session, organization_id=org_id, user_id=user_id)
@@ -175,10 +214,18 @@ class TestGoogleOAuthCallback:
 
         def fake_exchange(self, code):
             calls["exchange"] += 1
-            return {"access_token": "access-token-value", "refresh_token": "refresh-token-value", "expires_in": 3600}
+            return {
+                "access_token": "access-token-value",
+                "refresh_token": "refresh-token-value",
+                "expires_in": 3600,
+            }
 
         monkeypatch.setattr(GoogleOAuthService, "exchange_code", fake_exchange)
-        monkeypatch.setattr(GoogleOAuthService, "fetch_userinfo", lambda self, access_token: {"email": "hr-google@example.com"})
+        monkeypatch.setattr(
+            GoogleOAuthService,
+            "fetch_userinfo",
+            lambda self, access_token: {"email": "hr-google@example.com"},
+        )
 
         first = client.get(
             "/api/v1/hr/google/callback",
@@ -198,11 +245,13 @@ class TestGoogleOAuthCallback:
         assert calls["exchange"] == 1
 
         # Consumed state must remain unusable (durable one-time consumption)
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             GoogleOAuthService().consume_state(db_session, state)
         db_session.rollback()
 
-    def test_failed_exchange_consumes_state_and_requires_fresh_attempt(self, client, db_session, seeded_org_user, oauth_settings, monkeypatch):
+    def test_failed_exchange_consumes_state_and_requires_fresh_attempt(
+        self, client, db_session, seeded_org_user, oauth_settings, monkeypatch
+    ):
         org_id, user_id = seeded_org_user
         service = GoogleOAuthService()
         state = service.create_state(db_session, organization_id=org_id, user_id=user_id)
@@ -222,12 +271,14 @@ class TestGoogleOAuthCallback:
         assert "google=error" in resp.headers.get("location", "")
 
         # State consumed durably and never reusable, even though exchange failed
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             GoogleOAuthService().consume_state(db_session, state)
         db_session.rollback()
 
         db_session.expire_all()
-        conn = db_session.scalar(select(HRGoogleConnection).where(HRGoogleConnection.user_id == user_id))
+        conn = db_session.scalar(
+            select(HRGoogleConnection).where(HRGoogleConnection.user_id == user_id)
+        )
         assert conn is None
 
         replay = client.get(
@@ -270,7 +321,7 @@ def test_consume_state_is_atomic_under_postgres_concurrency(test_engine):
                 organization_id=org_id,
                 user_id=user_id,
                 token_hash=token_hash,
-                expires_at=datetime.now(timezone.utc) + timedelta(minutes=10),
+                expires_at=datetime.now(UTC) + timedelta(minutes=10),
                 used_at=None,
             )
         )
@@ -323,7 +374,9 @@ def test_consume_state_is_atomic_under_postgres_concurrency(test_engine):
         # Cleanup committed test rows (safe test DB) to preserve cross-test isolation.
         cleanup = SessionLocal()
         try:
-            cleanup.query(HRGoogleOAuthState).filter(HRGoogleOAuthState.token_hash == token_hash).delete()
+            cleanup.query(HRGoogleOAuthState).filter(
+                HRGoogleOAuthState.token_hash == token_hash
+            ).delete()
             cleanup.query(HRGoogleConnection).filter(HRGoogleConnection.user_id == user_id).delete()
             cleanup.query(User).filter(User.id == user_id).delete()
             cleanup.query(Organization).filter(Organization.id == org_id).delete()

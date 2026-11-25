@@ -10,6 +10,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     String,
     Text,
     UniqueConstraint,
@@ -86,6 +87,9 @@ class Job(Base):
     experience: Mapped[str | None] = mapped_column(String(100), nullable=True)
     requirements: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
     required_skills: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
+    prerank_top_n: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=20, server_default="20"
+    )
     idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
     source_file_uri: Mapped[str | None] = mapped_column(String(512), nullable=True)
     source_file_name: Mapped[str | None] = mapped_column(String(255), nullable=True)

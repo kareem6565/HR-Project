@@ -3,7 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import ApplicationReview, { filterCertificationHeadings } from "./ApplicationReview";
-import { getReviewWorkspace, recordDecision } from "../../services/reviewService";
+import { getReviewWorkspace, recordDecision, runEvaluation } from "../../services/reviewService";
 import { createCandidateInterviewInvitation } from "../../services/interviewService";
 
 // Verify the review screen keeps submitting the exact same payload through
@@ -13,6 +13,14 @@ vi.mock("../../services/reviewService", () => ({
   getReviewWorkspace: vi.fn(),
   runEvaluation: vi.fn(),
   recordDecision: vi.fn(),
+  getPipelineState: vi.fn().mockResolvedValue({
+    application_id: "app-1", status: "ready_for_review", pipeline_stage: "review",
+    allowed_next_stages: ["screening", "interview", "withdrawn", "archived"],
+    allowed_correction_stages: [], reason_required_stages: ["screening", "withdrawn"],
+    is_admin: false, transitions: [],
+  }),
+  transitionPipelineStage: vi.fn(),
+  correctHiredPipelineStage: vi.fn(),
 }));
 vi.mock("../../services/resumeService", () => ({
   downloadResume: vi.fn(),
@@ -61,7 +69,7 @@ function renderPage(initialEntry = "/applications/app-1/review", state = undefin
     <MemoryRouter initialEntries={initialEntries}>
       <Routes>
         <Route path="/applications/:id/review" element={<ApplicationReview />} />
-        <Route path="/matching" element={<div data-testid="matching-page">Matching Page</div>} />
+        <Route path="/matching-results" element={<div data-testid="matching-page">Matching Page</div>} />
         <Route path="/applications/:id/review" element={<ApplicationReview />} />
       </Routes>
     </MemoryRouter>
@@ -75,6 +83,53 @@ describe("ApplicationReview pipeline decision", () => {
     getReviewWorkspace.mockResolvedValue(workspace);
     recordDecision.mockResolvedValue({});
     createCandidateInterviewInvitation.mockResolvedValue({ token: "opaque-test-token" });
+  });
+
+  it("shows the rules-only notice before an evaluation is run", async () => {
+    getReviewWorkspace.mockResolvedValueOnce({ ...workspace, aiMode: "rules" });
+    renderPage();
+
+    await screen.findByRole("heading", { name: "Ada Lovelace" });
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Rules-only mode is active. New evaluations use deterministic CV evidence without calling an AI model."
+    );
+  });
+
+  it("does not report evaluation success when the refreshed result has no requirement evidence", async () => {
+    const user = userEvent.setup();
+    getReviewWorkspace
+      .mockResolvedValueOnce(workspace)
+      .mockResolvedValueOnce({
+        ...workspace,
+        evaluation: { id: "eval-1", version_number: 3, status: "completed", score: "0" },
+        evidence: [],
+      });
+    runEvaluation.mockResolvedValue({ evaluation_id: "eval-1", version_number: 3 });
+
+    renderPage();
+    await user.click(await screen.findByRole("button", { name: "Evaluate Candidate" }));
+
+    expect(await screen.findByText(/completed evaluation with requirement evidence was not saved/i)).toBeInTheDocument();
+    expect(screen.queryByText("Evaluation v3 completed with requirement evidence.")).not.toBeInTheDocument();
+  });
+
+  it("shows OCR provenance and a manual-review warning for low-confidence extraction", async () => {
+    getReviewWorkspace.mockResolvedValueOnce({
+      ...workspace,
+      resume: {
+        id: "resume-ocr",
+        original_filename: "candidate.pdf",
+        extraction_source: "ocr",
+        extraction_confidence: 0.42,
+        status: "needs_manual_review",
+      },
+    });
+    renderPage();
+
+    await screen.findByRole("heading", { name: "Ada Lovelace" });
+    expect(screen.getByRole("status")).toHaveTextContent("Needs manual review");
+    expect(screen.getByRole("status")).toHaveTextContent("OCR confidence: 42%");
+    expect(screen.getByRole("status")).toHaveTextContent("Check the original CV");
   });
 
   it("submits { decision: 'hold', reason } via the shared component and confirmation modal", async () => {

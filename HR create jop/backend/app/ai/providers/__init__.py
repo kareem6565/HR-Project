@@ -13,19 +13,23 @@ from app.ai.providers.base import (
 from app.ai.providers.errors import (
     ProviderBudgetExceededError,
     ProviderConfigurationError,
+    ProviderContextLimitError,
     ProviderError,
     ProviderInsufficientCreditsError,
     ProviderInvalidRequestError,
     ProviderInvalidResponseError,
     ProviderRateLimitError,
     ProviderTimeoutError,
+    ProviderTruncatedResponseError,
     ProviderUnavailableError,
     ProviderUsageCheckError,
     provider_error_for,
 )
 from app.ai.providers.factory import get_provider
 from app.ai.providers.fake import FakeAIProvider
+from app.ai.providers.local import LocalProvider
 from app.ai.providers.ollama_cloud import OllamaCloudProvider
+from app.ai.providers.ollama_local import OllamaLocalProvider
 from app.ai.providers.openai_compatible import OpenAICompatibleProvider
 from app.ai.providers.openrouter import OpenRouterProvider
 from app.ai.providers.soal import SoalProvider
@@ -34,17 +38,21 @@ __all__ = [
     "AIProvider",
     "FakeAIProvider",
     "OllamaCloudProvider",
+    "OllamaLocalProvider",
+    "LocalProvider",
     "OpenAICompatibleProvider",
     "OpenRouterProvider",
     "SoalProvider",
     "ProviderError",
     "ProviderBudgetExceededError",
     "ProviderConfigurationError",
+    "ProviderContextLimitError",
     "ProviderInsufficientCreditsError",
     "ProviderInvalidRequestError",
     "ProviderInvalidResponseError",
     "ProviderRateLimitError",
     "ProviderTimeoutError",
+    "ProviderTruncatedResponseError",
     "ProviderUnavailableError",
     "ProviderUsageCheckError",
     "StructuredGenerationRequest",

@@ -39,7 +39,13 @@ TECHNICAL_SYNONYMS: dict[str, list[str]] = {
     "data science": ["data science", "علم البيانات"],
     "react": ["react", "react.js", "رياكت"],
     "spring boot": ["spring boot", "springboot", "سبرينج بوت", "سبرنج بوت"],
-    "rest api": ["rest api", "restful api", "apis", "واجهات برمجة التطبيقات", "واجهة برمجة التطبيقات"],
+    "rest api": [
+        "rest api",
+        "restful api",
+        "apis",
+        "واجهات برمجة التطبيقات",
+        "واجهة برمجة التطبيقات",
+    ],
     "testing": ["testing", "unit testing", "qa", "اختبار البرمجيات", "فحص البرمجيات"],
     "security": ["security", "cybersecurity", "امن المعلومات", "أمن المعلومات", "الأمن السيبراني"],
     "agile": ["agile", "scrum", "أجايل", "اجايل", "سكروم"],
@@ -279,10 +285,14 @@ def match_quote_in_source(
         return True, location, {"reason": "normalized_source_substring", "similarity": 100.0}
 
     if len(norm_quote) < _QUOTE_FUZZY_MIN_LENGTH:
-        return False, None, {
-            "reason": "quote_too_short_for_fuzzy_match",
-            "similarity": None,
-        }
+        return (
+            False,
+            None,
+            {
+                "reason": "quote_too_short_for_fuzzy_match",
+                "similarity": None,
+            },
+        )
 
     # 3. Allow only close character-level matches for PDF extraction noise. This
     # does not accept paraphrases or synonym matches, and short skill names stay
@@ -299,15 +309,23 @@ def match_quote_in_source(
             "similarity": round(similarity, 2),
             "verbatim_quote": cleaned_quote,
         }
-        return True, location, {
-            "reason": "fuzzy_source_match",
-            "similarity": round(similarity, 2),
-        }
+        return (
+            True,
+            location,
+            {
+                "reason": "fuzzy_source_match",
+                "similarity": round(similarity, 2),
+            },
+        )
 
-    return False, None, {
-        "reason": "fuzzy_similarity_below_threshold",
-        "similarity": round(similarity, 2),
-    }
+    return (
+        False,
+        None,
+        {
+            "reason": "fuzzy_similarity_below_threshold",
+            "similarity": round(similarity, 2),
+        },
+    )
 
 
 def find_quote_in_source(quote: str, source_text: str) -> tuple[bool, dict[str, Any] | None]:

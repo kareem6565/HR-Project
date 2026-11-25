@@ -90,6 +90,7 @@ def test_get_returns_effective_config(client: httpx.Client) -> None:
     assert resp.status_code == 200
     body = resp.json()
     assert body["provider"] == effective["provider"]
+    assert body["is_demo"] is (effective["provider"] == "fake")
     assert body["has_api_key"] == bool(effective["api_key"])
     assert body["api_key_source"] == effective["api_key_source"]
     assert body["model"] == effective["model"]
@@ -158,7 +159,7 @@ def test_verify_missing_key_returns_inline_failure(client: httpx.Client) -> None
     body = resp.json()
     assert body["ok"] is False
     assert body["message"]
-    assert body["model"]
+    assert body["model"] == ""
 
 
 def test_verify_refuses_non_openrouter_provider(client: httpx.Client, monkeypatch) -> None:
@@ -179,6 +180,33 @@ def test_verify_refuses_non_openrouter_provider(client: httpx.Client, monkeypatc
     body = resp.json()
     assert body["ok"] is False
     assert "openrouter" in body["message"].lower()
+
+
+def test_verify_self_hosted_openai_compatible_without_required_api_key(
+    client: httpx.Client, monkeypatch
+) -> None:
+    """The self-hosted local provider can be checked without a cloud API key."""
+    from types import SimpleNamespace
+
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "ai_provider", "local")
+    monkeypatch.setattr(settings, "local_llm_model", "operator-selected-model")
+    monkeypatch.setattr(settings, "local_llm_api_key", None)
+    org, user = bootstrap(client)
+    h = auth_headers(org["id"], user["id"])
+
+    with mock.patch("app.api.v1.routes.ai_settings.LocalProvider") as provider_cls:
+        provider_cls.return_value.generate_text.return_value = SimpleNamespace(text="OK")
+        response = client.post("/api/v1/settings/ai/verify", json={}, headers=h)
+
+    provider_cls.assert_called_once_with(
+        api_key=None,
+        model="operator-selected-model",
+        base_url=settings.local_llm_base_url,
+    )
+    assert response.status_code == 200
+    assert response.json()["ok"] is True
 
 
 def test_verify_with_provided_key_calls_openrouter(client: httpx.Client, monkeypatch) -> None:
@@ -231,6 +259,7 @@ def test_openrouter_settings_report_presence_without_returning_key(
     assert resp.json() == {
         "provider": "openrouter",
         "model": settings.openrouter_model,
+        "is_demo": False,
         "api_key_source": "environment",
         "has_api_key": True,
     }

@@ -14,7 +14,8 @@ Usage (from `HR create jop/backend/`)::
 Environment overrides::
 
     HERA_DATABASE_URL   defaults to the local docker-compose database
-    HR_SEED_PASSWORD    password for every seeded account (default: hr123)
+    APP_ENV             must be set to `development` to use the local test password
+    HR_SEED_PASSWORD    required outside development; at least 8 characters
 """
 
 from __future__ import annotations
@@ -26,11 +27,31 @@ import bcrypt
 import psycopg
 from psycopg.rows import dict_row
 
+from app.cli.bootstrap import FORBIDDEN_PASSWORDS
+
 DATABASE_URL = os.getenv(
     "HERA_DATABASE_URL",
-    "postgresql://hr_ai_assistant:hr_ai_assistant@127.0.0.1:5432/hr_ai_assistant",
+    "postgresql://hr_ai_assistant:hr_ai_assistant@127.0.0.1:5432/hera_recruitment_v2",
 )
-SEED_PASSWORD = os.getenv("HR_SEED_PASSWORD", "hr123")
+DEVELOPMENT_SEED_PASSWORD = "hr123"
+KNOWN_WEAK_PASSWORDS = FORBIDDEN_PASSWORDS | {DEVELOPMENT_SEED_PASSWORD}
+
+
+def resolve_seed_password(app_env: str | None, configured_password: str | None) -> tuple[str, bool]:
+    """Return a safe seed password and whether seeded accounts must rotate it."""
+    normalized_env = (app_env or "").strip().lower()
+    if normalized_env == "development":
+        return configured_password or DEVELOPMENT_SEED_PASSWORD, False
+
+    password = (configured_password or "").strip()
+    if not password:
+        raise ValueError("HR_SEED_PASSWORD is required when APP_ENV is not development.")
+    if len(password) < 8 or password.lower() in KNOWN_WEAK_PASSWORDS:
+        raise ValueError(
+            "HR_SEED_PASSWORD is too weak; use a unique password of at least 8 characters."
+        )
+    return password, True
+
 
 CATEGORY = {
     "name": "الشفت الصباحي (الافتراضي)",
@@ -75,7 +96,15 @@ def hash_password(password: str) -> str:
 
 
 def main() -> int:
-    password_hash = hash_password(SEED_PASSWORD)
+    try:
+        seed_password, must_change_password = resolve_seed_password(
+            os.getenv("APP_ENV"), os.getenv("HR_SEED_PASSWORD")
+        )
+    except ValueError as exc:
+        print(f"ERROR: {exc}")
+        return 2
+
+    password_hash = hash_password(seed_password)
     print(f"PostgreSQL: {DATABASE_URL.rsplit('@', 1)[-1]} (schema hr_ops)")
 
     with psycopg.connect(DATABASE_URL, row_factory=dict_row) as connection:
@@ -136,11 +165,21 @@ def main() -> int:
                     """
                     INSERT INTO hr_ops.users (
                         emp_code, name, password_hash, role, category_id,
-                        basic_salary, yearly_vacation_days
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (emp_code) DO NOTHING
+                        basic_salary, yearly_vacation_days, must_change_password
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (emp_code) DO UPDATE
+                    SET must_change_password = EXCLUDED.must_change_password
                     """,
-                    (emp_code, name, password_hash, role, category_id, salary, vacation_days),
+                    (
+                        emp_code,
+                        name,
+                        password_hash,
+                        role,
+                        category_id,
+                        salary,
+                        vacation_days,
+                        must_change_password,
+                    ),
                 )
 
             cursor.execute("SELECT COUNT(*) AS total FROM hr_ops.users")
@@ -149,8 +188,7 @@ def main() -> int:
         connection.commit()
 
     print(f"seeded hr_ops: users={user_count}, leave_types={len(LEAVE_TYPES)}")
-    print(f"sign in with employee code HR001 and password {SEED_PASSWORD}")
-    print("change the password from the employee management screen before real use")
+    print("Seeded accounts are available only under the configured environment policy.")
     return 0
 
 

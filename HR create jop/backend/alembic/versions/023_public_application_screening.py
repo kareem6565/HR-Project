@@ -15,19 +15,24 @@ def upgrade() -> None:
         "screening_batch_items",
         sa.Column("source", sa.String(32), nullable=False, server_default="manual_upload"),
     )
-    op.add_column(
-        "screening_batch_items", sa.Column("job_profile_id", sa.Uuid(), nullable=True)
-    )
+    op.add_column("screening_batch_items", sa.Column("job_profile_id", sa.Uuid(), nullable=True))
     op.create_check_constraint(
-        "ck_screening_batch_items_source", "screening_batch_items",
+        "ck_screening_batch_items_source",
+        "screening_batch_items",
         "source IN ('manual_upload', 'public_application')",
     )
     op.create_foreign_key(
         "fk_screening_batch_items_job_profile_id_job_profiles",
-        "screening_batch_items", "job_profiles", ["job_profile_id"], ["id"], ondelete="RESTRICT",
+        "screening_batch_items",
+        "job_profiles",
+        ["job_profile_id"],
+        ["id"],
+        ondelete="RESTRICT",
     )
     op.create_index(
-        "uq_screening_batch_items_public_application", "screening_batch_items", ["application_id"],
+        "uq_screening_batch_items_public_application",
+        "screening_batch_items",
+        ["application_id"],
         unique=True,
         postgresql_where=sa.text("source = 'public_application' AND application_id IS NOT NULL"),
         sqlite_where=sa.text("source = 'public_application' AND application_id IS NOT NULL"),

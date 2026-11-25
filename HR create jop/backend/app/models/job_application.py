@@ -7,8 +7,10 @@ from typing import TYPE_CHECKING
 from sqlalchemy import (
     CheckConstraint,
     DateTime,
+    Float,
     ForeignKey,
     Index,
+    Integer,
     String,
     Text,
     UniqueConstraint,
@@ -27,6 +29,7 @@ if TYPE_CHECKING:
     from app.models.interview_question_set import InterviewQuestionSet
     from app.models.job import Job
     from app.models.organization import Organization
+    from app.models.pipeline_stage_transition import PipelineStageTransition
     from app.models.resume import Resume
 
 
@@ -39,6 +42,13 @@ class JobApplication(Base):
             "'ready_for_review', 'hold', 'advanced', 'rejected', 'archived'"
             ")",
             name="ck_job_applications_status",
+        ),
+        CheckConstraint(
+            "(status = 'rejected' AND pipeline_stage = 'rejected') OR "
+            "(status = 'archived' AND pipeline_stage = 'archived') OR "
+            "(status NOT IN ('rejected', 'archived') AND pipeline_stage IN "
+            "('screening', 'review', 'interview', 'offer', 'hired', 'withdrawn'))",
+            name="ck_job_applications_status_pipeline_stage",
         ),
         Index("ix_job_applications_organization_id_status", "organization_id", "status"),
         Index("ix_job_applications_job_id_status", "job_id", "status"),
@@ -67,6 +77,9 @@ class JobApplication(Base):
         UUID(as_uuid=True), ForeignKey("resumes.id", ondelete="RESTRICT"), nullable=False
     )
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="created")
+    pipeline_stage: Mapped[str] = mapped_column(
+        String(24), nullable=False, default="screening", server_default="screening"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -89,6 +102,10 @@ class JobApplication(Base):
         DateTime(timezone=True), nullable=True
     )
     public_contact_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    advisory_rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    advisory_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    advisory_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    advisory_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     organization: Mapped[Organization] = relationship()
     job: Mapped[Job] = relationship(back_populates="applications")
@@ -97,6 +114,9 @@ class JobApplication(Base):
     evaluations: Mapped[list[CandidateEvaluation]] = relationship(back_populates="job_application")
     hr_decisions: Mapped[list[HRDecision]] = relationship(back_populates="job_application")
     interviews: Mapped[list[Interview]] = relationship(back_populates="job_application")
+    pipeline_transitions: Mapped[list[PipelineStageTransition]] = relationship(
+        back_populates="job_application", order_by="PipelineStageTransition.created_at"
+    )
     question_sets: Mapped[list[InterviewQuestionSet]] = relationship(
         back_populates="job_application"
     )

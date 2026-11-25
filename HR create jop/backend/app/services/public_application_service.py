@@ -200,6 +200,7 @@ class PublicApplicationService:
                     max_upload_bytes=settings.max_upload_bytes,
                     storage=storage,
                     checksum=resume_checksum,
+                    defer_text_extraction=True,
                 )
                 db.info["public_application_pending_file"] = (storage, resume.file_uri)
                 application = JobApplicationService().create(

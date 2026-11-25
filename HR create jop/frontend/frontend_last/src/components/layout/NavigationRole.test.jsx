@@ -7,6 +7,7 @@ import Sidebar from "./Sidebar";
 import Navbar from "./Navbar";
 import ProtectedRoute from "../common/ProtectedRoute";
 import { AuthContext } from "../../context/AuthContext";
+import { ThemeProvider } from "../../context/ThemeContext";
 
 describe("HERA UI-09: Simplified MVP Navigation and Role-Aware Controls", () => {
   const renderSidebar = (role, initialEntries = ["/dashboard"]) => {
@@ -24,11 +25,13 @@ describe("HERA UI-09: Simplified MVP Navigation and Role-Aware Controls", () => 
     };
 
     return render(
-      <AuthContext.Provider value={authValues}>
-        <MemoryRouter initialEntries={initialEntries}>
-          <Sidebar />
-        </MemoryRouter>
-      </AuthContext.Provider>
+      <ThemeProvider>
+        <AuthContext.Provider value={authValues}>
+          <MemoryRouter initialEntries={initialEntries}>
+            <Sidebar />
+          </MemoryRouter>
+        </AuthContext.Provider>
+      </ThemeProvider>
     );
   };
 
@@ -145,29 +148,31 @@ describe("HERA UI-09: Simplified MVP Navigation and Role-Aware Controls", () => 
       };
 
       return render(
-        <AuthContext.Provider value={authValues}>
-          <MemoryRouter initialEntries={[path]}>
-            <Routes>
-              <Route path="/dashboard" element={<div>Dashboard Page</div>} />
-              <Route
-                path="/ai-activity"
-                element={
-                  <ProtectedRoute allowedRoles={["admin", "administrator"]}>
-                    <div>Technical AI Activity Content</div>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/settings"
-                element={
-                  <ProtectedRoute allowedRoles={["admin", "administrator"]}>
-                    <div>Secret Admin Settings Content</div>
-                  </ProtectedRoute>
-                }
-              />
-            </Routes>
-          </MemoryRouter>
-        </AuthContext.Provider>
+        <ThemeProvider>
+          <AuthContext.Provider value={authValues}>
+            <MemoryRouter initialEntries={[path]}>
+              <Routes>
+                <Route path="/dashboard" element={<div>Dashboard Page</div>} />
+                <Route
+                  path="/ai-activity"
+                  element={
+                    <ProtectedRoute allowedRoles={["admin", "administrator"]}>
+                      <div>Technical AI Activity Content</div>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/settings"
+                  element={
+                    <ProtectedRoute allowedRoles={["admin", "administrator"]}>
+                      <div>Secret Admin Settings Content</div>
+                    </ProtectedRoute>
+                  }
+                />
+              </Routes>
+            </MemoryRouter>
+          </AuthContext.Provider>
+        </ThemeProvider>
       );
     };
 
@@ -220,16 +225,19 @@ describe("HERA UI-09: Simplified MVP Navigation and Role-Aware Controls", () => 
       };
 
       render(
+      <ThemeProvider>
         <AuthContext.Provider value={authValues}>
           <MemoryRouter>
             <Navbar pathname="/dashboard" />
           </MemoryRouter>
         </AuthContext.Provider>
+      </ThemeProvider>
       );
 
-      expect(screen.getByText("Sarah Recruiter")).toBeInTheDocument();
-      expect(screen.getByText("sarah@company.com")).toBeInTheDocument();
-      expect(screen.getByText("recruiter")).toBeInTheDocument();
+      expect(screen.getByLabelText("Signed in as Recruiter")).toBeInTheDocument();
+      expect(screen.getByText("Recruiter")).toBeInTheDocument();
+      expect(screen.queryByText("Sarah Recruiter")).not.toBeInTheDocument();
+      expect(screen.queryByText("sarah@company.com")).not.toBeInTheDocument();
 
       const logoutBtn = screen.getByRole("button", { name: /sign out/i });
       expect(logoutBtn).toBeInTheDocument();

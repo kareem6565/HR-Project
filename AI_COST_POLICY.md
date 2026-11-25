@@ -8,8 +8,8 @@
 - `openrouter/free` is the default route. OpenRouter documents it as routing each chat request to a free model that fits it.
 - Explicit model IDs are allowed only when they end in `:free`, appear in `AI_FREE_MODEL_ALLOWLIST`, and the current public catalog reports both prompt and completion prices as zero. Catalog eligibility is cached for ten minutes and a catalog outage fails closed.
 - Text input and text output are required. Structured requests to explicit models additionally require catalog support for `response_format`. Structured requests sent to `openrouter/free` require parameter-compatible provider routing.
-- Soal, Ollama, paid DeepSeek, unknown models, nonzero or missing prices, noncanonical endpoints, and nonzero budgets are blocked before inference.
-- There is no paid fallback, no user-facing paid switch, and no runtime approval API. Setting `AI_PAID_MODE_ENABLED=true` or a nonzero `AI_PAID_BUDGET_USD` still blocks requests until a separately reviewed owner-approval mechanism exists.
+- Paid inference is disabled by default. A temporary owner-authorized OpenRouter route may be enabled only for the exact `deepseek/deepseek-v4.1-flash-1017` model, when it appears in `AI_PAID_MODEL_ALLOWLIST`, with a positive `AI_PAID_BUDGET_USD` monthly cap. Per-request routing is price-sorted, requires request parameter support, disables provider fallback, and caps rates at $0.03/M input and $0.20/M output. The monthly reservation is checked before each request and reconciled against reported usage; missing usage retains the reservation. Unexpected cost above the reservation trips the global circuit breaker. No paid inference is selected by the application UI.
+- All other paid models, unknown models, missing prices, and noncanonical endpoints are blocked before inference. There is no user-facing paid switch or runtime approval API.
 - Explicit `AI_PROVIDER=fake` remains available for tests/offline development. Missing provider selection defaults to OpenRouter; missing credentials fail closed rather than selecting Fake.
 
 ## Limits
@@ -32,7 +32,7 @@ Usage rows contain internal user and organization UUID references but no HR payl
 
 ## Paid activation
 
-Paid inference remains disabled, budget is zero, and there is no code path for an application user to enable it. A future activation would need a separate owner-only approval record binding exact provider/model, a hard USD cap, and expiration, plus audit and enforcement tests. That activation mechanism is not implemented here.
+Paid inference remains disabled unless an operator explicitly sets the exact-model allowlist, positive budget, and paid-mode environment setting. The service enforces the configured monthly cap with a pre-call reservation. Operators must turn paid mode back off after an authorized one-time task. This environment-gated mechanism is not a substitute for a production owner approval UI/API and is not exposed to application users.
 
 ## Deployment notes
 

@@ -1,4 +1,4 @@
-"""Offline regression checks for the versioned synthetic Ollama quality set."""
+"""Offline regression checks for the shared synthetic provider quality set."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pathlib import Path
 from app.ai.contracts import normalize_job_profile_requirements
 from app.services.scoring_service import ScoringService
 
-CASES_PATH = Path(__file__).parent / "data" / "ollama_quality_cases.json"
+CASES_PATH = Path(__file__).parent / "data" / "synthetic_ai_quality_cases.json"
 
 
 def load_cases() -> list[dict]:
@@ -18,10 +18,10 @@ def load_cases() -> list[dict]:
 def test_synthetic_model_cases_are_versioned_and_distinct() -> None:
     cases = load_cases()
 
-    assert len(cases) == 8
-    assert len({case["id"] for case in cases}) == 8
+    assert len(cases) == 9
+    assert len({case["id"] for case in cases}) == 9
     assert all(case["cv_text"].strip() for case in cases)
-    assert all(case["expected_score"] in range(101) for case in cases)
+    assert all(0 <= case["expected_score"] <= 100 for case in cases)
 
 
 def test_expected_scores_follow_unchanged_backend_scoring_rules() -> None:
@@ -29,8 +29,7 @@ def test_expected_scores_follow_unchanged_backend_scoring_rules() -> None:
         requirements = normalize_job_profile_requirements(case["requirements"])
         expected_by_text = case["expected_evidence"]
         evidence_by_key = {
-            requirement.key: expected_by_text[requirement.text]
-            for requirement in requirements
+            requirement.key: expected_by_text[requirement.text] for requirement in requirements
         }
 
         result = ScoringService().compute(requirements, evidence_by_key)

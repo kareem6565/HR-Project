@@ -203,6 +203,7 @@ export default function ScreeningBatchProgress({
     0;
   const queuedFiles =
     batchData.counts?.queued ?? batchData.queued_items ?? 0;
+  const waitingQuotaFiles = batchData.counts?.waiting_for_quota ?? batchData.waiting_for_quota_items ?? 0;
   const runningFiles =
     batchData.counts?.running ?? batchData.running_items ?? 0;
   const doneFiles =
@@ -322,6 +323,12 @@ export default function ScreeningBatchProgress({
             aria-valuetext={`${terminalFiles} of ${totalFiles} files reached a final state`}
           />
         )}
+        {batchData.eta_label === "unknown" || batchData.eta_seconds == null ? (
+          <p className="muted-note">Estimated time: unknown until enough files finish.</p>
+        ) : (
+          <p className="muted-note">Estimated time remaining: about {Math.ceil(batchData.eta_seconds / 60)} min.</p>
+        )}
+        {waitingQuotaFiles > 0 && <p role="status" className="muted-note">{waitingQuotaFiles} file(s) are waiting for provider quota and will resume automatically.</p>}
         <p className="muted-note">
           {progressPercent === null
             ? "Progress will appear when the batch reports its file count."
@@ -425,7 +432,7 @@ export default function ScreeningBatchProgress({
               } else if (item.status === "duplicate") {
                 tone = "grey";
                 Icon = Copy;
-              } else if (item.status === "queued") {
+              } else if (item.status === "queued" || item.status === "waiting_for_quota") {
                 tone = "amber";
                 Icon = Clock;
               }
@@ -457,7 +464,7 @@ export default function ScreeningBatchProgress({
                         className={item.status === "running" ? "spin" : ""}
                         aria-hidden="true"
                       />
-                      {item.status}
+                      {item.status === "waiting_for_quota" ? "Waiting for quota" : item.status}
                     </span>
                   </td>
                   <td>
@@ -477,6 +484,8 @@ export default function ScreeningBatchProgress({
                       <span className="muted-note">
                         {item.error_message || "Duplicate CV file content"}
                       </span>
+                    ) : item.status === "waiting_for_quota" ? (
+                      <span className="muted-note">{item.reason || "Waiting for provider quota; will resume automatically."}</span>
                     ) : item.status === "running" ? (
                       <ScreeningItemProgress item={item} />
                     ) : item.status === "queued" && item.error_message ? (

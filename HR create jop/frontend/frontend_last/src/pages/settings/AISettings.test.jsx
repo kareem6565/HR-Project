@@ -10,6 +10,7 @@ vi.mock("../../services/aiSettingsService", () => ({
   getAISettings: vi.fn().mockResolvedValue({
     provider: "ollama",
     model: "gemma4:31b",
+    is_demo: false,
     has_api_key: true,
     api_key_source: "environment",
   }),
@@ -71,9 +72,48 @@ describe("AI settings appearance", () => {
       </ThemeProvider>,
     );
 
-    expect(await screen.findByText("openrouter")).toBeInTheDocument();
+    expect(await screen.findByText("OpenRouter")).toBeInTheDocument();
     expect(screen.getByText("openai/gpt-4o-mini")).toBeInTheDocument();
     expect(screen.getByText("Missing")).toBeInTheDocument();
-    expect(screen.getByText(/manage the provider and its API key in the backend environment/i)).toBeInTheDocument();
+    expect(screen.getByText(/manage its endpoint and credentials in the backend environment/i)).toBeInTheDocument();
+  });
+
+  it("shows an explicit demo notice when the fake provider is active", async () => {
+    vi.mocked(getAISettings).mockResolvedValueOnce({
+      provider: "fake",
+      model: "",
+      is_demo: true,
+      has_api_key: false,
+      api_key_source: "none",
+    });
+
+    render(
+      <ThemeProvider>
+        <MemoryRouter><AISettings /></MemoryRouter>
+      </ThemeProvider>,
+    );
+
+    expect(await screen.findByText(/demo ai is active/i)).toBeInTheDocument();
+    expect(screen.getByText(/responses are simulated/i)).toBeInTheDocument();
+  });
+
+  it("distinguishes self-hosted Ollama from Ollama Cloud", async () => {
+    vi.mocked(getAISettings).mockResolvedValueOnce({
+      provider: "ollama_local",
+      model: "operator-configured-model",
+      is_demo: false,
+      has_api_key: false,
+      api_key_source: "none",
+    });
+
+    render(
+      <ThemeProvider>
+        <MemoryRouter><AISettings /></MemoryRouter>
+      </ThemeProvider>,
+    );
+
+    expect(await screen.findByText("Self-hosted Ollama")).toBeInTheDocument();
+    expect(screen.getByText("Optional / not set")).toBeInTheDocument();
+    expect(screen.getByText("operator-configured-model")).toBeInTheDocument();
   });
 });

@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from contextlib import nullcontext
-from datetime import UTC, datetime, timedelta
 import json
 import logging
-from types import SimpleNamespace
 import uuid
+from contextlib import nullcontext
+from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 
-from pydantic import BaseModel, ConfigDict, ValidationError as PydanticValidationError
+from pydantic import BaseModel, ConfigDict
+from pydantic import ValidationError as PydanticValidationError
 
 import app.worker as worker_module
 from app.core.logging import StructuredJsonFormatter
@@ -64,9 +65,7 @@ def test_structured_failure_diagnostics_exclude_payload_and_exception_text(caplo
     assert event["processing_stage"] == "candidate_profile_extraction"
     assert event["exception_class"] == "ValidationError"
     assert {"location": ["score"], "type": "int_parsing"} in event["validation_errors"]
-    assert {"location": ["[REDACTED]"], "type": "extra_forbidden"} in event[
-        "validation_errors"
-    ]
+    assert {"location": ["[REDACTED]"], "type": "extra_forbidden"} in event["validation_errors"]
     assert event["exception_frames"]
     assert canary not in rendered
     assert mock_secret not in rendered
@@ -93,9 +92,7 @@ def test_formatter_redacts_unrecognized_diagnostic_fields() -> None:
     record.validation_errors = [
         {"location": ["full_name", "UNEXPECTED_CANARY_LOCATION"], "type": "missing"}
     ]
-    record.exception_frames = [
-        {"file": "CANARY_PATH.pdf", "function": "safe_function", "line": 3}
-    ]
+    record.exception_frames = [{"file": "CANARY_PATH.pdf", "function": "safe_function", "line": 3}]
 
     rendered = StructuredJsonFormatter().format(record)
     event = json.loads(rendered)
@@ -111,6 +108,8 @@ def test_formatter_redacts_unrecognized_diagnostic_fields() -> None:
 def test_worker_pipeline_failure_logs_actual_stage_without_sensitive_values(
     monkeypatch, caplog
 ) -> None:
+    from app.services.text_extraction_service import ExtractedDocumentText
+
     canary = "HERA_CV_CANARY_1e4ab9"
     mock_secret = "MOCK_API_SECRET_51cf02"
     error = _synthetic_validation_exception(canary, mock_secret)
@@ -144,12 +143,27 @@ def test_worker_pipeline_failure_logs_actual_stage_without_sensitive_values(
         id=item.batch.job_id,
         organization_id=item.batch.organization_id,
         title="Synthetic Engineer",
-        profiles=[SimpleNamespace(status="approved", profile_data={"requirements": []})],
+        profiles=[
+            SimpleNamespace(
+                status="approved",
+                profile_data={
+                    "requirements": [
+                        {
+                            "text": "Relevant professional experience",
+                            "category": "must_have",
+                            "dimension": "experience",
+                        }
+                    ]
+                },
+            )
+        ],
     )
 
     class FakeStorage:
-        def read(self, *, file_uri):
+        def read(self, *, file_uri, organization_id=None, file_id=None):
             assert file_uri == item.storage_key
+            assert organization_id == item.batch.organization_id
+            assert file_id == item.id
             return b"synthetic document bytes"
 
         def save(self, **kwargs):
@@ -165,6 +179,10 @@ def test_worker_pipeline_failure_logs_actual_stage_without_sensitive_values(
             if model is Job:
                 return job
             raise AssertionError("Unexpected model access in synthetic worker test.")
+
+        def scalar(self, query):
+            assert "FOR UPDATE" in str(query)
+            return self.get(ScreeningBatchItem, item.id)
 
         def begin_nested(self):
             return nullcontext()
@@ -194,8 +212,8 @@ def test_worker_pipeline_failure_logs_actual_stage_without_sensitive_values(
 
     monkeypatch.setattr(
         worker_module,
-        "extract_text",
-        lambda *args, **kwargs: "synthetic CV text",
+        "extract_document_text",
+        lambda *args, **kwargs: ExtractedDocumentText(text="synthetic CV text"),
     )
     monkeypatch.setattr(
         worker_module,
@@ -204,9 +222,7 @@ def test_worker_pipeline_failure_logs_actual_stage_without_sensitive_values(
     )
     monkeypatch.setattr(worker_module, "get_provider", lambda *args, **kwargs: object())
     monkeypatch.setattr(worker_module, "CandidateService", SyntheticCandidateService)
-    monkeypatch.setattr(
-        worker_module, "CandidateProfileExtractionWorkflow", FailingProfileWorkflow
-    )
+    monkeypatch.setattr(worker_module, "CandidateProfileExtractionWorkflow", FailingProfileWorkflow)
     monkeypatch.setattr(ScreeningBatchService, "_update_batch_state", lambda batch: None)
     session = FakeSession()
     worker = ScreeningWorker(storage=FakeStorage(), initial_retry_delay_seconds=30)
@@ -215,7 +231,7 @@ def test_worker_pipeline_failure_logs_actual_stage_without_sensitive_values(
         result = worker.process_item(session, item.id, item.claim_token)
 
     assert result is False
-    assert item.status == "queued"
+    assert item.status == "failed"
     record = next(
         record
         for record in caplog.records

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import io
 import uuid
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import pytest
@@ -23,7 +23,6 @@ from app.models import (
     Candidate,
     CandidateEvaluation,
     CandidateProfile,
-    ChatMessage,
     ChatThread,
     HRDecision,
     Interview,
@@ -32,7 +31,6 @@ from app.models import (
     Job,
     JobApplication,
     JobProfile,
-    MatchEvidence,
     Organization,
     Resume,
     User,
@@ -42,10 +40,10 @@ from app.models import (
 from app.services.storage_service import LocalFileSystemStorage
 from app.services.user_service import UserService
 
-
 # ==============================================================================
 # Fixtures: Two Independent Organizations and Users
 # ==============================================================================
+
 
 @pytest.fixture()
 def client(db_session):
@@ -152,6 +150,7 @@ def auth_header(user: User) -> dict[str, str]:
 # ==============================================================================
 # Fixture: Representative Resources for Both Organizations
 # ==============================================================================
+
 
 @pytest.fixture()
 def seeded_resources(db_session, org_a, org_b, admin_a, admin_b):
@@ -527,6 +526,7 @@ def seeded_resources(db_session, org_a, org_b, admin_a, admin_b):
 # 1. Cross-Tenant Read Protection (Returning 404 Not Found)
 # ==============================================================================
 
+
 def test_cross_tenant_read_returns_404(client, recruiter_a, seeded_resources) -> None:
     """Organization Alpha cannot retrieve Organization Beta's resources by ID."""
     headers = auth_header(recruiter_a)
@@ -558,10 +558,14 @@ def test_cross_tenant_read_returns_404(client, recruiter_a, seeded_resources) ->
 
     for endpoint in endpoints:
         resp = client.get(endpoint, headers=headers)
-        assert resp.status_code == 404, f"Expected 404 for {endpoint}, got {resp.status_code}: {resp.text}"
+        assert resp.status_code == 404, (
+            f"Expected 404 for {endpoint}, got {resp.status_code}: {resp.text}"
+        )
 
 
-def test_cross_tenant_read_by_id_does_not_leak_via_422(client, recruiter_a, seeded_resources) -> None:
+def test_cross_tenant_read_by_id_does_not_leak_via_422(
+    client, recruiter_a, seeded_resources
+) -> None:
     """Verifies that requesting an existing cross-tenant ID returns 404, not 422."""
     headers = auth_header(recruiter_a)
     res = seeded_resources
@@ -580,7 +584,10 @@ def test_cross_tenant_read_by_id_does_not_leak_via_422(client, recruiter_a, seed
 # 2. List & Search Isolation (Excluding Cross-Tenant Data)
 # ==============================================================================
 
-def test_list_queries_exclude_other_organization_data(client, recruiter_a, seeded_resources) -> None:
+
+def test_list_queries_exclude_other_organization_data(
+    client, recruiter_a, seeded_resources
+) -> None:
     """List, search, and summary queries only return caller organization data."""
     headers = auth_header(recruiter_a)
     res = seeded_resources
@@ -650,6 +657,7 @@ def test_list_queries_exclude_other_organization_data(client, recruiter_a, seede
 # ==============================================================================
 # 3. Cross-Tenant Mutation Protection
 # ==============================================================================
+
 
 def test_cross_tenant_update_and_delete_returns_404(client, admin_a, seeded_resources) -> None:
     """Organization Alpha cannot modify or delete Organization Beta's records."""
@@ -743,10 +751,13 @@ def test_cross_tenant_update_and_delete_returns_404(client, admin_a, seeded_reso
 # 4. Nested Resource Linking Rejection (Prevent Cross-Tenant References)
 # ==============================================================================
 
+
 def test_cannot_link_cross_tenant_resources_in_job_application(
     client, recruiter_a, seeded_resources
 ) -> None:
-    """An organization cannot create an application linking its own resources to Org B's resources."""
+    """An organization cannot create an application linking its own resources to Org B's
+    resources.
+    """
     headers = auth_header(recruiter_a)
     res = seeded_resources
 
@@ -787,12 +798,16 @@ def test_cannot_link_cross_tenant_resources_in_job_application(
     assert resp.status_code == 404
 
 
-def test_cannot_upload_resume_to_cross_tenant_candidate(client, recruiter_a, seeded_resources) -> None:
+def test_cannot_upload_resume_to_cross_tenant_candidate(
+    client, recruiter_a, seeded_resources
+) -> None:
     """Uploading a resume to another organization's candidate returns 404."""
     headers = auth_header(recruiter_a)
     res = seeded_resources
 
-    file_payload = {"file": ("malicious.pdf", io.BytesIO(b"%PDF-1.4 sample content"), "application/pdf")}
+    file_payload = {
+        "file": ("malicious.pdf", io.BytesIO(b"%PDF-1.4 sample content"), "application/pdf")
+    }
     resp = client.post(
         f"/api/v1/candidates/{res['cand_b'].id}/resumes/upload",
         files=file_payload,
@@ -906,6 +921,7 @@ def test_cannot_trigger_workflows_on_cross_tenant_resources(
 # 5. Client-Supplied Organization and User Identifiers Cannot Override Context
 # ==============================================================================
 
+
 def test_client_supplied_org_id_in_payload_is_ignored_or_rejected(
     client, db_session, recruiter_a, org_b
 ) -> None:
@@ -970,6 +986,7 @@ def test_client_supplied_legacy_headers_do_not_override_jwt_identity(
 # 6. Role & Administration Protection
 # ==============================================================================
 
+
 def test_recruiter_cannot_access_ai_settings(client, recruiter_a) -> None:
     """Recruiters receive 403 Forbidden on AI configuration endpoints."""
     headers = auth_header(recruiter_a)
@@ -1001,9 +1018,7 @@ def test_recruiter_cannot_manage_users(client, recruiter_a, org_a) -> None:
     assert resp.status_code == 403
 
 
-def test_admin_cannot_provision_or_list_users_in_other_organization(
-    client, admin_a, org_b
-) -> None:
+def test_admin_cannot_provision_or_list_users_in_other_organization(client, admin_a, org_b) -> None:
     """Administrator of Organization Alpha cannot provision or list users in Organization Beta."""
     headers = auth_header(admin_a)
 
@@ -1065,6 +1080,7 @@ def test_unauthenticated_requests_are_rejected(client, seeded_resources) -> None
 # 7. AI Settings Configuration Security
 # ==============================================================================
 
+
 def test_ai_settings_endpoint_never_exposes_api_key_secret(client, admin_a) -> None:
     """GET /settings/ai returns key status and provider but never the secret key."""
     headers = auth_header(admin_a)
@@ -1108,10 +1124,13 @@ def test_runtime_ai_key_mutation_endpoints_are_disabled(client, admin_a) -> None
 # 8. AI Chat & Tools Tenant Isolation
 # ==============================================================================
 
+
 def test_ai_chat_assistant_cannot_access_cross_tenant_application(
     client, recruiter_a, seeded_resources
 ) -> None:
-    """HERA chat tool execution rejects cross-tenant application lookups grounded in tenant scope."""
+    """HERA chat tool execution rejects cross-tenant application lookups grounded in tenant
+    scope.
+    """
     headers = auth_header(recruiter_a)
     res = seeded_resources
 
@@ -1137,7 +1156,9 @@ def test_ai_chat_assistant_cannot_access_cross_tenant_application(
     # The tool returns ok=False with not found error, preventing any leak of Org B data.
     tool_results = msg.get("tool_results")
     if tool_results:
-        app_result = next((tr for tr in tool_results if tr.get("tool") == "get_application_details"), None)
+        app_result = next(
+            (tr for tr in tool_results if tr.get("tool") == "get_application_details"), None
+        )
         if app_result:
             assert app_result["ok"] is False
             assert "not found" in app_result["error"].lower()

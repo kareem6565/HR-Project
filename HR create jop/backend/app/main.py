@@ -19,6 +19,7 @@ from app.ai.providers.errors import (
     ProviderRateLimitError,
     ProviderTimeoutError,
 )
+from app.ai.providers.factory import resolve_ai_config
 from app.api.v1.router import api_router
 from app.api.v1.routes.health import router as health_router
 from app.core.config import settings
@@ -28,6 +29,7 @@ from app.services.errors import (
     ConflictError,
     InvalidStateError,
     NotFoundError,
+    PermissionDeniedError,
     ValidationError,
     VersionConflictError,
 )
@@ -96,11 +98,17 @@ def _provider_error_response(request: Request, exc: ProviderError) -> JSONRespon
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Start background workers on startup and stop them on shutdown."""
-    threads: list[threading.Thread] = []
+    """Start background workers and stop them cleanly during shutdown."""
+    ai_config = resolve_ai_config(settings)
+    logger.info(
+        "Effective AI provider configured: provider=%s model=%s demo=%s",
+        ai_config["provider"],
+        ai_config["model"] or "none",
+        ai_config["is_fake"],
+    )
     workers: list[object] = []
+    worker_threads: list[threading.Thread] = []
 
-    # Run outbox worker for durable async delivery/reconciliation (email + calendar)
     if settings.enable_outbox_worker:
         try:
             from app.services.outbox_worker import OutboxWorker
@@ -114,40 +122,36 @@ async def lifespan(app: FastAPI):
             )
             outbox_thread.start()
             workers.append(outbox_worker)
-            threads.append(outbox_thread)
+            worker_threads.append(outbox_thread)
             logger.info("Outbox worker thread started.")
         except Exception:
-            logger.exception("Failed to start outbox worker")
+            logger.exception("Failed to start outbox worker.")
 
     if settings.enable_screening_worker:
         from app.worker import ScreeningWorker
 
-        worker = ScreeningWorker()
-        worker_thread = threading.Thread(
-            target=worker.run_loop,
+        screening_worker = ScreeningWorker()
+        screening_thread = threading.Thread(
+            target=screening_worker.run_loop,
             kwargs={"poll_interval_seconds": 2.0},
             daemon=True,
             name="screening-worker",
         )
-        worker_thread.start()
-        workers.append(worker)
-        threads.append(worker_thread)
+        screening_thread.start()
+        workers.append(screening_worker)
+        worker_threads.append(screening_thread)
         logger.info("Screening worker thread started.")
 
     try:
         yield
     finally:
-        for w in workers:
+        for worker in workers:
             try:
-                if hasattr(w, "request_shutdown"):
-                    w.request_shutdown()
+                worker.request_shutdown()
             except Exception:
-                pass
-        for t in threads:
-            try:
-                t.join(timeout=2.0)
-            except Exception:
-                pass
+                logger.exception("Failed to stop background worker.")
+        for worker_thread in worker_threads:
+            worker_thread.join(timeout=2.0)
         logger.info("Background workers stopped.")
 
 
@@ -189,6 +193,12 @@ def create_app() -> FastAPI:
     async def not_found_handler(request: Request, exc: NotFoundError) -> JSONResponse:
         return JSONResponse(status_code=404, content={"detail": str(exc)})
 
+    @app.exception_handler(PermissionDeniedError)
+    async def permission_denied_handler(
+        request: Request, exc: PermissionDeniedError
+    ) -> JSONResponse:
+        return JSONResponse(status_code=403, content={"detail": str(exc)})
+
     @app.exception_handler(ValidationError)
     async def validation_error_handler(request: Request, exc: ValidationError) -> JSONResponse:
         msg = str(exc).lower()
@@ -203,7 +213,9 @@ def create_app() -> FastAPI:
             content["code"] = exc.code
             if exc.code == "invalid_ai_output":
                 content["error_code"] = "invalid_ai_output"
-                content["request_id"] = getattr(request.state, "request_id", None) or get_request_id()
+                content["request_id"] = (
+                    getattr(request.state, "request_id", None) or get_request_id()
+                )
         return JSONResponse(status_code=422, content=content)
 
     @app.exception_handler(InvalidStateError)

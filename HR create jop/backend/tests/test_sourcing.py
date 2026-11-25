@@ -227,9 +227,7 @@ def test_enrich_merges_profile_details_and_email(db_session, monkeypatch):
 
         async def get(self, url, *, headers, params=None):
             if "/actor-runs/" in url:
-                return _Response(
-                    {"data": {"status": "SUCCEEDED", "defaultDatasetId": "ds-e1"}}
-                )
+                return _Response({"data": {"status": "SUCCEEDED", "defaultDatasetId": "ds-e1"}})
             return _Response(
                 [
                     {

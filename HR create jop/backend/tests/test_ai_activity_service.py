@@ -5,8 +5,8 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.models import (
-    AIUsageEvent,
     AITrace,
+    AIUsageEvent,
     Candidate,
     Job,
     Organization,
@@ -130,14 +130,16 @@ def test_provider_requests_are_payload_free_and_scoped_to_org(db_session: Sessio
         completed_at=now,
     )
     db_session.add(event)
-    db_session.add(AIUsageEvent(
-        organization_id=other_org.id,
-        feature="private_feature",
-        provider="openrouter",
-        model="private-model",
-        status="succeeded",
-        created_at=now,
-    ))
+    db_session.add(
+        AIUsageEvent(
+            organization_id=other_org.id,
+            feature="private_feature",
+            provider="openrouter",
+            model="private-model",
+            status="succeeded",
+            created_at=now,
+        )
+    )
     db_session.commit()
 
     results = AIActivityService().list_provider_requests(

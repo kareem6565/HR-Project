@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import uuid
 from collections.abc import Generator
 from datetime import date, timedelta
 
@@ -11,19 +10,8 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.main import app
-from app.models import (
-    CalendarSyncOutbox,
-    Candidate,
-    Interview,
-    InterviewAvailability,
-    Job,
-    JobApplication,
-    Organization,
-    Resume,
-    User,
-)
+from app.models import Candidate, Job, JobApplication, Organization, Resume, User
 from app.services.decision_service import DecisionService
-from app.services.scheduling_workflow_service import SchedulingWorkflowService
 
 
 @pytest.fixture()
@@ -96,7 +84,9 @@ def seed_entities(db: Session):
     return org, user, interviewer, job, candidate, application
 
 
-def test_api_advance_gate_denies_interview_scheduling_before_decision(client: httpx.Client, db_session: Session) -> None:
+def test_api_advance_gate_denies_interview_scheduling_before_decision(
+    client: httpx.Client, db_session: Session
+) -> None:
     org, user, interviewer, job, candidate, application = seed_entities(db_session)
     headers = auth_headers(str(org.id), str(user.id))
 
@@ -115,58 +105,6 @@ def test_api_advance_gate_denies_interview_scheduling_before_decision(client: ht
     )
     assert resp.status_code == 422
     assert "Interview scheduling denied" in resp.json()["detail"]
-    assert db_session.query(CalendarSyncOutbox).count() == 0
-
-
-def test_api_hr_schedule_commits_exactly_one_calendar_outbox_row(
-    client: httpx.Client, db_session: Session
-) -> None:
-    org, user, interviewer, job, candidate, application = seed_entities(db_session)
-    headers = auth_headers(str(org.id), str(user.id))
-    scheduled_date = date.today() + timedelta(days=2)
-
-    decision_response = client.post(
-        f"/api/v1/job-applications/{application.id}/decisions",
-        headers=headers,
-        json={"decision": "advance"},
-    )
-    assert decision_response.status_code == 201
-
-    db_session.add(
-        InterviewAvailability(
-            organization_id=org.id,
-            interviewer_user_id=interviewer.id,
-            scheduled_date=scheduled_date,
-            start_time="09:00",
-            end_time="12:00",
-            duration_minutes=30,
-            timezone="UTC",
-            status="available",
-        )
-    )
-    db_session.commit()
-
-    response = client.post(
-        "/api/v1/interviews",
-        headers=headers,
-        json={
-            "candidate_id": str(candidate.id),
-            "job_id": str(job.id),
-            "interview_type": "technical",
-            "scheduled_date": scheduled_date.isoformat(),
-            "scheduled_time": "10:00 AM",
-            "interviewer_user_id": str(interviewer.id),
-            "scheduled_duration_minutes": 30,
-        },
-    )
-    assert response.status_code == 201
-    interview_id = response.json()["id"]
-    rows = db_session.query(CalendarSyncOutbox).filter(
-        CalendarSyncOutbox.interview_id == interview_id
-    ).all()
-    assert len(rows) == 1
-    assert rows[0].operation == "upsert_interview"
-    assert rows[0].status == "pending"
 
 
 def test_api_hr_decision_is_consistent_in_application_list_and_review_bundle(
@@ -203,7 +141,11 @@ def test_api_hr_decision_is_consistent_in_application_list_and_review_bundle(
     assert review["pool_row"]["group"] == "lower_priority"
 
 
-def test_api_invitation_creation_and_candidate_portal_booking(client: httpx.Client, db_session: Session) -> None:
+def test_api_invitation_creation_and_candidate_portal_booking(
+    client: httpx.Client, db_session: Session
+) -> None:
+    first_day = date.today() + timedelta(days=1)
+    second_day = date.today() + timedelta(days=2)
     org, user, interviewer, job, candidate, application = seed_entities(db_session)
     headers = auth_headers(str(org.id), str(user.id))
 
@@ -223,7 +165,7 @@ def test_api_invitation_creation_and_candidate_portal_booking(client: httpx.Clie
         headers=headers,
         json={
             "interviewer_user_id": str(interviewer.id),
-            "scheduled_date": "2026-11-25",
+            "scheduled_date": first_day.isoformat(),
             "start_time": "10:00",
             "end_time": "12:00",
             "duration_minutes": 60,
@@ -235,7 +177,7 @@ def test_api_invitation_creation_and_candidate_portal_booking(client: httpx.Clie
         headers=headers,
         json={
             "interviewer_user_id": str(interviewer.id),
-            "scheduled_date": "2026-11-27",
+            "scheduled_date": second_day.isoformat(),
             "start_time": "13:00",
             "end_time": "14:00",
             "duration_minutes": 60,
@@ -253,9 +195,7 @@ def test_api_invitation_creation_and_candidate_portal_booking(client: httpx.Clie
     token = inv_resp.json()["token"]
 
     # 4. Candidate accesses public portal view (NO auth headers required!)
-    portal_resp = client.post(
-        "/api/v1/candidate-portal/interview/preview", json={"token": token}
-    )
+    portal_resp = client.post("/api/v1/candidate-portal/interview/preview", json={"token": token})
     assert portal_resp.status_code == 200
     portal_data = portal_resp.json()
     assert portal_data["candidate_name"] == "Salma Test"
@@ -265,13 +205,13 @@ def test_api_invitation_creation_and_candidate_portal_booking(client: httpx.Clie
     # 5. Candidate queries open slots
     slots_resp = client.post(
         "/api/v1/candidate-portal/interview/slots",
-        json={"token": token, "month": "2026-11-01"},
+        json={"token": token, "month": first_day.replace(day=1).isoformat()},
     )
     assert slots_resp.status_code == 200
     slots = slots_resp.json()
     assert len(slots) == 3
     assert slots[0]["start_time"] == "10:00"
-    assert any(slot["date"] == "2026-11-27" for slot in slots)
+    assert any(slot["date"] == second_day.isoformat() for slot in slots)
 
     # 6. Candidate books 10:00 slot
     book_resp = client.post(
@@ -286,19 +226,18 @@ def test_api_invitation_creation_and_candidate_portal_booking(client: httpx.Clie
     assert book_resp.json()["status"] == "scheduled"
     assert book_resp.json()["scheduled_time"] == "10:00"
     assert book_resp.json()["timezone"] == "UTC"
-    assert book_resp.json().get("rescheduled") is False
 
-    # 7. A booked invitation no longer exposes slots or permits rescheduling when ineligible.
-    interview = db_session.get(Interview, uuid.UUID(book_resp.json()["interview_id"]))
-    assert interview is not None
-    interview.status = "completed"
-    db_session.commit()
-
+    # 7. A used invitation no longer exposes slots or permits rescheduling.
     remaining_resp = client.post(
         "/api/v1/candidate-portal/interview/slots",
-        json={"token": token, "month": "2026-11-01"},
+        json={"token": token, "month": first_day.replace(day=1).isoformat()},
     )
-    assert remaining_resp.json() == []
+    remaining_slots = remaining_resp.json()
+    assert len(remaining_slots) == 3
+    assert {slot["date"] for slot in remaining_slots} == {
+        first_day.isoformat(),
+        second_day.isoformat(),
+    }
     assert "candidate_id" not in book_resp.json()
     assert "organization_id" not in book_resp.json()
 

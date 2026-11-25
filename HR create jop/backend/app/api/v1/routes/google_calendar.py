@@ -14,7 +14,7 @@ from app.services.google_oauth_service import GoogleOAuthService
 
 # Protected HR routes (registered under authenticated recruitment router).
 router = APIRouter()
-# Public Google redirect callback (registered without HERA bearer auth; validated via one-time state).
+# Public Google callback (no HERA bearer auth; validated via one-time state).
 public_router = APIRouter()
 
 
@@ -35,9 +35,7 @@ def google_connect_start(
     db: Session = Depends(get_db),
 ):
     service = GoogleOAuthService()
-    state = service.create_state(
-        db, organization_id=ctx.organization_id, user_id=ctx.user_id
-    )
+    state = service.create_state(db, organization_id=ctx.organization_id, user_id=ctx.user_id)
     url = service.build_authorize_url(state=state)
     db.commit()
     return {"authorize_url": url}

@@ -10,6 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
+from app.ai.tools.pipeline_tools import _get_talent_pool
 from app.core.database import get_db
 from app.main import app
 from app.models import (
@@ -24,7 +25,6 @@ from app.models import (
 )
 from app.services.errors import NotFoundError
 from app.services.talent_pool_consent_service import TalentPoolConsentService
-from app.ai.tools.pipeline_tools import _get_talent_pool
 
 
 @pytest.fixture()
@@ -159,11 +159,14 @@ def test_talent_pool_requires_explicit_consent_and_withdrawal_keeps_original_dec
 
     headers = _headers(organization, user)
     assert client.get("/api/v1/talent-pool", headers=headers).json() == []
-    assert _get_talent_pool(
-        db_session,
-        organization_id=organization.id,
-        user_id=user.id,
-    )["total"] == 0
+    assert (
+        _get_talent_pool(
+            db_session,
+            organization_id=organization.id,
+            user_id=user.id,
+        )["total"]
+        == 0
+    )
     link_response = client.post(
         f"/api/v1/candidates/{candidate.id}/talent-pool-consent-link", headers=headers
     )
@@ -182,11 +185,14 @@ def test_talent_pool_requires_explicit_consent_and_withdrawal_keeps_original_dec
     assert client.get("/api/v1/talent-pool", headers=headers).json()[0]["application_id"] == str(
         application.id
     )
-    assert _get_talent_pool(
-        db_session,
-        organization_id=organization.id,
-        user_id=user.id,
-    )["total"] == 1
+    assert (
+        _get_talent_pool(
+            db_session,
+            organization_id=organization.id,
+            user_id=user.id,
+        )["total"]
+        == 1
+    )
 
     reused = client.post(
         "/api/v1/candidate-portal/talent-pool-consent/respond",
@@ -198,11 +204,14 @@ def test_talent_pool_requires_explicit_consent_and_withdrawal_keeps_original_dec
     consent_record.consent_expires_at = datetime.now(UTC) - timedelta(seconds=1)
     db_session.flush()
     assert client.get("/api/v1/talent-pool", headers=headers).json() == []
-    assert _get_talent_pool(
-        db_session,
-        organization_id=organization.id,
-        user_id=user.id,
-    )["total"] == 0
+    assert (
+        _get_talent_pool(
+            db_session,
+            organization_id=organization.id,
+            user_id=user.id,
+        )["total"]
+        == 0
+    )
 
     renewal_link = client.post(
         f"/api/v1/candidates/{candidate.id}/talent-pool-consent-link", headers=headers
@@ -220,11 +229,14 @@ def test_talent_pool_requires_explicit_consent_and_withdrawal_keeps_original_dec
     assert withdrawn.status_code == 200
     assert withdrawn.json()["withdrawn"] is True
     assert client.get("/api/v1/talent-pool", headers=headers).json() == []
-    assert _get_talent_pool(
-        db_session,
-        organization_id=organization.id,
-        user_id=user.id,
-    )["total"] == 0
+    assert (
+        _get_talent_pool(
+            db_session,
+            organization_id=organization.id,
+            user_id=user.id,
+        )["total"]
+        == 0
+    )
     assert db_session.get(JobApplication, application.id).status == "hold"
     assert db_session.get(HRDecision, decision.id).decision == "hold"
 
@@ -246,7 +258,13 @@ def test_consent_link_and_talent_pool_are_organization_scoped(
         organization_id=organization.id,
         actor_user_id=user.id,
     )
-    assert client.post(
-        "/api/v1/candidate-portal/talent-pool-consent/preview", json={"token": token}
-    ).status_code == 200
-    assert client.get("/api/v1/talent-pool", headers=_headers(other_organization, other_user)).json() == []
+    assert (
+        client.post(
+            "/api/v1/candidate-portal/talent-pool-consent/preview", json={"token": token}
+        ).status_code
+        == 200
+    )
+    assert (
+        client.get("/api/v1/talent-pool", headers=_headers(other_organization, other_user)).json()
+        == []
+    )
