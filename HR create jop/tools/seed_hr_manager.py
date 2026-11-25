@@ -31,7 +31,7 @@ from app.cli.bootstrap import FORBIDDEN_PASSWORDS
 
 DATABASE_URL = os.getenv(
     "HERA_DATABASE_URL",
-    "postgresql://hr_ai_assistant:hr_ai_assistant@127.0.0.1:5432/hr_ai_assistant",
+    "postgresql://hr_ai_assistant:hr_ai_assistant@127.0.0.1:5432/hera_recruitment_v2",
 )
 DEVELOPMENT_SEED_PASSWORD = "hr123"
 KNOWN_WEAK_PASSWORDS = FORBIDDEN_PASSWORDS | {DEVELOPMENT_SEED_PASSWORD}
