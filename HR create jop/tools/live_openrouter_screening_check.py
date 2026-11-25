@@ -121,6 +121,30 @@ def build_client():
             db.close()
 
     app.dependency_overrides[get_db] = override_get_db
+
+    # The cost policy meters through its own SessionLocal (the local dev DB),
+    # not the in-memory test DB, so the test org/user must exist there too or
+    # the usage-event insert fails its FK (this is test topology only: in
+    # production both share one database).
+    from app.core.database import SessionLocal as MeteringSessionLocal
+
+    metering = MeteringSessionLocal()
+    try:
+        if not metering.get(Organization, org_uuid):
+            metering.add(Organization(id=org_uuid, name="HERA Live Check Org"))
+            metering.flush()
+        if not metering.get(User, user_uuid):
+            metering.add(User(
+                id=user_uuid,
+                organization_id=org_uuid,
+                email="hera-live-check@example.com",
+                full_name="HERA Live Checker",
+                role="recruiter",
+            ))
+        metering.commit()
+    finally:
+        metering.close()
+
     client = TestClient(app, base_url="http://testserver/api/v1")
     client.headers.update(HEADERS)
     return client, TestingSession
@@ -177,6 +201,16 @@ def main() -> None:
             sys.exit(3)
 
     client, TestingSession = build_client()
+
+    # Snapshot existing metered events so the final readout only counts this run.
+    from app.core.database import SessionLocal as MeteringSessionLocal
+    from app.models.ai_usage import AIUsageEvent
+
+    pre_session = MeteringSessionLocal()
+    try:
+        pre_event_ids = {row[0] for row in pre_session.query(AIUsageEvent.id).all()}
+    finally:
+        pre_session.close()
 
     # Stage A: job draft
     job_payload = {
@@ -262,11 +296,21 @@ def main() -> None:
             for item in ev_items[:3]:
                 print(f"    evidence: type={item.get('evidence_type')} req={item.get('requirement_text')!r:.60}")
 
-    # Credit usage: read the metering table
+    # Credit usage: the cost policy meters into its own SessionLocal DB,
+    # so read the events created since this run started from there.
+    from app.core.database import SessionLocal as MeteringSessionLocal
     from app.models.ai_usage import AIUsageEvent
 
-    session = TestingSession()
-    events = session.query(AIUsageEvent).all()
+    session = MeteringSessionLocal()
+    try:
+        events = (
+            session.query(AIUsageEvent)
+            .filter(AIUsageEvent.id.notin_(pre_event_ids) if pre_event_ids else True)
+            .order_by(AIUsageEvent.created_at)
+            .all()
+        )
+    finally:
+        session.close()
     total = Decimal("0")
     print("\n--- AI usage events (real OpenRouter calls) ---")
     for ev in events:
