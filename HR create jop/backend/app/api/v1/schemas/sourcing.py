@@ -43,3 +43,12 @@ class SourcingSearchResponse(BaseModel):
     candidates: list[SourcingCandidateOut] = []
     created_at: datetime
     updated_at: datetime
+
+
+class OutreachDraftResponse(BaseModel):
+    candidate_id: UUID
+    channel: Literal["email"] = "email"
+    to: str | None = None
+    subject: str
+    body: str
+    personalized: bool = False

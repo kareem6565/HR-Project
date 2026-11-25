@@ -8,13 +8,18 @@ from sqlalchemy.orm import Session
 
 from app.api.v1.deps import RequestContext, get_request_context
 from app.api.v1.schemas.sourcing import (
+    OutreachDraftResponse,
     SourcingCandidateOut,
     SourcingSearchRequest,
     SourcingSearchResponse,
 )
 from app.core.config import settings
 from app.core.database import get_db
-from app.models import Job, SourcingCandidate, SourcingSearch
+from app.models import Job, Organization, SourcingCandidate, SourcingSearch, User
+from app.services.sourcing_outreach_service import (
+    build_ai_personalized_draft,
+    build_template_draft,
+)
 from app.services.sourcing_service import (
     SourcingSearchService,
     get_sourcing_provider,
@@ -135,6 +140,10 @@ async def enrich_sourcing_candidate(
     await get_sourcing_provider().enrich(candidate)
     db.commit()
     db.refresh(candidate)
+    return _candidate_out(candidate)
+
+
+def _candidate_out(candidate: SourcingCandidate) -> SourcingCandidateOut:
     return SourcingCandidateOut(
         id=candidate.id,
         full_name=candidate.full_name,
@@ -147,4 +156,84 @@ async def enrich_sourcing_candidate(
         phone=candidate.phone,
         fit_score=candidate.fit_score,
         status=candidate.status,
+    )
+
+
+def _draft_for_candidate(
+    db: Session,
+    *,
+    candidate_id: uuid.UUID,
+    organization_id: uuid.UUID,
+    user_id: uuid.UUID,
+    personalize: bool,
+) -> OutreachDraftResponse:
+    candidate = db.scalar(
+        select(SourcingCandidate)
+        .join(SourcingSearch, SourcingCandidate.search_id == SourcingSearch.id)
+        .where(
+            SourcingCandidate.id == candidate_id,
+            SourcingSearch.organization_id == organization_id,
+        )
+    )
+    if candidate is None:
+        raise HTTPException(status_code=404, detail="Sourced candidate was not found.")
+    search = db.get(SourcingSearch, candidate.search_id)
+    job = db.get(Job, search.job_id) if search and search.job_id else None
+    organization = db.get(Organization, organization_id)
+    sender = db.get(User, user_id)
+    builder = build_ai_personalized_draft if personalize else build_template_draft
+    draft = builder(
+        candidate=candidate,
+        job=job,
+        organization_name=organization.name if organization else "our company",
+        sender_name=(sender.full_name if sender and sender.full_name else "Hiring team"),
+    )
+    return OutreachDraftResponse(
+        candidate_id=candidate.id,
+        to=candidate.email,
+        subject=draft["subject"],
+        body=draft["body"],
+        personalized=draft["personalized"],
+    )
+
+
+@router.post(
+    "/sourcing/candidates/{candidate_id}/outreach-draft",
+    response_model=OutreachDraftResponse,
+)
+def outreach_draft(
+    candidate_id: uuid.UUID,
+    ctx: RequestContext = Depends(get_request_context),
+    db: Session = Depends(get_db),
+):
+    """Template-based outreach draft for one candidate (default)."""
+    if not _sourcing_ready():
+        raise HTTPException(status_code=503, detail="LinkedIn sourcing is not enabled.")
+    return _draft_for_candidate(
+        db,
+        candidate_id=candidate_id,
+        organization_id=ctx.organization_id,
+        user_id=ctx.user_id,
+        personalize=False,
+    )
+
+
+@router.post(
+    "/sourcing/candidates/{candidate_id}/outreach-draft/personalize",
+    response_model=OutreachDraftResponse,
+)
+def outreach_draft_personalize(
+    candidate_id: uuid.UUID,
+    ctx: RequestContext = Depends(get_request_context),
+    db: Session = Depends(get_db),
+):
+    """AI-personalized outreach draft for one candidate, on HR's request only."""
+    if not _sourcing_ready():
+        raise HTTPException(status_code=503, detail="LinkedIn sourcing is not enabled.")
+    return _draft_for_candidate(
+        db,
+        candidate_id=candidate_id,
+        organization_id=ctx.organization_id,
+        user_id=ctx.user_id,
+        personalize=True,
     )
