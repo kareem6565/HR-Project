@@ -1,18 +1,19 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Search, Users, Sparkles, Radar } from "lucide-react";
+import { Search, Users, Sparkles, Radar, MapPin, Building2, ExternalLink, TriangleAlert } from "lucide-react";
 import { getJobs } from "../../services/jobService";
 import { searchLinkedInCandidates } from "../../services/sourcingService";
 
-// LinkedIn candidate sourcing: HR describes who they need, HERA suggests
-// candidates from LinkedIn. The backend integration is pending; the page is
-// fully built around honest loading and empty states so it demos cleanly and
-// the team only has to swap services/sourcingService.js.
+// LinkedIn candidate sourcing: HR describes who they need, HERA runs a real
+// sourcing search through the backend (services/sourcingService.js) and shows
+// the suggested profiles with their fit evidence.
 
 const SEARCH_PHASES = [
   "Reading your requirements…",
   "Scanning LinkedIn profiles…",
   "Ranking candidates by fit…",
 ];
+
+const PHASE_ROTATE_MS = 1800;
 
 export default function LinkedInSourcing() {
   const [jobs, setJobs] = useState([]);
@@ -22,7 +23,7 @@ export default function LinkedInSourcing() {
   const [phaseText, setPhaseText] = useState("");
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
-  const timers = useRef([]);
+  const rotator = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -35,9 +36,26 @@ export default function LinkedInSourcing() {
       .catch(() => {});
     return () => {
       cancelled = true;
-      timers.current.forEach(clearTimeout);
+      if (rotator.current) clearInterval(rotator.current);
     };
   }, []);
+
+  const startTheater = () => {
+    let step = 0;
+    setPhaseText(SEARCH_PHASES[0]);
+    if (rotator.current) clearInterval(rotator.current);
+    rotator.current = setInterval(() => {
+      step = (step + 1) % SEARCH_PHASES.length;
+      setPhaseText(SEARCH_PHASES[step]);
+    }, PHASE_ROTATE_MS);
+  };
+
+  const stopTheater = () => {
+    if (rotator.current) {
+      clearInterval(rotator.current);
+      rotator.current = null;
+    }
+  };
 
   const runSearch = async (event) => {
     event.preventDefault();
@@ -48,22 +66,16 @@ export default function LinkedInSourcing() {
     setError("");
     setResult(null);
     setPhase("searching");
-    timers.current.forEach(clearTimeout);
-    timers.current = SEARCH_PHASES.map((text, i) =>
-      setTimeout(() => setPhaseText(text), i * 900)
-    );
-    setPhaseText(SEARCH_PHASES[0]);
+    startTheater();
     try {
       const data = await searchLinkedInCandidates({ jobId, needs: needs.trim() });
-      timers.current.push(
-        setTimeout(() => {
-          setResult(data);
-          setPhase("done");
-        }, SEARCH_PHASES.length * 900)
-      );
+      setResult(data);
+      setPhase("done");
     } catch (err) {
       setPhase("idle");
       setError(err?.message || "The search could not be completed.");
+    } finally {
+      stopTheater();
     }
   };
 
@@ -134,7 +146,15 @@ export default function LinkedInSourcing() {
           </div>
         )}
 
-        {phase === "done" && result && result.status !== "ok" && (
+        {phase === "done" && result && result.status === "failed" && (
+          <div className="sourcing-empty" role="alert">
+            <TriangleAlert size={40} aria-hidden="true" className="sourcing-idle-icon" />
+            <h3>The search could not be completed</h3>
+            <p>{result.errorMessage}</p>
+          </div>
+        )}
+
+        {phase === "done" && result && result.status === "unavailable" && (
           <div className="sourcing-empty">
             <Users size={40} aria-hidden="true" className="sourcing-idle-icon" />
             <h3>No LinkedIn candidates yet</h3>
@@ -155,8 +175,28 @@ export default function LinkedInSourcing() {
           <ul className="sourcing-candidate-list motion-stagger">
             {(result.candidates || []).map((c) => (
               <li key={c.id} className="sourcing-candidate-card">
-                <strong dir="auto">{c.name}</strong>
-                <span dir="auto">{c.headline}</span>
+                <div className="sourcing-candidate-main">
+                  <strong dir="auto">{c.name}</strong>
+                  {c.headline && <span dir="auto">{c.headline}</span>}
+                  <span className="sourcing-candidate-meta">
+                    {c.currentTitle && (
+                      <span><Building2 size={12} aria-hidden="true" /> {c.currentTitle}{c.currentCompany ? ` at ${c.currentCompany}` : ""}</span>
+                    )}
+                    {c.location && (
+                      <span><MapPin size={12} aria-hidden="true" /> {c.location}</span>
+                    )}
+                  </span>
+                </div>
+                {c.profileUrl && (
+                  <a
+                    className="sourcing-candidate-link"
+                    href={c.profileUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Profile <ExternalLink size={12} aria-hidden="true" />
+                  </a>
+                )}
               </li>
             ))}
           </ul>

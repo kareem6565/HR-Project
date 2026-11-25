@@ -363,7 +363,13 @@
 .sourcing-phase-text { font-weight: 600; color: #1B3A3A; animation: hmFadeSlideUp 400ms ease both; }
 .sourcing-skeleton-list { display: grid; gap: 10px; margin-top: 18px; }
 .sourcing-candidate-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; width: 100%; }
-.sourcing-candidate-card { text-align: left; border: 1px solid #eaecf0; border-radius: 12px; padding: 14px 16px; display: grid; gap: 2px; }
+.sourcing-candidate-card { text-align: left; border: 1px solid #eaecf0; border-radius: 12px; padding: 14px 16px; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease; }
+.sourcing-candidate-card:hover { border-color: #1B3A3A33; box-shadow: 0 6px 18px rgba(27, 58, 58, 0.08); transform: translateY(-1px); }
+.sourcing-candidate-main { display: grid; gap: 2px; min-width: 0; }
+.sourcing-candidate-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: #667085; margin-top: 4px; }
+.sourcing-candidate-meta span { display: inline-flex; align-items: center; gap: 4px; }
+.sourcing-candidate-link { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; color: #1B3A3A; white-space: nowrap; padding: 6px 10px; border-radius: 999px; border: 1px solid #1B3A3A22; }
+.sourcing-candidate-link:hover { background: #1B3A3A0D; }
 
 /* Job method prominence badge */
 .job-method-badge {
