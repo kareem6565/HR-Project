@@ -157,13 +157,11 @@ export default function LinkedInSourcing() {
         {phase === "done" && result && result.status === "unavailable" && (
           <div className="sourcing-empty">
             <Users size={40} aria-hidden="true" className="sourcing-idle-icon" />
-            <h3>No LinkedIn candidates yet</h3>
+            <h3>LinkedIn sourcing is not enabled yet</h3>
             <p>
-              {selectedJob
-                ? `Sourcing for "${selectedJob.title}" is ready.`
-                : "Your search is ready."}{" "}
-              Ranked candidate suggestions from LinkedIn will appear here with fit
-              scores and profile evidence as soon as sourcing results come in.
+              The sourcing engine is built and ready. Once it is switched on for this
+              workspace, ranked candidate suggestions from LinkedIn will appear here
+              with fit scores and profile evidence.
             </p>
             {needs.trim() && (
               <p className="sourcing-criteria"><Sparkles size={13} aria-hidden="true" /> Looking for: {needs.trim()}</p>
@@ -172,7 +170,20 @@ export default function LinkedInSourcing() {
         )}
 
         {phase === "done" && result && result.status === "ok" && (
-          <ul className="sourcing-candidate-list motion-stagger">
+          <div className="sourcing-results-live">
+            <div className="sourcing-results-head">
+              <h3>
+                {result.candidates.length}{" "}
+                {result.candidates.length === 1 ? "candidate" : "candidates"} found
+              </h3>
+              {(needs.trim() || selectedJob) && (
+                <p className="sourcing-criteria">
+                  <Sparkles size={13} aria-hidden="true" />{" "}
+                  {selectedJob ? `For: ${selectedJob.title}` : `Looking for: ${needs.trim()}`}
+                </p>
+              )}
+            </div>
+            <ul className="sourcing-candidate-list motion-stagger">
             {(result.candidates || []).map((c) => (
               <li key={c.id} className="sourcing-candidate-card">
                 <div className="sourcing-candidate-main">
@@ -199,7 +210,8 @@ export default function LinkedInSourcing() {
                 )}
               </li>
             ))}
-          </ul>
+            </ul>
+          </div>
         )}
       </div>
     </section>

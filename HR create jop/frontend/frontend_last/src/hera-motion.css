@@ -442,3 +442,8 @@
   .question-list .question-item { transition: none; animation: none !important; }
   .modal-panel, .modal-overlay { animation: none; }
 }
+
+/* Sourcing results header */
+.sourcing-results-live { display: grid; gap: 12px; }
+.sourcing-results-head h3 { margin: 0 0 4px; }
+.sourcing-results-head .sourcing-criteria { margin: 0; }

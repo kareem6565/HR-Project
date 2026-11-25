@@ -51,7 +51,7 @@ describe("LinkedInSourcing", () => {
     await act(async () => {
       vi.advanceTimersByTime(4000);
     });
-    expect(screen.getByText(/No LinkedIn candidates yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/LinkedIn sourcing is not enabled yet/i)).toBeInTheDocument();
     expect(screen.getByText(/Looking for: Senior backend engineer, Python/i)).toBeInTheDocument();
   });
 });
