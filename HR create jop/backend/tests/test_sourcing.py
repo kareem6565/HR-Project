@@ -178,3 +178,88 @@ def test_candidate_mapper_extracts_email_from_provider_list():
     assert candidate is not None
     assert candidate.email == "sara@example.com"
     assert candidate.phone is None
+
+
+def test_candidate_mapper_prefers_validated_email_entry():
+    candidate = candidate_from_provider_item(
+        {
+            "firstName": "A",
+            "lastName": "B",
+            "emails": [
+                {"email": "guess@example.com", "validEmailServer": False, "qualityScore": 40},
+                {"email": "real@example.com", "validEmailServer": True, "qualityScore": 90},
+            ],
+        }
+    )
+    assert candidate is not None
+    assert candidate.email == "real@example.com"
+
+
+def test_enrich_merges_profile_details_and_email(db_session, monkeypatch):
+    record, _, _ = _record(db_session)
+    monkeypatch.setattr(settings, "apify_api_token", "unit-test-token")
+    monkeypatch.setattr(
+        settings, "apify_sourcing_enrichment_actor_id", "harvestapi/linkedin-profile-scraper"
+    )
+    candidate = SourcingCandidate(
+        search_id=record.id,
+        full_name="Ahmed Taha",
+        profile_url="https://www.linkedin.com/in/ahmed-taha1",
+        status="suggested",
+    )
+    db_session.add(candidate)
+    db_session.flush()
+    calls = []
+
+    class EnrichClient:
+        def __init__(self, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def post(self, url, *, headers, json):
+            calls.append(("post", url, json))
+            return _Response({"data": {"id": "run-e1"}})
+
+        async def get(self, url, *, headers, params=None):
+            if "/actor-runs/" in url:
+                return _Response(
+                    {"data": {"status": "SUCCEEDED", "defaultDatasetId": "ds-e1"}}
+                )
+            return _Response(
+                [
+                    {
+                        "firstName": "Ahmed",
+                        "lastName": "Taha",
+                        "headline": "Backend Engineer @ Bosta",
+                        "emails": [
+                            {
+                                "email": "ahmed.taha@bosta.co",
+                                "validEmailServer": True,
+                                "qualityScore": 60,
+                            }
+                        ],
+                    }
+                ]
+            )
+
+    monkeypatch.setattr("app.services.sourcing_service.httpx.AsyncClient", EnrichClient)
+    provider = ApifySourcingProvider()
+    provider.enrich_poll_seconds = 0
+    found = asyncio.run(provider.enrich(candidate))
+
+    assert found is True
+    assert candidate.email == "ahmed.taha@bosta.co"
+    assert candidate.headline == "Backend Engineer @ Bosta"
+    assert calls[0][1].endswith("/acts/harvestapi~linkedin-profile-scraper/runs")
+    assert calls[0][2]["urls"] == ["https://www.linkedin.com/in/ahmed-taha1"]
+    assert "email search" in calls[0][2]["profileScraperMode"]
+
+
+def test_enrich_returns_false_without_profile_url(db_session):
+    candidate = SourcingCandidate(search_id=None, status="suggested")
+    assert asyncio.run(ApifySourcingProvider().enrich(candidate)) is False

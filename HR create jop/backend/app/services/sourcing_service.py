@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import uuid
 from datetime import UTC, datetime
 from typing import Any, Protocol
@@ -33,6 +34,37 @@ def _first_str(item: dict[str, Any], *keys: str, max_length: int = 500) -> str |
         if isinstance(value, str) and value.strip():
             return value.strip()[:max_length]
     return None
+
+
+def _best_provider_email(emails: Any) -> str | None:
+    """Pick the most deliverable address from the provider's emails list.
+
+    harvestapi entries look like {email, validEmailServer, status, qualityScore};
+    plain-string lists are also accepted. Prefers the highest qualityScore with
+    a valid server.
+    """
+
+    if not isinstance(emails, list):
+        return None
+    entries: list[dict[str, Any]] = []
+    first_string: str | None = None
+    for entry in emails:
+        if isinstance(entry, str) and entry.strip() and first_string is None:
+            first_string = entry.strip()[:255]
+        elif isinstance(entry, dict):
+            address = _first_str(entry, "email", "address", "value", max_length=255)
+            if address:
+                entries.append({"address": address, "raw": entry})
+    if not entries:
+        return first_string
+    entries.sort(
+        key=lambda e: (
+            bool(e["raw"].get("validEmailServer")),
+            e["raw"].get("qualityScore") or 0,
+        ),
+        reverse=True,
+    )
+    return entries[0]["address"]
 
 
 def candidate_from_provider_item(item: dict[str, Any]) -> SourcingCandidate | None:
@@ -74,16 +106,7 @@ def candidate_from_provider_item(item: dict[str, Any]) -> SourcingCandidate | No
             )
     email = _first_str(item, "email", "emailAddress", "workEmail", max_length=255)
     if not email:
-        emails = item.get("emails")
-        if isinstance(emails, list):
-            for entry in emails:
-                if isinstance(entry, str) and entry.strip():
-                    email = entry.strip()[:255]
-                    break
-                if isinstance(entry, dict):
-                    email = _first_str(entry, "email", "address", "value", max_length=255)
-                    if email:
-                        break
+        email = _best_provider_email(item.get("emails"))
     return SourcingCandidate(
         full_name=full_name,
         headline=headline,
@@ -109,6 +132,8 @@ class SourcingProvider(Protocol):
 
     async def refresh(self, search: SourcingSearch, db: Session) -> None: ...
 
+    async def enrich(self, candidate: SourcingCandidate) -> bool: ...
+
 
 class ApifySourcingProvider:
     """Apify actor integration (no-login / public-data actors only).
@@ -119,6 +144,8 @@ class ApifySourcingProvider:
 
     name = "apify"
     api_root = "https://api.apify.com/v2"
+    enrich_poll_seconds = 3
+    enrich_max_polls = 40
 
     async def start(self, search: SourcingSearch) -> None:
         actor_path = settings.apify_sourcing_actor_id.replace("/", "~")
@@ -225,6 +252,76 @@ class ApifySourcingProvider:
             search.error_code = "apify_unavailable"
         except (httpx.HTTPError, ValueError, TypeError):
             self._fail(search, "malformed_result")
+
+    async def enrich(self, candidate: SourcingCandidate) -> bool:
+        """On-demand per-profile detail + email search (~$0.01 per profile).
+
+        Runs the enrichment actor for this candidate's profile URL and merges
+        the result back. Returns True when the provider returned a profile,
+        even if it found no email; False when nothing usable came back.
+        """
+
+        if not candidate.profile_url:
+            return False
+        actor_path = settings.apify_sourcing_enrichment_actor_id.replace("/", "~")
+        headers = {"Authorization": f"Bearer {settings.apify_api_token}"}
+        timeout = httpx.Timeout(connect=8.0, read=25.0, write=10.0, pool=5.0)
+        payload = {
+            "urls": [candidate.profile_url],
+            "profileScraperMode": "Profile details + email search ($10 per 1k)",
+        }
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.post(
+                    f"{self.api_root}/acts/{actor_path}/runs", headers=headers, json=payload
+                )
+                response.raise_for_status()
+                run = response.json().get("data") or {}
+                run_id = run.get("id")
+                if not isinstance(run_id, str) or not run_id:
+                    return False
+                dataset_id = None
+                for _ in range(self.enrich_max_polls):
+                    await asyncio.sleep(self.enrich_poll_seconds)
+                    run_response = await client.get(
+                        f"{self.api_root}/actor-runs/{run_id}", headers=headers
+                    )
+                    run_response.raise_for_status()
+                    run_data = run_response.json().get("data") or {}
+                    run_status = run_data.get("status")
+                    if run_status in {"READY", "RUNNING", "TIMING-OUT"}:
+                        continue
+                    if run_status != "SUCCEEDED":
+                        return False
+                    dataset_id = run_data.get("defaultDatasetId")
+                    break
+                if not dataset_id:
+                    return False
+                items_response = await client.get(
+                    f"{self.api_root}/datasets/{dataset_id}/items",
+                    params={"limit": 1, "clean": "true", "format": "json"},
+                    headers=headers,
+                )
+                items_response.raise_for_status()
+                items = items_response.json()
+        except httpx.HTTPError:
+            return False
+        if not isinstance(items, list) or not items or not isinstance(items[0], dict):
+            return False
+        enriched = candidate_from_provider_item(items[0])
+        if enriched is None:
+            return False
+        candidate.full_name = candidate.full_name or enriched.full_name
+        candidate.headline = enriched.headline or candidate.headline
+        candidate.location = enriched.location or candidate.location
+        candidate.current_title = enriched.current_title or candidate.current_title
+        candidate.current_company = enriched.current_company or candidate.current_company
+        if enriched.email:
+            candidate.email = enriched.email
+        if enriched.phone:
+            candidate.phone = enriched.phone
+        candidate.provider_payload = items[0]
+        return True
 
     @staticmethod
     def _fail(search: SourcingSearch, code: str) -> None:

@@ -7,10 +7,14 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.v1.deps import RequestContext, get_request_context
-from app.api.v1.schemas.sourcing import SourcingSearchRequest, SourcingSearchResponse
+from app.api.v1.schemas.sourcing import (
+    SourcingCandidateOut,
+    SourcingSearchRequest,
+    SourcingSearchResponse,
+)
 from app.core.config import settings
 from app.core.database import get_db
-from app.models import Job, SourcingSearch
+from app.models import Job, SourcingCandidate, SourcingSearch
 from app.services.sourcing_service import (
     SourcingSearchService,
     get_sourcing_provider,
@@ -100,3 +104,47 @@ async def get_sourcing_search(
     db.commit()
     db.refresh(search)
     return SourcingSearchService.response_payload(search)
+
+
+@router.post(
+    "/sourcing/candidates/{candidate_id}/enrich",
+    response_model=SourcingCandidateOut,
+)
+async def enrich_sourcing_candidate(
+    candidate_id: uuid.UUID,
+    ctx: RequestContext = Depends(get_request_context),
+    db: Session = Depends(get_db),
+):
+    """On-demand detail + email enrichment for one candidate (HR-triggered)."""
+    if not _sourcing_ready():
+        raise HTTPException(status_code=503, detail="LinkedIn sourcing is not enabled.")
+    candidate = db.scalar(
+        select(SourcingCandidate)
+        .join(SourcingSearch, SourcingCandidate.search_id == SourcingSearch.id)
+        .where(
+            SourcingCandidate.id == candidate_id,
+            SourcingSearch.organization_id == ctx.organization_id,
+        )
+    )
+    if candidate is None:
+        raise HTTPException(status_code=404, detail="Sourced candidate was not found.")
+    if not candidate.profile_url:
+        raise HTTPException(
+            status_code=422, detail="This candidate has no profile URL to enrich from."
+        )
+    await get_sourcing_provider().enrich(candidate)
+    db.commit()
+    db.refresh(candidate)
+    return SourcingCandidateOut(
+        id=candidate.id,
+        full_name=candidate.full_name,
+        headline=candidate.headline,
+        location=candidate.location,
+        current_title=candidate.current_title,
+        current_company=candidate.current_company,
+        profile_url=candidate.profile_url,
+        email=candidate.email,
+        phone=candidate.phone,
+        fit_score=candidate.fit_score,
+        status=candidate.status,
+    )

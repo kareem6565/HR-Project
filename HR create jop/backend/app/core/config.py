@@ -94,6 +94,10 @@ class Settings(BaseSettings):
         validation_alias="APIFY_SOURCING_ACTOR_ID",
     )
     apify_sourcing_enabled: bool = Field(default=False, validation_alias="APIFY_SOURCING_ENABLED")
+    apify_sourcing_enrichment_actor_id: str = Field(
+        default="harvestapi/linkedin-profile-scraper",
+        validation_alias="APIFY_SOURCING_ENRICHMENT_ACTOR_ID",
+    )
     application_privacy_notice_text: str = Field(
         default="", validation_alias="APPLICATION_PRIVACY_NOTICE_TEXT"
     )
