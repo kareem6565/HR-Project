@@ -62,8 +62,8 @@ const JOURNEY = [
     step: "07",
     title: "Source beyond your inbox",
     text: "Describe who you need in plain words. HERA searches LinkedIn-scale professional data and returns ranked, scored suggestions.",
-    video: null,
-    alt: null,
+    video: "/landing/clip-sourcing.mp4",
+    alt: "Plain-language candidate search typing itself and returning sourced profile cards"
   },
   {
     icon: MessagesSquare,
