@@ -89,6 +89,38 @@ const FEATURES = [
   ["Assistant", "A chatbot that answers plain-language questions about your live pipeline and points you to the right screen."],
 ];
 
+const PLANS = [
+  {
+    code: "starter",
+    name: "Starter",
+    price: "Free",
+    tagline: "Your first roles, screened with real evidence.",
+    features: ["3 active jobs", "50 screenings / month", "2 seats", "Talent pool & interview scheduling"],
+    cta: "Start free",
+    featured: false,
+  },
+  {
+    code: "pro",
+    name: "Pro",
+    price: "$49",
+    period: "/mo",
+    tagline: "For teams screening at volume every week.",
+    features: ["25 active jobs", "1,000 screenings / month", "10 seats", "OCR CV photo intake", "Priority support"],
+    cta: "Choose Pro",
+    featured: true,
+  },
+  {
+    code: "business",
+    name: "Business",
+    price: "$199",
+    period: "/mo",
+    tagline: "High-volume hiring, uncapped roles.",
+    features: ["Unlimited active jobs", "10,000 screenings / month", "Unlimited seats", "Audit exports", "Dedicated support"],
+    cta: "Choose Business",
+    featured: false,
+  },
+];
+
 export default function LandingPage() {
   const rootRef = useRef(null);
 
@@ -120,6 +152,7 @@ export default function LandingPage() {
         <div className="lp-nav-links">
           <a href="#lp-journey">How it works</a>
           <a href="#lp-features">Features</a>
+          <a href="#lp-pricing">Pricing</a>
           <Link to="/login" className="lp-nav-cta">Sign in</Link>
         </div>
       </nav>
@@ -178,6 +211,32 @@ export default function LandingPage() {
               <strong>{name}</strong>
               <p>{desc}</p>
             </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="lp-pricing" id="lp-pricing" aria-label="Pricing">
+        <h2 className="lp-section-title lp-reveal">Simple pricing that scales with your hiring.</h2>
+        <p className="lp-pricing-sub lp-reveal">Every plan keeps the same promise: evidence behind every score, humans behind every decision.</p>
+        <div className="lp-plan-grid">
+          {PLANS.map((plan) => (
+            <article className={`lp-plan lp-reveal${plan.featured ? " lp-plan-featured" : ""}`} key={plan.code}>
+              {plan.featured && <span className="lp-plan-flag">Most popular</span>}
+              <h3>{plan.name}</h3>
+              <p className="lp-plan-price">
+                {plan.price}
+                {plan.period && <span>{plan.period}</span>}
+              </p>
+              <p className="lp-plan-tagline">{plan.tagline}</p>
+              <ul>
+                {plan.features.map((feature) => (
+                  <li key={feature}>{feature}</li>
+                ))}
+              </ul>
+              <Link to="/login" className={`lp-btn ${plan.featured ? "lp-btn-gold" : "lp-btn-ghost"}`}>
+                {plan.cta}
+              </Link>
+            </article>
           ))}
         </div>
       </section>

@@ -223,3 +223,104 @@
 .lp-nohero .lp-hero, .lp-nohero .lp-nav { display: none; }
 .lp-nohero .lp-journey { padding-top: 40px; }
 .lp-nohero .lp-reveal { opacity: 1; transform: none; transition: none; }
+
+/* ---------- pricing ---------- */
+.lp-pricing {
+  padding: 110px 6vw 90px;
+  text-align: center;
+  background: linear-gradient(180deg, transparent, rgba(27, 58, 58, 0.55) 30%, transparent);
+}
+.lp-pricing-sub {
+  margin: -12px auto 48px;
+  max-width: 560px;
+  color: rgba(250, 247, 236, 0.68);
+  font-size: 15.5px;
+  line-height: 1.6;
+}
+.lp-plan-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 22px;
+  max-width: 1080px;
+  margin: 0 auto;
+  text-align: left;
+}
+.lp-plan {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 30px 26px 26px;
+  border-radius: 18px;
+  border: 1px solid rgba(233, 217, 138, 0.14);
+  background: rgba(250, 247, 236, 0.04);
+  backdrop-filter: blur(4px);
+  transition: transform 300ms ease, border-color 300ms ease, box-shadow 300ms ease;
+}
+.lp-plan:hover {
+  transform: translateY(-6px);
+  border-color: rgba(233, 217, 138, 0.4);
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.35);
+}
+.lp-plan h3 { margin: 0; font-size: 19px; letter-spacing: 0.01em; }
+.lp-plan-featured {
+  border-color: var(--lp-gold);
+  background: linear-gradient(170deg, rgba(233, 217, 138, 0.12), rgba(250, 247, 236, 0.05) 45%);
+  box-shadow: 0 18px 44px rgba(233, 217, 138, 0.12);
+}
+.lp-plan-flag {
+  position: absolute;
+  top: -12px;
+  right: 20px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--lp-gold);
+  color: var(--lp-teal-deep);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.lp-plan-price {
+  margin: 6px 0 0;
+  font-size: 40px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--lp-gold);
+}
+.lp-plan-price span { font-size: 15px; font-weight: 600; opacity: 0.75; }
+.lp-plan-tagline {
+  margin: 0 0 14px;
+  font-size: 13.5px;
+  color: rgba(250, 247, 236, 0.66);
+  min-height: 40px;
+}
+.lp-plan ul {
+  list-style: none;
+  margin: 0 0 20px;
+  padding: 0;
+  display: grid;
+  gap: 9px;
+  flex: 1;
+}
+.lp-plan li {
+  position: relative;
+  padding-left: 22px;
+  font-size: 14px;
+  color: rgba(250, 247, 236, 0.85);
+}
+.lp-plan li::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 7px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--lp-gold);
+  box-shadow: 0 0 8px rgba(233, 217, 138, 0.7);
+}
+.lp-plan .lp-btn { justify-content: center; text-align: center; }
+@media (prefers-reduced-motion: reduce) {
+  .lp-plan { transition: none; }
+}
