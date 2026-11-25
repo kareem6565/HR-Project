@@ -1,7 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Search, Users, Sparkles, Radar, MapPin, Building2, ExternalLink, TriangleAlert, MailSearch, LoaderCircle } from "lucide-react";
+import { Search, Users, Sparkles, Radar, MapPin, Building2, ExternalLink, TriangleAlert, MailSearch, LoaderCircle, PenLine, Wand2, X, Send } from "lucide-react";
 import { getJobs } from "../../services/jobService";
-import { searchLinkedInCandidates, enrichSourcingCandidate } from "../../services/sourcingService";
+import {
+  searchLinkedInCandidates,
+  enrichSourcingCandidate,
+  getOutreachDraft,
+  personalizeOutreachDraft,
+} from "../../services/sourcingService";
 
 // LinkedIn candidate sourcing: HR describes who they need, HERA runs a real
 // sourcing search through the backend (services/sourcingService.js) and shows
@@ -25,6 +30,9 @@ export default function LinkedInSourcing() {
   const [error, setError] = useState("");
   const [enrichingId, setEnrichingId] = useState(null);
   const [enrichNote, setEnrichNote] = useState("");
+  const [draft, setDraft] = useState(null); // { candidateId, to, subject, body, personalized }
+  const [draftLoading, setDraftLoading] = useState(false);
+  const [personalizing, setPersonalizing] = useState(false);
   const rotator = useRef(null);
 
   useEffect(() => {
@@ -97,6 +105,37 @@ export default function LinkedInSourcing() {
       setEnrichingId(null);
     }
   };
+
+  const openDraft = async (candidate) => {
+    setDraftLoading(true);
+    setDraft({ candidateId: candidate.id, to: candidate.email, subject: "", body: "", personalized: false, name: candidate.name });
+    try {
+      const data = await getOutreachDraft(candidate.id);
+      setDraft({ ...data, name: candidate.name });
+    } catch {
+      setDraft(null);
+      setEnrichNote(`The draft for ${candidate.name} could not be prepared.`);
+    } finally {
+      setDraftLoading(false);
+    }
+  };
+
+  const personalizeDraft = async () => {
+    if (!draft) return;
+    setPersonalizing(true);
+    try {
+      const data = await personalizeOutreachDraft(draft.candidateId);
+      setDraft((prev) => ({ ...prev, ...data }));
+    } catch {
+      // keep the current draft; personalization is a bonus
+    } finally {
+      setPersonalizing(false);
+    }
+  };
+
+  const mailtoHref = draft
+    ? `mailto:${draft.to || ""}?subject=${encodeURIComponent(draft.subject)}&body=${encodeURIComponent(draft.body)}`
+    : "#";
 
   const selectedJob = jobs.find((j) => String(j.id) === String(jobId));
 
@@ -246,6 +285,13 @@ export default function LinkedInSourcing() {
                       Profile <ExternalLink size={12} aria-hidden="true" />
                     </a>
                   )}
+                  <button
+                    type="button"
+                    className="sourcing-candidate-link sourcing-find-email"
+                    onClick={() => openDraft(c)}
+                  >
+                    <PenLine size={12} aria-hidden="true" /> Draft outreach
+                  </button>
                 </span>
               </li>
             ))}
@@ -254,6 +300,66 @@ export default function LinkedInSourcing() {
           </div>
         )}
       </div>
+
+      {draft && (
+        <div className="sourcing-draft-overlay" role="dialog" aria-modal="true" aria-label="Outreach draft">
+          <div className="sourcing-draft-modal">
+            <div className="sourcing-draft-head">
+              <h3>Outreach to {draft.name}</h3>
+              <button type="button" className="sourcing-draft-close" onClick={() => setDraft(null)} aria-label="Close">
+                <X size={16} aria-hidden="true" />
+              </button>
+            </div>
+            {draftLoading ? (
+              <p className="sourcing-phase-text"><LoaderCircle size={14} aria-hidden="true" className="sourcing-spin" /> Preparing the draft…</p>
+            ) : (
+              <>
+                <label htmlFor="draft-subject">Subject</label>
+                <input
+                  id="draft-subject"
+                  value={draft.subject}
+                  onChange={(e) => setDraft({ ...draft, subject: e.target.value })}
+                />
+                <label htmlFor="draft-body">Message</label>
+                <textarea
+                  id="draft-body"
+                  rows="9"
+                  value={draft.body}
+                  onChange={(e) => setDraft({ ...draft, body: e.target.value })}
+                />
+                {draft.personalized && (
+                  <p className="sourcing-criteria"><Sparkles size={13} aria-hidden="true" /> Personalized by HERA</p>
+                )}
+                {!draft.to && (
+                  <p className="hera-note">No email on file for this candidate yet. Use Find email first.</p>
+                )}
+                <div className="sourcing-draft-actions">
+                  <button
+                    type="button"
+                    className="sourcing-candidate-link sourcing-find-email"
+                    onClick={personalizeDraft}
+                    disabled={personalizing}
+                  >
+                    {personalizing ? (
+                      <><LoaderCircle size={12} aria-hidden="true" className="sourcing-spin" /> Personalizing…</>
+                    ) : (
+                      <><Wand2 size={12} aria-hidden="true" /> AI personalize</>
+                    )}
+                  </button>
+                  <a
+                    className={`primary sourcing-send ${!draft.to ? "sourcing-send-disabled" : ""}`}
+                    href={draft.to ? mailtoHref : undefined}
+                    aria-disabled={!draft.to}
+                    onClick={draft.to ? () => setDraft(null) : (e) => e.preventDefault()}
+                  >
+                    <Send size={14} aria-hidden="true" /> Open in email
+                  </a>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </section>
   );
 }

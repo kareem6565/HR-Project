@@ -46,6 +46,18 @@ export async function startSourcingSearch({ jobId, needs }) {
   return normalizeSearch(data);
 }
 
+export async function getOutreachDraft(candidateId) {
+  const { data } = await apiClient.post(`/sourcing/candidates/${candidateId}/outreach-draft`);
+  return data;
+}
+
+export async function personalizeOutreachDraft(candidateId) {
+  const { data } = await apiClient.post(
+    `/sourcing/candidates/${candidateId}/outreach-draft/personalize`
+  );
+  return data;
+}
+
 export async function enrichSourcingCandidate(candidateId) {
   const { data } = await apiClient.post(`/sourcing/candidates/${candidateId}/enrich`);
   return normalizeCandidate(data);

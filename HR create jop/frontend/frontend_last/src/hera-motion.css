@@ -452,3 +452,16 @@
 .sourcing-find-email:disabled { opacity: 0.6; cursor: default; }
 .sourcing-spin { animation: sourcing-rotate 0.9s linear infinite; }
 @keyframes sourcing-rotate { to { transform: rotate(360deg); } }
+
+/* Sourcing outreach draft modal */
+.sourcing-draft-overlay { position: fixed; inset: 0; background: rgba(16, 24, 24, 0.45); display: grid; place-items: center; z-index: 60; padding: 20px; }
+.sourcing-draft-modal { background: #fff; border-radius: 16px; padding: 22px 24px; width: min(560px, 100%); display: grid; gap: 8px; box-shadow: 0 24px 64px rgba(16, 24, 24, 0.25); animation: hera-pop var(--hm-standard) var(--hm-ease-spring) both; }
+.sourcing-draft-head { display: flex; align-items: center; justify-content: space-between; }
+.sourcing-draft-head h3 { margin: 0; }
+.sourcing-draft-close { background: none; border: none; cursor: pointer; padding: 6px; border-radius: 8px; color: #667085; }
+.sourcing-draft-close:hover { background: #f2f4f7; }
+.sourcing-draft-modal label { font-size: 12px; font-weight: 700; color: #475467; }
+.sourcing-draft-modal input, .sourcing-draft-modal textarea { border: 1px solid #d0d5dd; border-radius: 10px; padding: 10px 12px; font: inherit; }
+.sourcing-draft-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+.sourcing-send { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+.sourcing-send-disabled { opacity: 0.5; cursor: not-allowed; }
