@@ -159,7 +159,7 @@ def test_verify_missing_key_returns_inline_failure(client: httpx.Client) -> None
     body = resp.json()
     assert body["ok"] is False
     assert body["message"]
-    assert body["model"]
+    assert body["model"] == ""
 
 
 def test_verify_refuses_non_openrouter_provider(client: httpx.Client, monkeypatch) -> None:

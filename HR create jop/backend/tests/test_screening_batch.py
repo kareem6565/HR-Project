@@ -28,6 +28,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from sqlalchemy import select
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.orm import sessionmaker
 from starlette.testclient import TestClient
 
 from app.ai.providers.errors import ProviderRateLimitError
@@ -53,6 +54,12 @@ from app.services.storage_service import LocalFileSystemStorage
 from app.services.user_service import UserService
 from app.worker import ScreeningWorker
 from tests.resume_upload_fixtures import make_docx_bytes, make_pdf_bytes
+
+
+def _test_session_factory(db_session):
+    """Keep worker progress writes on the isolated test database, never app DATABASE_URL."""
+    return sessionmaker(bind=db_session.get_bind())
+
 
 # ==============================================================================
 # Fixtures & Setup
@@ -538,7 +545,7 @@ class TestWorkerProcessing:
 
         # Instantiate worker
         storage = LocalFileSystemStorage(settings.storage_root_dir)
-        worker = ScreeningWorker(storage=storage)
+        worker = ScreeningWorker(storage=storage, session_factory=_test_session_factory(db_session))
 
         # 1. Claim
         claim = worker.claim_next_item(db_session)
@@ -585,7 +592,7 @@ class TestWorkerProcessing:
         batch_id = uuid.UUID(post_resp.json()["batch_id"])
 
         storage = LocalFileSystemStorage(settings.storage_root_dir)
-        worker = ScreeningWorker(storage=storage)
+        worker = ScreeningWorker(storage=storage, session_factory=_test_session_factory(db_session))
 
         # Process first item
         claim1 = worker.claim_next_item(db_session)
@@ -869,7 +876,10 @@ class TestB2LargeBatch:
         item.attempts = 1
         db_session.flush()
 
-        worker = ScreeningWorker(storage=LocalFileSystemStorage(settings.storage_root_dir))
+        worker = ScreeningWorker(
+            storage=LocalFileSystemStorage(settings.storage_root_dir),
+            session_factory=_test_session_factory(db_session),
+        )
         routed = []
         monkeypatch.setattr(db_session, "rollback", lambda: None)
         monkeypatch.setattr(
@@ -950,7 +960,10 @@ class TestB2LargeBatch:
             assert response.json()["counts"]["total"] == 300
             assert response.json()["counts"]["failed"] == 0
 
-            worker = ScreeningWorker(storage=LocalFileSystemStorage(settings.storage_root_dir))
+            worker = ScreeningWorker(
+                storage=LocalFileSystemStorage(settings.storage_root_dir),
+                session_factory=_test_session_factory(db_session),
+            )
             for _ in range(300):
                 claim = worker.claim_next_item(db_session)
                 if claim is None:
